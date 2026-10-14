@@ -177,6 +177,32 @@ nav.tabs button[data-tab="quests"][aria-current="page"]{color:var(--quest)}
 @keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:14px;font-weight:700;max-width:calc(100% - 32px)}
 .empty{border:1px dashed var(--rule);border-radius:12px;padding:16px;color:var(--ink-2);font-size:14px;text-align:center}
+/* history calendar */
+.calhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .dow{font-family:var(--f-data);font-size:10px;letter-spacing:.06em;color:var(--ink-3);text-align:center;padding-block:2px}
+.cal button{aspect-ratio:1/1;max-width:100%;min-width:0;border:1px solid var(--rule);background:var(--paper);border-radius:8px;font-family:var(--f-data);font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0}
+.cal button.has{background:var(--lab-soft);border-color:transparent;color:var(--lab);font-weight:500}
+.cal button .qd{width:5px;height:5px;border-radius:50%;background:var(--quest)}
+.cal button.today{box-shadow:inset 0 0 0 2px var(--ink)}
+.cal button:disabled{opacity:.35;cursor:default}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-3)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+/* forecast day picker */
+.fc{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.fc button{border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px;min-height:76px;min-width:0}
+.fc button[aria-pressed="true"]{background:var(--quest);color:var(--on-accent);border-color:var(--quest)}
+.fc .wx{font-size:18px;line-height:1.2}
+.fc b{font-family:var(--f-data);font-size:13px;font-variant-numeric:tabular-nums}
+.fc .pp{font-family:var(--f-data);font-size:10px;opacity:.85}
+.twist{border-top:1px dashed var(--quest);padding-top:8px;font-size:14px}
+.wxnote{font-size:13px;color:var(--ink-2)}
+.numin{max-width:160px}
+.switchrow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.switch{position:relative;width:50px;height:30px;border-radius:999px;border:1px solid var(--rule);background:var(--paper);padding:0;flex-shrink:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--ink-3);transition:transform .15s}
+.switch[aria-checked="true"]{background:var(--quest);border-color:var(--quest)}
+.switch[aria-checked="true"]::after{transform:translateX(20px);background:var(--on-accent)}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -204,6 +230,7 @@ nav.tabs button[data-tab="quests"][aria-current="page"]{color:var(--quest)}
 <script>
 (function(){
 "use strict";
+const VERSION="2.0";
 /* ---------- dates ---------- */
 const pad=n=>String(n).padStart(2,"0");
 const ds=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -214,52 +241,77 @@ const diffDays=(a,b)=>{const u=s=>{const [y,m,d]=s.split("-").map(Number);return
 const fmt=(s,o)=>parse(s).toLocaleDateString(undefined,o||{month:"short",day:"numeric"});
 const uid=()=>Math.random().toString(36).slice(2,10);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const seasonOf=s=>{const m=parse(s).getMonth()+1;return m>=3&&m<=5?"spring":m>=6&&m<=8?"summer":m>=9&&m<=11?"fall":"winter"};
 
 /* ---------- quest deck ---------- */
-// cost 0 free / 1 cheap / 2 splurge; time 1 ≤2h / 2 half day / 3 full day; who solo|group|any; set in|out|any
+// cost 0 free / 1 cheap / 2 splurge; time 1 ≤2h / 2 half day / 3 full day; who solo|group|any; set in|out|any; season optional
+const Q=(id,title,detail,cat,cost,time,who,set,season)=>({id,title,detail,cat,cost,time,who,set,season:season||null});
 const DECK=[
- ["sunrise","Sunrise at the ocean","Get to a South Shore beach before sunrise with a coffee. Stay until the sun clears the horizon.","Outdoors",0,1,"any","out"],
- ["montauk","Ride out to the end of the Island","Drive to Montauk Point, walk the bluffs by the lighthouse, and stop somewhere new to eat on the way back.","Outdoors",2,3,"any","out"],
- ["fireisland","Ferry to Fire Island","Take a ferry over and walk the beach an hour in one direction, then back.","Outdoors",1,3,"any","out"],
- ["newtrail","A trail you've never walked","Pick a park or preserve on the Island you've never set foot in and walk its longest loop.","Outdoors",0,2,"any","out"],
- ["bike","Bike a new route","Ride 10+ miles round trip on roads you've never biked.","Outdoors",0,2,"solo","out"],
- ["stars","Find three constellations","Drive somewhere dark enough to see stars and identify three constellations.","Outdoors",0,1,"any","out"],
- ["paddle","Get on the water","Rent a kayak or paddleboard for an hour on a bay or harbor.","Outdoors",1,2,"any","out"],
- ["highpoint","Sunset from the highest point","Find the highest spot you can reach within 30 minutes and watch the sun go down.","Outdoors",0,1,"any","out"],
- ["cuisine","A cuisine you've never had","Eat a full meal from a cuisine you've never tried. Order whatever the staff recommends.","Food",1,1,"any","any"],
- ["crawl","Three-stop food crawl","Pick one Queens neighborhood and eat one thing at three different spots.","Food",1,2,"group","any"],
- ["farmstand","Farm stand to stove","Drive out east, buy something at a farm stand you've never cooked with, and cook it tonight.","Food",1,2,"any","any"],
- ["diner","Diner after midnight","Late-night diner run. Order something you'd never order at noon.","Food",1,1,"group","any"],
- ["hardDish","Cook the dish that scares you","Make a dish from scratch that intimidates you. Bread, dumplings, a proper risotto.","Food",1,2,"any","in"],
- ["slice","Blind slice tribunal","Hit three pizzerias in one afternoon and score them blind with friends.","Food",1,2,"group","any"],
- ["regular","Ask the regular","Go somewhere you've never been and ask a regular what to order.","Food",1,1,"solo","any"],
- ["museum","A museum you've never entered","Pick a museum you've never been inside and find one thing you'd come back for.","Culture",1,2,"any","in"],
- ["gallery","One gallery, one hour","Walk into a free gallery and choose a favorite piece. Figure out why.","Culture",0,1,"any","in"],
- ["unknownact","See an act you've never heard of","Go to a live show where you don't know the performer.","Culture",1,1,"any","in"],
- ["openmic","Comedy open mic","Watch an open mic night. Rate the sets on the drive home.","Culture",1,1,"group","in"],
- ["library","Library deep cut","Browse a library section you'd never pick and check out one book.","Culture",0,1,"solo","in"],
- ["historic","The place you always drive past","Visit a historic site or house on the Island you've passed a hundred times and never stopped at.","Culture",1,2,"any","any"],
- ["unknownstop","Get off at an unknown stop","Ride the LIRR or subway to a stop you've never used. Explore for two hours, no map app for the first 30 minutes.","Explore",1,2,"solo","any"],
- ["bridge","Walk a bridge","Walk across a bridge into or out of Manhattan.","Explore",0,1,"any","out"],
- ["borough","Your least-visited borough","Spend an afternoon in the borough you've been to least.","Explore",1,3,"any","any"],
- ["ferry","Ferry for no reason","Ride the Staten Island Ferry round trip at golden hour.","Explore",0,2,"any","any"],
- ["hidden","Three hidden things","Find three things in your own town you've never noticed: a plaque, a mural, a dead-end street.","Explore",0,1,"solo","out"],
- ["coin","Coin-flip walk","Leave the house with no plan. At every intersection, flip a coin.","Explore",0,2,"solo","out"],
- ["dormant","Revive a dormant friendship","Text someone you haven't talked to in a year and make an actual plan.","Social",0,1,"solo","any"],
- ["host","Host a themed dinner","Invite three to five people over for a dinner with a theme.","Social",1,2,"group","in"],
- ["newgame","Game night, new game","Learn a board or card game none of you have played.","Social",1,2,"group","in"],
- ["yourspot","Bring someone to your spot","Take a friend somewhere you love that they've never seen.","Social",0,2,"group","any"],
- ["pickup","Join a pickup game","Show up alone to a pickup basketball or soccer game.","Social",0,1,"solo","out"],
- ["dropin","One-night class","Take a single drop-in class: pottery, boxing, dance, improv.","Skill",1,1,"any","in"],
- ["cardtrick","Learn a card trick","Learn one card trick well enough to perform it for someone today.","Skill",0,1,"any","in"],
- ["phrases","Ten phrases","Learn ten phrases in a new language and use one on someone.","Skill",0,1,"solo","in"],
- ["thrift","$20 thrift challenge","Find the strangest genuinely useful item you can for under $20.","Skill",1,1,"any","in"],
- ["photo","Photo walk with one rule","Take 20 photos following one rule: only reflections, only red, only signs.","Skill",0,1,"solo","out"],
- ["volunteer","One volunteer shift","Do a single shift at a food pantry or a beach cleanup.","Social",0,2,"any","any"],
- ["fixit","Fix one broken thing","Pick something broken you've been ignoring and fix it yourself.","Skill",0,1,"solo","in"],
- ["cages","Batting cage or driving range","Go hit something. Bonus if you've never been.","Skill",1,1,"any","out"]
-].map(a=>({id:a[0],title:a[1],detail:a[2],cat:a[3],cost:a[4],time:a[5],who:a[6],set:a[7]}));
+ Q("sunrise","Sunrise at the ocean","Get to a South Shore beach before sunrise with a coffee. Stay until the sun clears the horizon.","Outdoors",0,1,"any","out"),
+ Q("montauk","Ride out to the end of the Island","Drive to Montauk Point, walk the bluffs by the lighthouse, and stop somewhere new to eat on the way back.","Outdoors",2,3,"any","out"),
+ Q("fireisland","Ferry to Fire Island","Take a ferry over and walk the beach an hour in one direction, then back.","Outdoors",1,3,"any","out"),
+ Q("newtrail","A trail you've never walked","Pick a park or preserve on the Island you've never set foot in and walk its longest loop.","Outdoors",0,2,"any","out"),
+ Q("bike","Bike a new route","Ride 10+ miles round trip on roads you've never biked.","Outdoors",0,2,"solo","out"),
+ Q("stars","Find three constellations","Drive somewhere dark enough to see stars and identify three constellations.","Outdoors",0,1,"any","out"),
+ Q("paddle","Get on the water","Rent a kayak or paddleboard for an hour on a bay or harbor.","Outdoors",1,2,"any","out"),
+ Q("highpoint","Sunset from the highest point","Find the highest spot you can reach within 30 minutes and watch the sun go down.","Outdoors",0,1,"any","out"),
+ Q("cuisine","A cuisine you've never had","Eat a full meal from a cuisine you've never tried. Order whatever the staff recommends.","Food",1,1,"any","any"),
+ Q("crawl","Three-stop food crawl","Pick one Queens neighborhood and eat one thing at three different spots.","Food",1,2,"group","any"),
+ Q("farmstand","Farm stand to stove","Drive out east, buy something at a farm stand you've never cooked with, and cook it tonight.","Food",1,2,"any","any"),
+ Q("diner","Diner after midnight","Late-night diner run. Order something you'd never order at noon.","Food",1,1,"group","any"),
+ Q("hardDish","Cook the dish that scares you","Make a dish from scratch that intimidates you. Bread, dumplings, a proper risotto.","Food",1,2,"any","in"),
+ Q("slice","Blind slice tribunal","Hit three pizzerias in one afternoon and score them blind with friends.","Food",1,2,"group","any"),
+ Q("regular","Ask the regular","Go somewhere you've never been and ask a regular what to order.","Food",1,1,"solo","any"),
+ Q("museum","A museum you've never entered","Pick a museum you've never been inside and find one thing you'd come back for.","Culture",1,2,"any","in"),
+ Q("gallery","One gallery, one hour","Walk into a free gallery and choose a favorite piece. Figure out why.","Culture",0,1,"any","in"),
+ Q("unknownact","See an act you've never heard of","Go to a live show where you don't know the performer.","Culture",1,1,"any","in"),
+ Q("openmic","Comedy open mic","Watch an open mic night. Rate the sets on the drive home.","Culture",1,1,"group","in"),
+ Q("library","Library deep cut","Browse a library section you'd never pick and check out one book.","Culture",0,1,"solo","in"),
+ Q("historic","The place you always drive past","Visit a historic site or house on the Island you've passed a hundred times and never stopped at.","Culture",1,2,"any","any"),
+ Q("unknownstop","Get off at an unknown stop","Ride the LIRR or subway to a stop you've never used. Explore for two hours, no map app for the first 30 minutes.","Explore",1,2,"solo","any"),
+ Q("bridge","Walk a bridge","Walk across a bridge into or out of Manhattan.","Explore",0,1,"any","out"),
+ Q("borough","Your least-visited borough","Spend an afternoon in the borough you've been to least.","Explore",1,3,"any","any"),
+ Q("ferry","Ferry for no reason","Ride the Staten Island Ferry round trip at golden hour.","Explore",0,2,"any","any"),
+ Q("hidden","Three hidden things","Find three things in your own town you've never noticed: a plaque, a mural, a dead-end street.","Explore",0,1,"solo","out"),
+ Q("coin","Coin-flip walk","Leave the house with no plan. At every intersection, flip a coin.","Explore",0,2,"solo","out"),
+ Q("dormant","Revive a dormant friendship","Text someone you haven't talked to in a year and make an actual plan.","Social",0,1,"solo","any"),
+ Q("host","Host a themed dinner","Invite three to five people over for a dinner with a theme.","Social",1,2,"group","in"),
+ Q("newgame","Game night, new game","Learn a board or card game none of you have played.","Social",1,2,"group","in"),
+ Q("yourspot","Bring someone to your spot","Take a friend somewhere you love that they've never seen.","Social",0,2,"group","any"),
+ Q("pickup","Join a pickup game","Show up alone to a pickup basketball or soccer game.","Social",0,1,"solo","out"),
+ Q("volunteer","One volunteer shift","Do a single shift at a food pantry or a beach cleanup.","Social",0,2,"any","any"),
+ Q("dropin","One-night class","Take a single drop-in class: pottery, boxing, dance, improv.","Skill",1,1,"any","in"),
+ Q("cardtrick","Learn a card trick","Learn one card trick well enough to perform it for someone today.","Skill",0,1,"any","in"),
+ Q("phrases","Ten phrases","Learn ten phrases in a new language and use one on someone.","Skill",0,1,"solo","in"),
+ Q("thrift","$20 thrift challenge","Find the strangest genuinely useful item you can for under $20.","Skill",1,1,"any","in"),
+ Q("photo","Photo walk with one rule","Take 20 photos following one rule: only reflections, only red, only signs.","Skill",0,1,"solo","out"),
+ Q("fixit","Fix one broken thing","Pick something broken you've been ignoring and fix it yourself.","Skill",0,1,"solo","in"),
+ Q("cages","Batting cage or driving range","Go hit something. Bonus if you've never been.","Skill",1,1,"any","out"),
+ // seasonal
+ Q("apples","Apple picking out east","Pick a bag of apples at an orchard on the North Fork, then make something with them that night.","Outdoors",1,2,"any","out","fall"),
+ Q("pumpkin","Pumpkin patch and cider doughnuts","Hit a farm patch, pick the ugliest pumpkin, and eat a cider doughnut on the spot.","Food",1,2,"group","out","fall"),
+ Q("haunted","Haunted house or ghost tour","Go to a haunted attraction or a local ghost walk. Whoever flinches first buys food after.","Culture",1,1,"group","any","fall"),
+ Q("foliage","Peak foliage hike","Find a wooded trail at peak color and walk it before the leaves drop.","Outdoors",0,2,"any","out","fall"),
+ Q("fnl","Friday night lights","Watch a local high school or college football game under the lights.","Social",0,1,"group","out","fall"),
+ Q("skate","Skate outdoors","Go ice skating at an outdoor rink. Stay until you've done one full lap without the wall.","Outdoors",1,1,"any","out","winter"),
+ Q("lights","Holiday lights drive","Find the most over-the-top decorated house or street on the Island and drive the route with music on.","Explore",0,1,"group","out","winter"),
+ Q("winterbeach","Winter beach walk","Walk an empty beach in the cold. Twenty minutes minimum, then hot food.","Outdoors",0,1,"any","out","winter"),
+ Q("soup","Soup from scratch","Make a pot of soup with no recipe shortcuts and feed it to someone.","Food",1,2,"any","in","winter"),
+ Q("cocoa","Hot chocolate tribunal","Try hot chocolate at three spots in one afternoon and crown a winner.","Food",1,2,"group","in","winter"),
+ Q("opening","First ballgame of the year","Catch an early-season baseball game, pro or minor league.","Social",1,2,"group","out","spring"),
+ Q("plant","Grow something","Plant something you can eat or watch grow: herbs on a windowsill counts.","Skill",1,1,"solo","any","spring"),
+ Q("blossoms","Cherry blossom walk","Find blossoming trees at a park or botanic garden while they're out.","Outdoors",0,2,"any","out","spring"),
+ Q("selloff","Spring sell-off","List five things you don't use for sale this week.","Skill",0,1,"solo","in","spring"),
+ Q("nightswim","Night swim","Swim at night with friends somewhere it's allowed and safe.","Outdoors",0,1,"group","out","summer"),
+ Q("outdoormovie","Outdoor movie","Watch a movie outside: a park screening or a projector in the backyard.","Social",0,2,"group","out","summer"),
+ Q("fish","Catch a fish","Go fishing off a pier or a party boat. One catch is the goal.","Outdoors",1,2,"any","out","summer"),
+ Q("fireworks","Fireworks from a new spot","Watch fireworks from somewhere you've never watched them before.","Social",0,2,"group","out","summer"),
+ Q("bonfire","Beach bonfire","Do a fire on a beach that permits it. Bring something to cook.","Social",0,2,"group","out","summer")
+];
+const TWISTS=["Phone stays in your pocket the whole time.","Bring someone who's never done this.","Hard cap: $15 total.","Talk to one stranger while you're there.","One photo only. Make it count.","Take a route you've never taken to get there.","Say yes to the first suggestion anyone makes.","Do it at an hour you normally wouldn't.","Leave 30 minutes earlier than you planned.","Write a three-line field note before you leave."];
 const COST=["Free","Cheap","Splurge"], TIME=["","Under 2 hrs","Half day","Full day"];
+const CATS=["Outdoors","Food","Culture","Explore","Social","Skill"];
+const DEFAULT_LOC={lat:40.79,lon:-73.2,name:"Long Island"};
 
 /* ---------- experiment templates ---------- */
 const TEMPLATES=[
@@ -272,9 +324,10 @@ const TEMPLATES=[
 /* ---------- state ---------- */
 const KEY="fieldwork.v1";
 function blank(){return{v:1,
-  metrics:[{id:"energy",name:"Energy",lo:"Drained",hi:"Charged"},{id:"mood",name:"Mood",lo:"Low",hi:"Great"},{id:"focus",name:"Focus",lo:"Scattered",hi:"Locked in"},{id:"output",name:"Output",lo:"Nothing done",hi:"Crushed it"}],
-  checkins:{},experiments:[],quests:{active:null,log:[],custom:[],banned:[]},
-  prefs:{cost:1,time:2,who:"any",set:"any"}}}
+  metrics:[{id:"energy",name:"Energy",type:"scale",lo:"Drained",hi:"Charged"},{id:"mood",name:"Mood",type:"scale",lo:"Low",hi:"Great"},{id:"focus",name:"Focus",type:"scale",lo:"Scattered",hi:"Locked in"},{id:"output",name:"Output",type:"scale",lo:"Nothing done",hi:"Crushed it"}],
+  archived:[],checkins:{},experiments:[],quests:{active:null,log:[],custom:[],banned:[]},
+  prefs:{cost:1,time:2,who:"any",set:"any",twist:false,day:null,loc:null,remind:"21:00"}}}
+function migrate(s){const b=blank();s.metrics.forEach(m=>{if(!m.type)m.type="scale"});s.archived=s.archived||[];s.prefs=Object.assign(b.prefs,s.prefs||{});return s}
 function seed(){
   const S=blank(),t=today(),start=addDays(t,-11);
   const base={energy:[3,2,3,3,2,3,4],mood:[3,3,2,4,3,3,3],focus:[2,3,3,2,3,2,3],output:[3,3,2,3,3,3,4]};
@@ -283,6 +336,7 @@ function seed(){
   for(let i=0;i<11;i++){const d=addDays(start,i),m={};
     for(const k in base)m[k]=i<7?base[k][i]:test[k][i-7];
     S.checkins[d]={m,note:"",adh:i>=7?{[id]:true}:{},sample:true};}
+  delete S.checkins[addDays(t,-4)]; // a missed day to show backfill
   S.experiments.push({id,sample:true,title:TEMPLATES[0].title,change:TEMPLATES[0].change,metrics:["energy","mood","focus"],start,baseDays:7,testDays:7,status:"active",created:start});
   S.quests.log.push(
     {id:uid(),qid:"unknownstop",title:"Get off at an unknown stop",cat:"Explore",date:addDays(t,-9),rating:5,note:"Ended up at a bakery I'll be back to.",sample:true},
@@ -290,91 +344,144 @@ function seed(){
     {id:uid(),qid:"sunrise",title:"Sunrise at the ocean",cat:"Outdoors",date:addDays(t,-2),rating:5,note:"Cold. Worth it.",sample:true});
   [addDays(t,-9),addDays(t,-6),addDays(t,-2)].forEach(d=>{const c=S.checkins[d];if(c){c.m.mood=Math.min(5,c.m.mood+1)}});
   S.hasSample=true;return S;}
-function load(){try{const r=localStorage.getItem(KEY);if(r){const s=JSON.parse(r);if(s&&s.v===1)return s}}catch(e){}return null}
+function load(){try{const r=localStorage.getItem(KEY);if(r){const s=JSON.parse(r);if(s&&s.v===1)return migrate(s)}}catch(e){}return null}
 let S=load()||seed();
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
-const UI={tab:"today",labDetail:null,rolled:null,draft:null,metricView:null,eraseArm:false};
+const UI={tab:"today",labDetail:null,rolled:null,rolledTwist:null,draft:null,sheetDraft:null,metricView:null,eraseArm:false,delArm:null,calMonth:today().slice(0,7),wxErr:false,wxLoading:false,newType:"scale"};
 try{const h=location.hash.replace("#","");if(["today","lab","quests"].includes(h))UI.tab=h}catch(e){}
+
+/* ---------- metrics ---------- */
+const metric=id=>S.metrics.find(m=>m.id===id)||S.archived.find(m=>m.id===id)||{id,name:id,type:"scale"};
+const mt=m=>m.type||"scale";
+function fmtVal(m,v){if(v==null||isNaN(v))return "–";const t=mt(m);if(t==="yesno")return Math.round(v*100)+"%";if(t==="number")return (Math.round(v*10)/10)+(m.unit?" "+m.unit:"");return v.toFixed(1)}
+function fmtRaw(m,v){const t=mt(m);if(t==="yesno")return v?"Yes":"No";if(t==="number")return v+(m.unit?" "+m.unit:"");return String(v)}
+function fmtDiff(m,d){const s=d>=0?"+":"−",a=Math.abs(d),t=mt(m);if(t==="yesno")return s+Math.round(a*100)+" pts";if(t==="number")return s+(Math.round(a*10)/10)+(m.unit?" "+m.unit:"");return s+a.toFixed(1)}
+const better=(m,d)=>m.dir==="down"?-d:d;
+function scaleNote(m){const t=mt(m);return t==="scale"?"on a 5-point scale":t==="yesno"?"in how often it happened":"per day"}
 
 /* ---------- stats ---------- */
 const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
 const sd=a=>{if(a.length<2)return 0;const m=mean(a);return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1))};
-function permP(a,b,n){n=n||4000;const obs=Math.abs(mean(b)-mean(a)),all=a.concat(b),na=a.length;let c=0;const x=all.slice();
+function permP(a,b,n){n=n||4000;const obs=Math.abs(mean(b)-mean(a)),na=a.length,x=a.concat(b);let c=0;
   for(let i=0;i<n;i++){for(let j=x.length-1;j>0;j--){const k=Math.floor(Math.random()*(j+1));const t=x[j];x[j]=x[k];x[k]=t}
     let sa=0;for(let j=0;j<na;j++)sa+=x[j];let sb=0;for(let j=na;j<x.length;j++)sb+=x[j];
     if(Math.abs(sb/(x.length-na)-sa/na)>=obs-1e-9)c++}
   return (c+1)/(n+1)}
 function cohen(a,b){const na=a.length,nb=b.length;const p=Math.sqrt(((na-1)*sd(a)**2+(nb-1)*sd(b)**2)/(na+nb-2));const d=mean(b)-mean(a);if(!p)return d===0?0:Math.sign(d)*3;return d/p}
-function compare(a,b){
+function compare(a,b,m){
+  m=m||{};
   if(a.length<4||b.length<4)return{ok:false,na:a.length,nb:b.length};
-  const diff=mean(b)-mean(a),d=cohen(a,b),p=permP(a,b);
+  const diff=mean(b)-mean(a),d=cohen(a,b),p=permP(a,b),g=better(m,diff);
   let v,cls;
-  if(p<0.05&&Math.abs(d)>=0.5){v=diff>0?"Real improvement":"Real decline";cls=diff>0?"good":"bad"}
-  else if(p<0.2){v=diff>0?"Leaning better":"Leaning worse";cls="warn"}
+  if(p<0.05&&Math.abs(d)>=0.5){v=g>0?"Real improvement":"Real decline";cls=g>0?"good":"bad"}
+  else if(p<0.2){v=g>0?"Leaning better":"Leaning worse";cls="warn"}
   else{v="No clear difference";cls=""}
-  return{ok:true,ma:mean(a),mb:mean(b),diff,d,p,v,cls,na:a.length,nb:b.length}}
+  return{ok:true,ma:mean(a),mb:mean(b),diff,d,p,v,cls,g,na:a.length,nb:b.length}}
 window.__fieldworkStats={compare,mean,cohen,permP};
 
 /* ---------- experiments ---------- */
-const metric=id=>S.metrics.find(m=>m.id===id)||{id,name:id};
+function phaseOn(e,date){const total=e.baseDays+e.testDays,day=diffDays(e.start,date);
+  return day<0?"scheduled":day<e.baseDays?"baseline":day<total?"test":"complete"}
 function phaseOf(e){const total=e.baseDays+e.testDays,day=diffDays(e.start,today());
-  let phase=e.status!=="active"?e.status:day<0?"scheduled":day<e.baseDays?"baseline":day<total?"test":"complete";
-  return{day,total,phase}}
+  return{day,total,phase:e.status!=="active"?e.status:phaseOn(e,today())}}
 function series(e,mid){const a=[],b=[],pts=[],total=e.baseDays+e.testDays;
-  Object.keys(S.checkins).sort().forEach(d=>{const k=diffDays(e.start,d);if(k<0||k>=total)return;const c=S.checkins[d];const v=c.m&&c.m[mid];if(v==null)return;
+  Object.keys(S.checkins).sort().forEach(d=>{const k=diffDays(e.start,d);if(k<0||k>=total)return;const c=S.checkins[d];const v=c.m&&c.m[mid];if(v==null||isNaN(v))return;
     if(k<e.baseDays){a.push(v);pts.push({k,v,ph:"b"})}else{if(c.adh&&c.adh[e.id]===false)return;b.push(v);pts.push({k,v,ph:"t"})}});
   return{a,b,pts,total}}
 function questDays(){return new Set(S.quests.log.map(q=>q.date))}
+
+/* ---------- weather ---------- */
+function wxIcon(code){if(code==null)return["·",""];if(code===0)return["☀️","Clear"];if(code<=3)return["⛅","Partly cloudy"];if(code<=48)return["🌫️","Fog"];if(code<=67)return["🌧️","Rain"];if(code<=77)return["❄️","Snow"];if(code<=82)return["🌦️","Showers"];if(code<=86)return["🌨️","Snow showers"];return["⛈️","Storms"]}
+const badDay=w=>!!w&&(w.pp>=50||(w.code>=51&&w.code!==45)||w.hi<38);
+function wxFor(d){return S.wx&&S.wx.days?S.wx.days[d]:null}
+async function loadWx(force){
+  const loc=S.prefs.loc||DEFAULT_LOC,key=loc.lat.toFixed(2)+","+loc.lon.toFixed(2);
+  if(!force&&S.wx&&S.wx.key===key&&Date.now()-S.wx.at<3*3600e3&&S.wx.days[today()])return;
+  if(UI.wxLoading)return;UI.wxLoading=true;
+  try{
+    const u=`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&daily=weather_code,temperature_2m_max,precipitation_probability_max&temperature_unit=fahrenheit&timezone=auto&forecast_days=8`;
+    const r=await fetch(u);if(!r.ok)throw new Error("bad");const j=await r.json();const days={};
+    j.daily.time.forEach((d,i)=>{days[d]={code:j.daily.weather_code[i],hi:Math.round(j.daily.temperature_2m_max[i]),pp:j.daily.precipitation_probability_max[i]==null?0:j.daily.precipitation_probability_max[i]}});
+    S.wx={key,at:Date.now(),days};UI.wxErr=false;save();
+  }catch(e){UI.wxErr=true}
+  UI.wxLoading=false;if(UI.tab==="quests")renderQuests();
+}
 
 /* ---------- rendering helpers ---------- */
 const main=document.getElementById("main"),layer=document.getElementById("layer");
 function phasePill(ph){const map={baseline:["Baseline",""],test:["Testing","lab"],complete:["Ready for results","good"],scheduled:["Starts soon",""],done:["Finished",""],abandoned:["Stopped","bad"]};const x=map[ph]||[ph,""];return `<span class="pill ${x[1]}">${x[0]}</span>`}
 function progBar(e){const {day,total}=phaseOf(e);const done=Math.max(0,Math.min(total,day+1));
   const bw=Math.min(done,e.baseDays)/total*100,tw=Math.max(0,done-e.baseDays)/total*100;
-  return `<div class="prog" role="img" aria-label="Day ${Math.min(done,total)} of ${total}"><i class="b" style="width:${bw}%"></i><i class="t" style="width:${tw}%"></i></div>
-  <div class="prog-legend"><span>Day ${Math.max(0,Math.min(done,total))} of ${total}</span><span>${e.baseDays}d baseline · ${e.testDays}d test</span></div>`}
+  return `<div class="prog" role="img" aria-label="Day ${done} of ${total}"><i class="b" style="width:${bw}%"></i><i class="t" style="width:${tw}%"></i></div>
+  <div class="prog-legend"><span>Day ${done} of ${total}</span><span>${e.baseDays}d baseline · ${e.testDays}d test</span></div>`}
 function stars(n){return "●".repeat(n)+"○".repeat(5-n)}
-function toast(msg){const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),1800)}
+function toast(msg){document.querySelectorAll(".toast").forEach(t=>t.remove());const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
 function sampleBanner(){return S.hasSample?`<div class="banner"><span>You're looking at example data so you can see how it works.</span><button class="link" data-act="clearSample">Clear examples</button></div>`:""}
+
+/* ---------- check-in fields (shared by Today and past-day sheet) ---------- */
+function newDraft(date){const c=S.checkins[date];return{date,m:Object.assign({},c&&c.m),adh:Object.assign({},c&&c.adh),note:c?c.note:"",editing:!c}}
+const draftFor=ctx=>ctx==="sheet"?UI.sheetDraft:UI.draft;
+function checkinFields(D,ctx){
+  let h="";
+  S.metrics.forEach(m=>{const t=mt(m),v=D.m[m.id];
+    h+=`<div class="metric"><div class="lbl"><b>${esc(m.name)}</b>${t==="number"&&m.unit?`<span class="muted small">${esc(m.unit)}</span>`:""}</div>`;
+    if(t==="scale"){h+=`<div class="scale" role="group" aria-label="${esc(m.name)}">`;for(let i=1;i<=5;i++)h+=`<button data-act="rate" data-ctx="${ctx}" data-m="${m.id}" data-v="${i}" aria-pressed="${v===i}">${i}</button>`;
+      h+=`</div><div class="ends"><span>${esc(m.lo||"Low")}</span><span>${esc(m.hi||"High")}</span></div>`}
+    else if(t==="yesno"){h+=`<div class="yn" role="group" aria-label="${esc(m.name)}"><button data-act="rate" data-ctx="${ctx}" data-m="${m.id}" data-v="1" aria-pressed="${v===1}">Yes</button><button data-act="rate" data-ctx="${ctx}" data-m="${m.id}" data-v="0" aria-pressed="${v===0}">No</button></div>`}
+    else{h+=`<input class="numin" type="number" inputmode="decimal" step="any" id="num-${ctx}-${m.id}" data-num="${m.id}" data-ctx="${ctx}" value="${v==null?"":v}" placeholder="0" aria-label="${esc(m.name)}">`}
+    h+=`</div>`});
+  S.experiments.filter(e=>e.status==="active"&&phaseOn(e,D.date)==="test").forEach(e=>{const v=D.adh[e.id];
+    h+=`<div class="metric"><div class="lbl"><b>Did you stick to it?</b></div><div class="small muted">${esc(e.change)}</div>
+      <div class="yn"><button data-act="adh" data-ctx="${ctx}" data-e="${e.id}" data-v="1" aria-pressed="${v===true}">Yes</button><button data-act="adh" data-ctx="${ctx}" data-e="${e.id}" data-v="0" aria-pressed="${v===false}">No</button></div></div>`});
+  h+=`<label class="f" for="note-${ctx}">Note (optional)<textarea id="note-${ctx}" data-note="${ctx}" placeholder="Anything that made the day unusual">${esc(D.note)}</textarea></label>`;
+  return h;
+}
+function summaryPills(c){return `<div class="row">${S.metrics.filter(m=>c.m[m.id]!=null).map(m=>`<span class="pill">${esc(m.name)} <b class="mono">${esc(fmtRaw(m,c.m[m.id]))}</b></span>`).join("")}</div>`}
+
+/* ---------- history calendar ---------- */
+function calendarHTML(){
+  const [y,mo]=UI.calMonth.split("-").map(Number),first=new Date(y,mo-1,1),days=new Date(y,mo,0).getDate(),t=today(),qd=questDays();
+  const atCurrent=UI.calMonth>=t.slice(0,7);
+  let missed=0;for(let i=1;i<=7;i++){if(!S.checkins[addDays(t,-i)])missed++}
+  let h=`<section class="card"><div class="calhead"><button class="iconbtn" data-act="calNav" data-d="-1" aria-label="Previous month">‹</button><h2>${first.toLocaleDateString(undefined,{month:"long",year:"numeric"})}</h2><button class="iconbtn" data-act="calNav" data-d="1" aria-label="Next month" ${atCurrent?"disabled":""}>›</button></div>
+   <div class="cal" role="grid">${["S","M","T","W","T","F","S"].map(d=>`<div class="dow" aria-hidden="true">${d}</div>`).join("")}`;
+  for(let i=0;i<first.getDay();i++)h+=`<div></div>`;
+  for(let d=1;d<=days;d++){const date=`${y}-${pad(mo)}-${pad(d)}`,has=!!S.checkins[date],fut=date>t;
+    h+=`<button class="${has?"has":""} ${date===t?"today":""}" data-act="openDay" data-date="${date}" ${fut?"disabled":""} aria-label="${fmt(date,{weekday:"long",month:"long",day:"numeric"})}${has?", logged":""}${qd.has(date)?", quest":""}">${d}${qd.has(date)?'<span class="qd"></span>':""}</button>`}
+  h+=`</div><div class="legend"><span><i style="background:var(--lab-soft)"></i>Checked in</span><span><i style="background:var(--quest);border-radius:50%"></i>Quest day</span></div>
+   <div class="small muted">${missed?`${missed} unlogged day${missed===1?"":"s"} in the past week. Tap any day to fill it in.`:"Every day this past week is logged."}</div></section>`;
+  return h;
+}
 
 /* ---------- TODAY ---------- */
 function renderToday(){
   const t=today(),c=S.checkins[t];
-  if(!UI.draft||UI.draft.date!==t)UI.draft={date:t,m:Object.assign({},c&&c.m),adh:Object.assign({},c&&c.adh),note:c?c.note:"",editing:!c};
-  const D=UI.draft,active=S.experiments.filter(e=>e.status==="active"),testing=active.filter(e=>phaseOf(e).phase==="test");
+  if(!UI.draft||UI.draft.date!==t)UI.draft=newDraft(t);
+  const D=UI.draft,active=S.experiments.filter(e=>e.status==="active");
   let h=sampleBanner();
   h+=`<div><div class="eyebrow">${esc(fmt(t,{weekday:"long"}))}</div><h1>${esc(fmt(t,{month:"long",day:"numeric"}))}</h1></div>`;
-  // check-in
-  if(D.editing){
-    h+=`<section class="card lab" aria-labelledby="ciH"><div class="row between"><h2 id="ciH">Daily check-in</h2><span class="eyebrow">10 seconds</span></div>`;
-    S.metrics.forEach(m=>{h+=`<div class="metric"><div class="lbl"><b>${esc(m.name)}</b></div><div class="scale" role="group" aria-label="${esc(m.name)}">`;
-      for(let i=1;i<=5;i++)h+=`<button data-act="rate" data-m="${m.id}" data-v="${i}" aria-pressed="${D.m[m.id]===i}">${i}</button>`;
-      h+=`</div><div class="ends"><span>${esc(m.lo||"Low")}</span><span>${esc(m.hi||"High")}</span></div></div>`});
-    testing.forEach(e=>{const v=D.adh[e.id];h+=`<div class="metric"><div class="lbl"><b>Did you stick to it today?</b></div><div class="small muted">${esc(e.change)}</div>
-      <div class="yn"><button data-act="adh" data-e="${e.id}" data-v="1" aria-pressed="${v===true}">Yes</button><button data-act="adh" data-e="${e.id}" data-v="0" aria-pressed="${v===false}">No</button></div></div>`});
-    h+=`<label class="f" for="ciNote">Note (optional)<textarea id="ciNote" placeholder="Anything that made today unusual">${esc(D.note)}</textarea></label>
-      <button class="btn lab wide" data-act="saveCheckin" ${Object.keys(D.m).length?"":"disabled"}>Save check-in</button></section>`;
+  if(D.editing||!c){
+    h+=`<section class="card lab" aria-labelledby="ciH"><div class="row between"><h2 id="ciH">Daily check-in</h2><span class="eyebrow">10 seconds</span></div>${checkinFields(D,"today")}
+      <button class="btn lab wide" data-act="saveCheckin" data-ctx="today">Save check-in</button></section>`;
   }else{
-    h+=`<section class="card lab"><div class="row between"><h2>Daily check-in</h2><span class="pill good">Logged</span></div>
-      <div class="row">${S.metrics.filter(m=>c.m[m.id]!=null).map(m=>`<span class="pill">${esc(m.name)} <b class="mono">${c.m[m.id]}</b></span>`).join("")}</div>
+    h+=`<section class="card lab"><div class="row between"><h2>Daily check-in</h2><span class="pill good">Logged</span></div>${summaryPills(c)}
       ${c.note?`<div class="small muted">${esc(c.note)}</div>`:""}<div><button class="link" data-act="editCheckin">Edit today's check-in</button></div></section>`;
   }
-  // experiments
   h+=`<section class="card"><div class="row between"><h2>Experiments running</h2><button class="link" data-act="goto" data-tab="lab">Open Lab</button></div>`;
   if(!active.length)h+=`<div class="empty">No experiment running. Pick something you want to know about yourself and test it.<br><br><button class="btn lab" data-act="newExp">Start an experiment</button></div>`;
   active.forEach(e=>{const ph=phaseOf(e);h+=`<button class="item" data-act="openExp" data-id="${e.id}"><div class="stack" style="gap:6px;flex:1"><div class="t">${esc(e.title)}</div>${progBar(e)}</div>${phasePill(ph.phase)}</button>`});
   h+=`</section>`;
-  // quest
   h+=questBlock(true);
-  const n=Object.keys(S.checkins).length;
-  h+=`<div class="small muted mono" style="text-align:center">${n} check-in${n===1?"":"s"} logged · ${S.quests.log.length} quest${S.quests.log.length===1?"":"s"} done</div>`;
+  h+=calendarHTML();
   main.innerHTML=h;
 }
 function questBlock(compact){
   const a=S.quests.active;
-  if(a){return `<section class="qcard" aria-label="Active quest"><div class="row between"><span class="eyebrow">Active quest · ${esc(a.cat)}</span><span class="dice" aria-hidden="true">⚂</span></div>
-    <h3>${esc(a.title)}</h3><div class="small">${esc(a.detail)}</div>
+  if(a){const w=a.day?wxFor(a.day):null,wi=w?wxIcon(w.code):null;
+    return `<section class="qcard" aria-label="Active quest"><div class="row between"><span class="eyebrow">Active quest · ${esc(a.cat)}${a.day?" · "+esc(a.day===today()?"today":fmt(a.day,{weekday:"long"})):""}</span><span class="dice" aria-hidden="true">⚂</span></div>
+    <h3>${esc(a.title)}</h3><div class="small">${esc(a.detail)}</div>${a.twist?`<div class="twist"><b>Twist:</b> ${esc(a.twist)}</div>`:""}
+    ${w?`<div class="wxnote">${wi[0]} ${w.hi}° · ${w.pp}% chance of rain</div>`:""}
     <div class="row"><button class="btn quest" data-act="completeQuest">Mark complete</button><button class="btn ghost" data-act="dropQuest">Drop it</button></div></section>`}
   if(compact)return `<section class="card quest"><div class="row between"><h2>Side quest</h2><span class="dice" aria-hidden="true">⚄</span></div><div class="small muted">Nothing on deck. Roll one for this week.</div><button class="btn quest" data-act="goto" data-tab="quests">Roll a quest</button></section>`;
   return "";
@@ -395,13 +502,19 @@ function renderLab(){
     h+=`</div></section>`});
   main.innerHTML=h;
 }
+function yRange(m,pts){const t=mt(m);
+  if(t==="scale")return{lo:1,hi:5,ticks:[1,2,3,4,5],lab:v=>String(v)};
+  if(t==="yesno")return{lo:0,hi:1,ticks:[0,1],lab:v=>v?"Yes":"No"};
+  let lo=Math.min(...pts.map(p=>p.v)),hi=Math.max(...pts.map(p=>p.v));if(!isFinite(lo)){lo=0;hi=1}
+  lo=Math.floor(lo);hi=Math.ceil(hi);if(lo===hi)hi=lo+1;const step=(hi-lo)/4,ticks=[0,1,2,3,4].map(i=>lo+i*step);
+  return{lo,hi,ticks,lab:v=>String(Math.round(v*10)/10)}}
 function chartSVG(e,mid){
-  const {pts,total,a,b}=series(e,mid);const W=320,H=130,L=22,R=8,T=16,B=20;
-  const x=k=>L+(k+.5)/total*(W-L-R),y=v=>T+(5-v)/4*(H-T-B);
+  const m=metric(mid),{pts,total,a,b}=series(e,mid),R0=yRange(m,pts);const W=320,H=130,L=28,R=8,T=16,B=20;
+  const x=k=>L+(k+.5)/total*(W-L-R),y=v=>T+(R0.hi-v)/(R0.hi-R0.lo)*(H-T-B);
   const bx=L+e.baseDays/total*(W-L-R);
-  let s=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(metric(mid).name)} by day, baseline versus test">`;
+  let s=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(m.name)} by day, baseline versus test">`;
   s+=`<rect class="band-b" x="${L}" y="${T}" width="${bx-L}" height="${H-T-B}"/><rect class="band-t" x="${bx}" y="${T}" width="${W-R-bx}" height="${H-T-B}"/>`;
-  for(let v=1;v<=5;v++)s+=`<line class="axis" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" opacity="${v===1?1:.5}"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${v}</text>`;
+  R0.ticks.forEach((v,i)=>{s+=`<line class="axis" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" opacity="${i===0?1:.5}"/><text x="${L-5}" y="${y(v)+3}" text-anchor="end">${esc(R0.lab(v))}</text>`});
   s+=`<text x="${L+4}" y="${T-5}">BASELINE</text><text x="${bx+4}" y="${T-5}">TEST</text>`;
   if(a.length)s+=`<line class="mean b" x1="${L}" x2="${bx}" y1="${y(mean(a))}" y2="${y(mean(a))}"/>`;
   if(b.length)s+=`<line class="mean t" x1="${bx}" x2="${W-R}" y1="${y(mean(b))}" y2="${y(mean(b))}"/>`;
@@ -420,55 +533,79 @@ function renderExp(e){
     ph.phase==="baseline"?`Baseline: live normally for ${e.baseDays-ph.day} more day${e.baseDays-ph.day===1?"":"s"}. Don't start the change yet.`:
     ph.phase==="test"?`Test phase: do the change every day. ${ph.total-ph.day} day${ph.total-ph.day===1?"":"s"} left.`:
     "Both phases are done. Read your results below, then close the experiment."}</div></section>`;
-  // results
-  const rows=e.metrics.map(mid=>{const {a,b}=series(e,mid);return{mid,r:compare(a,b)}});
+  const rows=e.metrics.map(mid=>{const {a,b}=series(e,mid);return{mid,m:metric(mid),r:compare(a,b,metric(mid))}});
   h+=`<section class="card"><div class="row between"><h2>Results so far</h2><span class="eyebrow">Baseline vs test</span></div>`;
   const ready=rows.filter(x=>x.r.ok);
-  if(!ready.length){const r=rows[0].r;h+=`<div class="empty">Need at least 4 check-ins in each phase to judge. You have ${r.na} baseline and ${r.nb} test so far.</div>`}
+  if(!ready.length){const r=rows[0].r;h+=`<div class="empty">Need at least 4 check-ins in each phase to judge. You have ${r.na} baseline and ${r.nb} test so far. Missed a day? Fill it in from the calendar on Today.</div>`}
   else{
     const best=ready.slice().sort((p,q)=>Math.abs(q.r.d)-Math.abs(p.r.d))[0];
-    h+=`<div class="verdict ${best.r.cls}"><b>${esc(metric(best.mid).name)}: ${esc(best.r.v)}</b><span class="small muted">${best.r.diff>=0?"+":""}${best.r.diff.toFixed(2)} points on a 5-point scale. ${best.r.p<0.05?"Unlikely to be chance.":best.r.p<0.2?"Could still be chance. More days would settle it.":"Looks like normal day-to-day noise."}</span></div>
+    h+=`<div class="verdict ${best.r.cls}"><b>${esc(best.m.name)}: ${esc(best.r.v)}</b><span class="small muted">${esc(fmtDiff(best.m,best.r.diff))} ${scaleNote(best.m)}. ${best.r.p<0.05?"Unlikely to be chance.":best.r.p<0.2?"Could still be chance. More days would settle it.":"Looks like normal day-to-day noise."}</span></div>
     <div class="tablewrap"><table class="res"><thead><tr><th>Metric</th><th>Base</th><th>Test</th><th>Change</th><th>Odds it's luck</th></tr></thead><tbody>`;
-    rows.forEach(({mid,r})=>{h+=r.ok?`<tr><td>${esc(metric(mid).name)}</td><td>${r.ma.toFixed(1)}</td><td>${r.mb.toFixed(1)}</td><td class="${r.diff>0.05?"pos":r.diff<-0.05?"neg":""}">${r.diff>=0?"+":""}${r.diff.toFixed(1)}</td><td>${r.p<0.01?"<1%":Math.round(r.p*100)+"%"}</td></tr>`:
-      `<tr><td>${esc(metric(mid).name)}</td><td colspan="4" style="text-align:right">needs data</td></tr>`});
+    rows.forEach(({m,r})=>{h+=r.ok?`<tr><td>${esc(m.name)}</td><td>${esc(fmtVal(m,r.ma))}</td><td>${esc(fmtVal(m,r.mb))}</td><td class="${r.g>1e-9&&Math.abs(r.diff)>0.05?"pos":r.g<-1e-9&&Math.abs(r.diff)>0.05?"neg":""}">${esc(fmtDiff(m,r.diff))}</td><td>${r.p<0.01?"<1%":Math.round(r.p*100)+"%"}</td></tr>`:
+      `<tr><td>${esc(m.name)}</td><td colspan="4" style="text-align:right">needs data</td></tr>`});
     h+=`</tbody></table></div><div class="small muted">"Odds it's luck" is how often shuffling your days at random produces a gap this big. Under 5% is a real signal.</div>`;
   }
   h+=`</section>`;
-  // chart
   h+=`<section class="card"><div class="chips labc" role="group" aria-label="Metric">${e.metrics.map(m=>`<button class="chip" data-act="metricView" data-m="${m}" aria-pressed="${m===UI.metricView}">${esc(metric(m).name)}</button>`).join("")}</div>${chartSVG(e,UI.metricView)}
    <div class="small muted">Dashed lines are each phase's average. Test days where you skipped the change are left out.</div></section>`;
-  // actions
   h+=`<section class="row">${e.status==="active"?`<button class="btn ghost" data-act="finishExp" data-id="${e.id}">${ph.phase==="complete"?"Close experiment":"End early"}</button>`:`<button class="btn ghost" data-act="reopenExp" data-id="${e.id}">Reopen</button>`}<button class="btn danger" data-act="deleteExp" data-id="${e.id}">${UI.delArm===e.id?"Tap again to delete":"Delete"}</button></section>`;
   main.innerHTML=h;
 }
 
 /* ---------- QUESTS ---------- */
 function pool(){return DECK.concat(S.quests.custom).filter(q=>!S.quests.banned.includes(q.id))}
-function eligible(){const P=S.prefs,recent=new Set(S.quests.log.filter(l=>diffDays(l.date,today())<60).map(l=>l.qid));
-  return pool().filter(q=>q.cost<=P.cost&&q.time<=P.time&&(P.who==="any"||q.who==="any"||q.who===P.who)&&(P.set==="any"||q.set==="any"||q.set===P.set)&&!recent.has(q.id)&&!(S.quests.active&&S.quests.active.id===q.id))}
+function dayOpts(){const t=today(),arr=[[t,"Today"],[addDays(t,1),"Tomorrow"]],dow=parse(t).getDay();
+  [addDays(t,(6-dow+7)%7),addDays(t,(7-dow)%7)].forEach(d=>{if(!arr.some(a=>a[0]===d))arr.push([d,fmt(d,{weekday:"short"})])});
+  let k=2;while(arr.length<4){const d=addDays(t,k++);if(!arr.some(a=>a[0]===d))arr.push([d,fmt(d,{weekday:"short"})])}
+  return arr.sort((a,b)=>a[0].localeCompare(b[0])).slice(0,4)}
+function questDay(){const opts=dayOpts().map(o=>o[0]);if(!S.prefs.day||!opts.includes(S.prefs.day))S.prefs.day=today();return S.prefs.day}
+function eligible(){const P=S.prefs,day=questDay(),season=seasonOf(day),w=wxFor(day),rain=badDay(w)&&P.set!=="out";
+  const recent=new Set(S.quests.log.filter(l=>diffDays(l.date,today())<60).map(l=>l.qid));
+  return pool().filter(q=>q.cost<=P.cost&&q.time<=P.time&&(P.who==="any"||q.who==="any"||q.who===P.who)&&(P.set==="any"||q.set==="any"||q.set===P.set)
+    &&(!q.season||q.season===season)&&!(rain&&q.set==="out")&&!recent.has(q.id)&&!(S.quests.active&&S.quests.active.id===q.id))}
+function tasteWeights(){const by={};S.quests.log.forEach(l=>{(by[l.cat]=by[l.cat]||[]).push(l.rating)});const out={};for(const c in by)out[c]=mean(by[c]);return out}
+function weightedPick(list){const taste=tasteWeights();
+  const ws=list.map(q=>{let w=1;const a=taste[q.cat];if(a!=null)w*=Math.max(0.3,1+(a-3)*0.5);if(q.season)w*=1.6;if(q.custom)w*=1.3;return w});
+  let r=Math.random()*ws.reduce((s,x)=>s+x,0);for(let i=0;i<list.length;i++){r-=ws[i];if(r<=0)return list[i]}return list[list.length-1]}
 function chipGroup(label,key,opts){return `<div class="fgroup"><span class="eyebrow">${label}</span><div class="chips" role="group" aria-label="${label}">${opts.map(([v,t])=>`<button class="chip" data-act="pref" data-k="${key}" data-v="${v}" aria-pressed="${String(S.prefs[key])===String(v)}">${t}</button>`).join("")}</div></div>`}
+function dayPicker(){const day=questDay();
+  let h=`<div class="fgroup"><span class="eyebrow">When</span><div class="fc" role="group" aria-label="Day">`;
+  dayOpts().forEach(([d,l])=>{const w=wxFor(d),wi=w?wxIcon(w.code):null;
+    h+=`<button data-act="pickDay" data-d="${d}" aria-pressed="${d===day}" aria-label="${esc(l)}${w?", "+wi[1]+", high "+w.hi+", "+w.pp+" percent rain":""}"><span>${esc(l)}</span>${w?`<span class="wx" aria-hidden="true">${wi[0]}</span><b>${w.hi}°</b><span class="pp">${w.pp}% rain</span>`:`<span class="pp">${UI.wxLoading?"loading…":"no forecast"}</span>`}</button>`});
+  h+=`</div>`;
+  const w=wxFor(day);
+  if(w&&badDay(w))h+=`<div class="wxnote">${wxIcon(w.code)[1]} likely ${day===today()?"today":fmt(day,{weekday:"long"})}, so outdoor quests are held back. Pick "Outdoors" to override.</div>`;
+  else if(!S.wx&&UI.wxErr)h+=`<div class="wxnote">Forecast unavailable right now. Quests still work, they just won't account for weather.</div>`;
+  const loc=S.prefs.loc;h+=`<div class="small muted">Forecast for ${esc(loc?loc.name:DEFAULT_LOC.name)}. <button class="link" data-act="useLoc">${loc?"Update location":"Use my location"}</button></div></div>`;
+  return h;
+}
 function renderQuests(){
   let h=sampleBanner();
   h+=`<div><div class="eyebrow">Side Quests</div><h1>Roll something you've never done</h1></div>`;
   h+=questBlock(false);
+  const n=eligible().length;
   h+=`<section class="card quest"><h2>Set the dice</h2>
+    ${dayPicker()}
     ${chipGroup("Budget","cost",[[0,"Free"],[1,"Cheap"],[2,"Splurge OK"]])}
     ${chipGroup("Time","time",[[1,"Under 2 hrs"],[2,"Half day"],[3,"Full day"]])}
     ${chipGroup("Company","who",[["solo","Solo"],["group","Friends"],["any","Either"]])}
     ${chipGroup("Setting","set",[["in","Indoors"],["out","Outdoors"],["any","Either"]])}
-    <button class="btn quest wide" data-act="roll">Roll a quest <span aria-hidden="true">⚅</span></button>
-    <div class="small muted mono" style="text-align:center">${eligible().length} quests match</div></section>`;
+    <div class="switchrow"><div><b>Add a twist</b><div class="small muted">A random rule that changes how you do it</div></div><button class="switch" role="switch" aria-checked="${!!S.prefs.twist}" aria-label="Add a twist" data-act="toggleTwist"></button></div>
+    <button class="btn quest wide" data-act="roll" ${n?"":"disabled"}>Roll a quest <span aria-hidden="true">⚅</span></button>
+    <div class="small muted mono" style="text-align:center">${n?`${n} quests match`:"Nothing matches. Loosen a filter."}</div></section>`;
   if(UI.rolled){const q=pool().find(x=>x.id===UI.rolled);if(q){
-    h+=`<section class="qcard roll" aria-live="polite"><div class="row between"><span class="eyebrow">${esc(q.cat)}</span><span class="dice" aria-hidden="true">⚃</span></div><h3>${esc(q.title)}</h3><div class="small">${esc(q.detail)}</div>
+    h+=`<section class="qcard roll" aria-live="polite"><div class="row between"><span class="eyebrow">${esc(q.cat)}${q.season?" · "+q.season+" only":""}</span><span class="dice" aria-hidden="true">⚃</span></div><h3>${esc(q.title)}</h3><div class="small">${esc(q.detail)}</div>
+      ${UI.rolledTwist?`<div class="twist"><b>Twist:</b> ${esc(UI.rolledTwist)}</div>`:""}
       <div class="row"><span class="pill quest">${COST[q.cost]}</span><span class="pill quest">${TIME[q.time]}</span><span class="pill quest">${q.who==="any"?"Solo or friends":q.who==="solo"?"Solo":"Friends"}</span></div>
       <div class="row"><button class="btn quest" data-act="acceptQuest" ${S.quests.active?"disabled":""}>${S.quests.active?"Finish your active quest first":"Accept quest"}</button><button class="btn ghost" data-act="roll">Reroll</button><button class="link" data-act="banQuest">Never show this</button></div></section>`}}
-  // stats
   const L=S.quests.log,avg=L.length?(L.reduce((s,q)=>s+q.rating,0)/L.length).toFixed(1):"–",cats=new Set(L.map(q=>q.cat)).size;
   h+=`<div class="stats"><div class="stat"><b>${L.length}</b><span>Quests done</span></div><div class="stat"><b>${avg}</b><span>Avg rating</span></div><div class="stat"><b>${cats}/6</b><span>Types tried</span></div></div>`;
+  const taste=tasteWeights(),tk=Object.keys(taste);
+  if(tk.length){const top=tk.sort((a,b)=>taste[b]-taste[a]);h+=`<div class="small muted">Your dice lean toward <b>${esc(top[0])}</b>${top.length>1&&taste[top[top.length-1]]<3?` and away from <b>${esc(top[top.length-1])}</b>`:""} based on your ratings.</div>`}
   h+=questEffect();
   h+=`<section class="card"><div class="row between"><h2>Quest log</h2><button class="link" data-act="addQuest">Add your own idea</button></div><div class="list">`;
   if(!L.length)h+=`<div class="empty">Finished quests land here with your rating and a note.</div>`;
-  L.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(q=>{h+=`<div class="item"><div><div class="t">${esc(q.title)}</div><div class="small muted">${esc(q.note||"")}</div></div><div style="text-align:right;flex-shrink:0"><div class="mono small" aria-label="${q.rating} of 5">${stars(q.rating)}</div><div class="eyebrow">${esc(fmt(q.date))}</div></div></div>`});
+  L.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(q=>{h+=`<div class="item"><div><div class="t">${esc(q.title)}</div>${q.twist?`<div class="small muted">Twist: ${esc(q.twist)}</div>`:""}<div class="small muted">${esc(q.note||"")}</div></div><div style="text-align:right;flex-shrink:0"><div class="mono small" aria-label="${q.rating} of 5">${stars(q.rating)}</div><div class="eyebrow">${esc(fmt(q.date))}</div></div></div>`});
   h+=`</div></section>`;
   main.innerHTML=h;
 }
@@ -479,7 +616,7 @@ function questEffect(){
   if(on.length<3||off.length<3){h+=`<div class="small muted">Once you've done 3 quests on days you also checked in, this compares your quest days to your regular days. ${on.length}/3 so far.</div></section>`;return h}
   h+=`<div class="tablewrap"><table class="res"><thead><tr><th>Metric</th><th>Quest days</th><th>Other days</th><th>Gap</th></tr></thead><tbody>`;
   S.metrics.forEach(m=>{const A=on.map(d=>S.checkins[d].m[m.id]).filter(v=>v!=null),B=off.map(d=>S.checkins[d].m[m.id]).filter(v=>v!=null);if(!A.length||!B.length)return;
-    const g=mean(A)-mean(B);h+=`<tr><td>${esc(m.name)}</td><td>${mean(A).toFixed(1)}</td><td>${mean(B).toFixed(1)}</td><td class="${g>0.05?"pos":g<-0.05?"neg":""}">${g>=0?"+":""}${g.toFixed(1)}</td></tr>`});
+    const g=mean(A)-mean(B),gb=better(m,g);h+=`<tr><td>${esc(m.name)}</td><td>${esc(fmtVal(m,mean(A)))}</td><td>${esc(fmtVal(m,mean(B)))}</td><td class="${gb>0.05?"pos":gb<-0.05?"neg":""}">${esc(fmtDiff(m,g))}</td></tr>`});
   const linked=S.experiments.some(e=>e.questLinked&&e.status==="active");
   h+=`</tbody></table></div><div class="small muted">This is a correlation: maybe quests lift your mood, maybe you only go questing on good days. ${linked?"Your side-quest experiment will settle it.":"Run the side-quest experiment to find out which."}</div>
   ${linked?"":`<button class="btn ghost" data-act="newExp" data-tpl="3">Start the side-quest experiment</button>`}</section>`;
@@ -487,11 +624,17 @@ function questEffect(){
 }
 
 /* ---------- sheets ---------- */
-function openSheet(html){layer.innerHTML=`<div class="overlay" data-act="closeSheet"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;const f=layer.querySelector("input,textarea,button");if(f)f.focus()}
+function openSheet(html,keepFocus){layer.innerHTML=`<div class="overlay" data-act="closeSheet"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;if(!keepFocus){const f=layer.querySelector(".sheet button");if(f)f.focus()}}
 function closeSheet(){layer.innerHTML=""}
+function daySheet(){const D=UI.sheetDraft,c=S.checkins[D.date],qs=S.quests.log.filter(q=>q.date===D.date);
+  openSheet(`<div class="row between"><div><div class="eyebrow">${D.date===today()?"Today":esc(fmt(D.date,{weekday:"long"}))}</div><h2>${esc(fmt(D.date,{month:"long",day:"numeric",year:"numeric"}))}</h2></div><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
+   ${qs.length?`<div class="row">${qs.map(q=>`<span class="pill quest">Quest: ${esc(q.title)}</span>`).join("")}</div>`:""}
+   ${checkinFields(D,"sheet")}
+   <button class="btn lab wide" data-act="saveCheckin" data-ctx="sheet">${c?"Save changes":"Log this day"}</button>
+   ${c?`<button class="btn danger" data-act="delCheckin">${UI.delDay===D.date?"Tap again to delete this day":"Delete this check-in"}</button>`:""}`,true)}
 function newExpSheet(tplIdx){
   const tp=tplIdx!=null?TEMPLATES[tplIdx]:null;
-  let h=`<div class="row between"><h2>New experiment</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
+  openSheet(`<div class="row between"><h2>New experiment</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
    <div class="fgroup"><span class="eyebrow">Start from an idea</span><div class="chips labc">${TEMPLATES.map((t,i)=>`<button class="chip" data-act="useTpl" data-i="${i}" aria-pressed="${tplIdx===i}">${esc(t.change)}</button>`).join("")}</div></div>
    <label class="f" for="exTitle">What do you want to find out?<input id="exTitle" type="text" value="${esc(tp?tp.title:"")}" placeholder="Does reading before bed help my focus?"></label>
    <label class="f" for="exChange">The one change you'll make<input id="exChange" type="text" value="${esc(tp?tp.change:"")}" placeholder="20 minutes of reading, no screens after 10 p.m."></label>
@@ -500,58 +643,90 @@ function newExpSheet(tplIdx){
    <label class="f" for="exStart">Start date<input id="exStart" type="date" value="${today()}"></label>
    <div class="small muted">Tip: 7 + 7 days catches big effects. Go 14 + 14 for subtle ones.</div>
    <input type="hidden" id="exQL" value="${tp&&tp.questLinked?1:0}">
-   <button class="btn lab wide" data-act="createExp">Start experiment</button>`;
-  openSheet(h);
-}
+   <button class="btn lab wide" data-act="createExp">Start experiment</button>`)}
 function completeSheet(){const a=S.quests.active;
   openSheet(`<div class="row between"><h2>Quest complete</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
-   <div class="t" style="font-weight:700">${esc(a.title)}</div>
+   <div style="font-weight:700">${esc(a.title)}</div>${a.twist?`<div class="small muted">Twist: ${esc(a.twist)}</div>`:""}
    <div class="fgroup"><span class="eyebrow">How was it?</span><div class="scale" id="qRate">${[1,2,3,4,5].map(i=>`<button data-act="qrate" data-v="${i}" aria-pressed="${i===4}">${i}</button>`).join("")}</div><div class="ends"><span>Skip it</span><span>Do it again</span></div></div>
-   <label class="f" for="qDate">Date<input id="qDate" type="date" value="${today()}"></label>
+   <label class="f" for="qDate">Date<input id="qDate" type="date" value="${a.day&&a.day<=today()?a.day:today()}" max="${today()}"></label>
    <label class="f" for="qNote">Field note<textarea id="qNote" placeholder="What happened? What would you tell a friend?"></textarea></label>
    <button class="btn quest wide" data-act="logQuest">Log it</button>`)}
 function addQuestSheet(){
   openSheet(`<div class="row between"><h2>Add a quest idea</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
    <label class="f" for="cqT">Quest<input id="cqT" type="text" placeholder="Try the dumpling spot in Flushing"></label>
    <label class="f" for="cqD">Details<textarea id="cqD" placeholder="What makes it a quest"></textarea></label>
-   <div class="grid2"><label class="f" for="cqCat">Type<select id="cqCat">${["Outdoors","Food","Culture","Explore","Social","Skill"].map(c=>`<option>${c}</option>`).join("")}</select></label>
+   <div class="grid2"><label class="f" for="cqCat">Type<select id="cqCat">${CATS.map(c=>`<option>${c}</option>`).join("")}</select></label>
    <label class="f" for="cqCost">Budget<select id="cqCost"><option value="0">Free</option><option value="1" selected>Cheap</option><option value="2">Splurge</option></select></label>
    <label class="f" for="cqTime">Time<select id="cqTime"><option value="1">Under 2 hrs</option><option value="2" selected>Half day</option><option value="3">Full day</option></select></label>
    <label class="f" for="cqSet">Setting<select id="cqSet"><option value="any">Either</option><option value="in">Indoors</option><option value="out">Outdoors</option></select></label></div>
+   <div class="small muted">Your own ideas come up a little more often than the built-in deck.</div>
    <button class="btn quest wide" data-act="saveCustom">Add to the deck</button>`)}
 function settingsSheet(){
-  const custom=S.quests.custom.length;
+  const custom=S.quests.custom.length,nt=UI.newType;
   openSheet(`<div class="row between"><h2>Settings</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
-   <div class="fgroup"><span class="eyebrow">Check-in metrics</span><div class="list">${S.metrics.map(m=>`<div class="item"><div><div class="t">${esc(m.name)}</div><div class="small muted">${esc(m.lo||"Low")} → ${esc(m.hi||"High")}</div></div>${S.metrics.length>1?`<button class="link" data-act="rmMetric" data-m="${m.id}">Remove</button>`:""}</div>`).join("")}</div>
-   <div class="grid2"><input id="nmName" type="text" placeholder="New metric, e.g. Sleep"><button class="btn ghost" data-act="addMetric">Add metric</button></div>
+   <div class="fgroup"><span class="eyebrow">Daily reminder</span><div class="small muted">Adds a repeating check-in reminder to your phone's calendar. Pick the time, then choose your calendar.</div>
+   <div class="grid2"><label class="f" for="remTime">Time<input id="remTime" type="time" value="${esc(S.prefs.remind||"21:00")}"></label><div></div></div>
+   <div class="row"><button class="btn ghost" data-act="remGoogle">Google Calendar</button><button class="btn ghost" data-act="remIcs">Apple Calendar</button></div></div>
+   <div class="fgroup"><span class="eyebrow">Check-in metrics</span><div class="list">${S.metrics.map(m=>`<div class="item"><div><div class="t">${esc(m.name)}</div><div class="small muted">${mt(m)==="scale"?esc((m.lo||"Low")+" → "+(m.hi||"High")):mt(m)==="yesno"?"Yes / no":"Number"+(m.unit?" ("+esc(m.unit)+")":"")}${m.dir==="down"?" · lower is better":""}</div></div>${S.metrics.length>1?`<button class="link" data-act="rmMetric" data-m="${m.id}">Remove</button>`:""}</div>`).join("")}</div>
+   <div class="stack" style="gap:8px;border:1px dashed var(--rule);border-radius:12px;padding:12px">
+     <b>Add a metric</b>
+     <div class="chips labc" role="group" aria-label="Metric type">${[["scale","1–5 rating"],["yesno","Yes / no"],["number","Number"]].map(([v,t])=>`<button class="chip" data-act="newType" data-v="${v}" aria-pressed="${nt===v}">${t}</button>`).join("")}</div>
+     <input id="nmName" type="text" placeholder="${nt==="yesno"?"Worked out":nt==="number"?"Hours slept":"Stress"}" aria-label="Metric name">
+     ${nt==="number"?`<input id="nmUnit" type="text" placeholder="Unit (hrs, $, cups)" aria-label="Unit">`:""}
+     ${nt!=="yesno"?`<select id="nmDir" aria-label="Which direction is better"><option value="up">Higher is better</option><option value="down">Lower is better</option></select>`:""}
+     <button class="btn ghost" data-act="addMetric">Add metric</button>
+   </div>
    <div class="small muted">Removing a metric hides it from check-ins. Past data stays.</div></div>
    <div class="fgroup"><span class="eyebrow">Backup</span><div class="small muted">Everything lives on this device only. Copy a backup now and then, or to move to a new phone.</div>
    <div class="row"><button class="btn ghost" data-act="copyBackup">Copy backup</button><button class="btn ghost" data-act="showImport">Restore from backup</button></div>
    <textarea id="bk" hidden></textarea><button class="btn lab" data-act="doImport" id="doImport" hidden>Restore this backup</button></div>
    ${S.hasSample?`<button class="btn ghost" data-act="clearSample">Clear example data</button>`:""}
-   <div class="small muted mono">${Object.keys(S.checkins).length} check-ins · ${S.experiments.length} experiments · ${S.quests.log.length} quests · ${custom} custom ideas</div>
+   <div class="small muted mono">${Object.keys(S.checkins).length} check-ins · ${S.experiments.length} experiments · ${S.quests.log.length} quests · ${custom} custom ideas · v${VERSION}</div>
    <button class="btn danger" data-act="eraseAll">${UI.eraseArm?"Tap again to erase everything":"Erase everything"}</button>`)}
+
+/* ---------- reminders ---------- */
+const APP_URL="https://francis1-glitch.github.io/fieldwork/";
+function remParts(){const v=(document.getElementById("remTime")||{}).value||S.prefs.remind||"21:00";S.prefs.remind=v;save();
+  const [hh,mm]=v.split(":").map(Number),s=parse(today());s.setHours(hh,mm,0,0);const e=new Date(s.getTime()+5*60000);
+  const f=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  return{start:f(s),end:f(e)}}
+function remGoogle(){const p=remParts();let tz="";try{tz=Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){}
+  const u=`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent("Fieldwork check-in")}&details=${encodeURIComponent("10 seconds. Open Fieldwork and log today. "+APP_URL)}&dates=${p.start}/${p.end}&recur=${encodeURIComponent("RRULE:FREQ=DAILY")}${tz?"&ctz="+encodeURIComponent(tz):""}`;
+  const a=document.createElement("a");a.href=u;a.target="_blank";a.rel="noopener";document.body.appendChild(a);a.click();a.remove()}
+function remIcs(){const p=remParts(),now=new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Fieldwork//EN","BEGIN:VEVENT","UID:fieldwork-checkin-"+uid(),"DTSTAMP:"+now,"DTSTART:"+p.start,"DTEND:"+p.end,"RRULE:FREQ=DAILY","SUMMARY:Fieldwork check-in","DESCRIPTION:10 seconds. Open Fieldwork and log today.","URL:"+APP_URL,"BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:Fieldwork check-in","TRIGGER:PT0M","END:VALARM","END:VEVENT","END:VCALENDAR"].join("\r\n");
+  try{const b=new Blob([ics],{type:"text/calendar"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="fieldwork-reminder.ics";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);toast("Open the file to add it to Calendar")}
+  catch(e){toast("Couldn't create the file here. Try it in the installed app.")}}
 
 /* ---------- actions ---------- */
 function render(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===UI.tab?"page":"false"));
-  if(UI.tab==="today")renderToday();else if(UI.tab==="lab")renderLab();else renderQuests();
+  if(UI.tab==="today")renderToday();else if(UI.tab==="lab")renderLab();else{renderQuests();loadWx()}
 }
 function go(tab){UI.tab=tab;UI.labDetail=null;render();window.scrollTo(0,0)}
+function rerender(ctx){if(ctx==="sheet")daySheet();else renderToday()}
 document.querySelector("nav.tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(b)go(b.dataset.tab)});
 document.getElementById("settingsBtn").addEventListener("click",()=>{UI.eraseArm=false;settingsSheet()});
-document.addEventListener("input",e=>{if(e.target.id==="ciNote"&&UI.draft)UI.draft.note=e.target.value});
+document.addEventListener("input",e=>{const t=e.target;
+  if(t.dataset.num){const D=draftFor(t.dataset.ctx);if(!D)return;if(t.value==="")delete D.m[t.dataset.num];else{const v=parseFloat(t.value);if(!isNaN(v))D.m[t.dataset.num]=v}}
+  if(t.dataset.note){const D=draftFor(t.dataset.note);if(D)D.note=t.value}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&layer.innerHTML)closeSheet()});
 document.addEventListener("click",ev=>{
   const el=ev.target.closest("[data-act]");if(!el)return;const act=el.dataset.act;
   if(act==="closeSheet"){if(el.classList.contains("overlay")&&ev.target!==el)return;closeSheet();return}
-  const D=UI.draft;
+  const ctx=el.dataset.ctx,D=draftFor(ctx);
   switch(act){
   case "goto":go(el.dataset.tab);break;
-  case "rate":D.m[el.dataset.m]=+el.dataset.v;renderToday();break;
-  case "adh":D.adh[el.dataset.e]=el.dataset.v==="1";renderToday();break;
-  case "saveCheckin":{const prev=S.checkins[D.date];S.checkins[D.date]={m:Object.assign({},D.m),adh:Object.assign({},D.adh),note:D.note||""};if(prev&&prev.sample)S.checkins[D.date].sample=true;D.editing=false;save();renderToday();toast("Check-in saved");break}
+  case "rate":D.m[el.dataset.m]=+el.dataset.v;rerender(ctx);break;
+  case "adh":D.adh[el.dataset.e]=el.dataset.v==="1";rerender(ctx);break;
+  case "saveCheckin":{
+    if(!Object.keys(D.m).length){toast("Rate at least one thing first");break}
+    const prev=S.checkins[D.date];S.checkins[D.date]={m:Object.assign({},D.m),adh:Object.assign({},D.adh),note:D.note||""};if(prev&&prev.sample)S.checkins[D.date].sample=true;
+    save();if(ctx==="sheet"){closeSheet();UI.draft=null;toast(D.date===today()?"Check-in saved":"Saved "+fmt(D.date,{weekday:"short",month:"short",day:"numeric"}))}else{D.editing=false;toast("Check-in saved")}render();break}
   case "editCheckin":D.editing=true;renderToday();break;
+  case "openDay":UI.delDay=null;UI.sheetDraft=newDraft(el.dataset.date);daySheet();break;
+  case "delCheckin":{const d=UI.sheetDraft.date;if(UI.delDay!==d){UI.delDay=d;daySheet();break}delete S.checkins[d];UI.delDay=null;UI.draft=null;save();closeSheet();render();toast("Check-in deleted");break}
+  case "calNav":{const [y,m]=UI.calMonth.split("-").map(Number),n=new Date(y,m-1+(+el.dataset.d),1);UI.calMonth=`${n.getFullYear()}-${pad(n.getMonth()+1)}`;renderToday();break}
   case "clearSample":clearSample();break;
   case "newExp":newExpSheet(el.dataset.tpl!=null?+el.dataset.tpl:null);break;
   case "useTpl":newExpSheet(+el.dataset.i);break;
@@ -572,27 +747,43 @@ document.addEventListener("click",ev=>{
   case "deleteExp":{const id=el.dataset.id;if(UI.delArm!==id){UI.delArm=id;renderLab();break}
     S.experiments=S.experiments.filter(x=>x.id!==id);Object.values(S.checkins).forEach(c=>{if(c.adh)delete c.adh[id]});UI.labDetail=null;UI.delArm=null;save();renderLab();toast("Experiment deleted");break}
   case "pref":{const k=el.dataset.k,v=el.dataset.v;S.prefs[k]=(k==="cost"||k==="time")?+v:v;save();renderQuests();break}
-  case "roll":{const E=eligible().filter(q=>q.id!==UI.rolled);const P=E.length?E:eligible();if(!P.length){UI.rolled=null;renderQuests();toast("Nothing fits. Loosen a filter.");break}
-    UI.rolled=P[Math.floor(Math.random()*P.length)].id;renderQuests();const c=document.querySelector(".qcard.roll");if(c)c.scrollIntoView({behavior:"smooth",block:"center"});break}
-  case "acceptQuest":{const q=pool().find(x=>x.id===UI.rolled);if(!q||S.quests.active)break;S.quests.active=Object.assign({accepted:today()},q);UI.rolled=null;save();renderQuests();toast("Quest accepted");window.scrollTo(0,0);break}
+  case "pickDay":S.prefs.day=el.dataset.d;save();renderQuests();break;
+  case "toggleTwist":S.prefs.twist=!S.prefs.twist;save();renderQuests();break;
+  case "useLoc":{
+    if(!("geolocation" in navigator)){toast("Location isn't available here");break}
+    toast("Finding your location…");
+    try{navigator.geolocation.getCurrentPosition(p=>{S.prefs.loc={lat:+p.coords.latitude.toFixed(2),lon:+p.coords.longitude.toFixed(2),name:"your location"};save();loadWx(true);toast("Forecast updated")},()=>toast("Location blocked. Using Long Island."),{timeout:10000,maximumAge:3600e3})}catch(e){toast("Location blocked. Using Long Island.")}
+    break}
+  case "roll":{const E=eligible();if(!E.length){UI.rolled=null;renderQuests();toast("Nothing fits. Loosen a filter.");break}
+    const P=E.length>1?E.filter(q=>q.id!==UI.rolled):E;const q=weightedPick(P);
+    UI.rolled=q.id;UI.rolledTwist=S.prefs.twist?TWISTS[Math.floor(Math.random()*TWISTS.length)]:null;
+    renderQuests();const c=document.querySelector(".qcard.roll");if(c)c.scrollIntoView({behavior:"smooth",block:"center"});break}
+  case "acceptQuest":{const q=pool().find(x=>x.id===UI.rolled);if(!q||S.quests.active)break;S.quests.active=Object.assign({accepted:today(),day:questDay(),twist:UI.rolledTwist},q);UI.rolled=null;UI.rolledTwist=null;save();renderQuests();toast("Quest accepted");window.scrollTo(0,0);break}
   case "banQuest":S.quests.banned.push(UI.rolled);UI.rolled=null;save();renderQuests();toast("Removed from the deck");break;
   case "dropQuest":S.quests.active=null;save();render();toast("Quest dropped");break;
   case "completeQuest":completeSheet();break;
   case "qrate":document.querySelectorAll("#qRate button").forEach(b=>b.setAttribute("aria-pressed",b===el?"true":"false"));break;
   case "logQuest":{const a=S.quests.active,r=+(document.querySelector("#qRate button[aria-pressed=true]")||{dataset:{v:4}}).dataset.v;
-    S.quests.log.push({id:uid(),qid:a.id,title:a.title,cat:a.cat,date:document.getElementById("qDate").value||today(),rating:r,note:document.getElementById("qNote").value.trim()});
+    S.quests.log.push({id:uid(),qid:a.id,title:a.title,cat:a.cat,twist:a.twist||null,date:document.getElementById("qDate").value||today(),rating:r,note:document.getElementById("qNote").value.trim()});
     S.quests.active=null;save();closeSheet();render();toast("Quest logged");break}
   case "addQuest":addQuestSheet();break;
   case "saveCustom":{const t=document.getElementById("cqT").value.trim();if(!t){toast("Name the quest");break}
-    S.quests.custom.push({id:"c-"+uid(),title:t,detail:document.getElementById("cqD").value.trim()||"Your own idea.",cat:document.getElementById("cqCat").value,cost:+document.getElementById("cqCost").value,time:+document.getElementById("cqTime").value,who:"any",set:document.getElementById("cqSet").value,custom:true});
+    S.quests.custom.push({id:"c-"+uid(),title:t,detail:document.getElementById("cqD").value.trim()||"Your own idea.",cat:document.getElementById("cqCat").value,cost:+document.getElementById("cqCost").value,time:+document.getElementById("cqTime").value,who:"any",set:document.getElementById("cqSet").value,season:null,custom:true});
     save();closeSheet();renderQuests();toast("Added to the deck");break}
-  case "addMetric":{const n=document.getElementById("nmName").value.trim();if(!n)break;S.metrics.push({id:"m-"+uid(),name:n,lo:"Low",hi:"High"});save();UI.draft=null;settingsSheet();render();break}
-  case "rmMetric":{S.metrics=S.metrics.filter(m=>m.id!==el.dataset.m);save();UI.draft=null;settingsSheet();render();break}
+  case "newType":UI.newType=el.dataset.v;settingsSheet();break;
+  case "addMetric":{const n=document.getElementById("nmName").value.trim();if(!n){toast("Name the metric");break}
+    const t=UI.newType,m={id:"m-"+uid(),name:n,type:t,lo:"Low",hi:"High"};
+    if(t==="number"){const u=document.getElementById("nmUnit");m.unit=u?u.value.trim():""}
+    const d=document.getElementById("nmDir");if(d&&d.value==="down")m.dir="down";
+    S.metrics.push(m);save();UI.draft=null;settingsSheet();render();toast("Metric added");break}
+  case "rmMetric":{const m=S.metrics.find(x=>x.id===el.dataset.m);S.metrics=S.metrics.filter(x=>x.id!==el.dataset.m);if(m&&!S.archived.some(x=>x.id===m.id))S.archived.push(m);save();UI.draft=null;settingsSheet();render();break}
+  case "remGoogle":remGoogle();break;
+  case "remIcs":remIcs();break;
   case "copyBackup":{const txt=JSON.stringify(S),ta=document.getElementById("bk");ta.hidden=false;ta.value=txt;
     const done=()=>toast("Backup copied. Paste it into Notes or email it to yourself.");
     try{navigator.clipboard.writeText(txt).then(done,()=>{ta.select();toast("Select all and copy the text below")})}catch(e){ta.select();toast("Select all and copy the text below")}break}
   case "showImport":{const ta=document.getElementById("bk");ta.hidden=false;ta.value="";ta.placeholder="Paste your backup here";document.getElementById("doImport").hidden=false;ta.focus();break}
-  case "doImport":{try{const s=JSON.parse(document.getElementById("bk").value);if(!s||s.v!==1||!s.checkins)throw 0;S=s;save();UI.draft=null;closeSheet();render();toast("Backup restored")}catch(e){toast("That doesn't look like a Fieldwork backup")}break}
+  case "doImport":{try{const s=JSON.parse(document.getElementById("bk").value);if(!s||s.v!==1||!s.checkins)throw 0;S=migrate(s);save();UI.draft=null;closeSheet();render();toast("Backup restored")}catch(e){toast("That doesn't look like a Fieldwork backup")}break}
   case "eraseAll":if(!UI.eraseArm){UI.eraseArm=true;settingsSheet();break}S=blank();save();UI.eraseArm=false;UI.draft=null;UI.labDetail=null;closeSheet();render();toast("Everything erased");break;
   }
 });
@@ -601,8 +792,7 @@ function clearSample(){
   S.experiments=S.experiments.filter(e=>!e.sample);S.quests.log=S.quests.log.filter(q=>!q.sample);
   S.hasSample=false;UI.draft=null;UI.labDetail=null;save();closeSheet();render();toast("Examples cleared. It's all yours.");
 }
-render();
-// Installed-app mode: cache for instant offline launch (no effect inside a preview).
+render();loadWx();
 try{if("serviceWorker" in navigator&&document.documentElement.dataset.pwa==="1")navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}
 })();
 </script>
