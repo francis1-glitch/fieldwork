@@ -1,0 +1,610 @@
+<!doctype html><html lang="en" data-pwa="1"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#16202A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fieldwork">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head><body>
+<title>Fieldwork</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-column phone app on graph paper; blue = Lab (experiments), ochre = Quests; bottom tab bar. */
+:root{
+  --paper:#EDF0EA; --sheet:#F9FBF7; --ink:#16202A; --ink-2:#4B5661; --ink-3:#7A858E;
+  --rule:#D2D9CF; --grid:rgba(22,32,42,.055);
+  --lab:#2A52C4; --lab-soft:#DDE5F8; --quest:#A86A12; --quest-soft:#F4E5CC;
+  --good:#23824F; --bad:#BC3A2C; --warn:#9A7208; --on-accent:#FFFFFF;
+  --f-display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#10151B; --sheet:#19212A; --ink:#E5EAE3; --ink-2:#A3AEB6; --ink-3:#727E88;
+  --rule:#2B3540; --grid:rgba(229,234,227,.045);
+  --lab:#86A3F2; --lab-soft:#1E2B4C; --quest:#E3A951; --quest-soft:#3A2B15;
+  --good:#5FC78D; --bad:#F07D6E; --warn:#E2B64E; --on-accent:#0F141A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#10151B; --sheet:#19212A; --ink:#E5EAE3; --ink-2:#A3AEB6; --ink-3:#727E88;
+  --rule:#2B3540; --grid:rgba(229,234,227,.045);
+  --lab:#86A3F2; --lab-soft:#1E2B4C; --quest:#E3A951; --quest-soft:#3A2B15;
+  --good:#5FC78D; --bad:#F07D6E; --warn:#E2B64E; --on-accent:#0F141A; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:22px 22px;
+  color:var(--ink); font-family:var(--f-body); font-size:16px; line-height:1.45;
+  -webkit-tap-highlight-color:transparent;
+}
+.wrap{max-width:560px;margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 calc(96px + env(safe-area-inset-bottom,0px));}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px 10px;border-bottom:1px solid var(--rule);margin-bottom:16px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:18px;letter-spacing:.02em}
+.brand small{display:block;font-family:var(--f-data);font-weight:400;font-size:11px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--lab);outline-offset:2px}
+.iconbtn{background:none;border:1px solid var(--rule);border-radius:10px;width:40px;height:40px;display:grid;place-items:center;color:var(--ink-2)}
+main{display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{margin:0;text-wrap:balance}
+h1{font-family:var(--f-display);font-weight:700;font-size:24px;line-height:1.15}
+h2{font-family:var(--f-display);font-weight:500;font-size:15px;letter-spacing:.01em}
+.eyebrow{font-family:var(--f-data);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.muted{color:var(--ink-2)}
+.small{font-size:14px}
+.mono{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card.lab{border-top:3px solid var(--lab)}
+.card.quest{border-top:3px solid var(--quest)}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.between{justify-content:space-between}
+.stack{display:flex;flex-direction:column;gap:10px}
+
+.btn{border:none;border-radius:10px;padding:12px 16px;font-weight:700;font-size:15px;min-height:44px}
+.btn.lab{background:var(--lab);color:var(--on-accent)}
+.btn.quest{background:var(--quest);color:var(--on-accent)}
+.btn.ghost{background:transparent;border:1px solid var(--rule);color:var(--ink)}
+.btn.danger{background:transparent;border:1px solid var(--bad);color:var(--bad)}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.45;cursor:default}
+.link{background:none;border:none;padding:0;color:var(--lab);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-data);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:999px;border:1px solid var(--rule);color:var(--ink-2);white-space:nowrap}
+.pill.lab{background:var(--lab-soft);border-color:transparent;color:var(--lab)}
+.pill.quest{background:var(--quest-soft);border-color:transparent;color:var(--quest)}
+.pill.good{color:var(--good);border-color:var(--good)}
+.pill.bad{color:var(--bad);border-color:var(--bad)}
+.pill.warn{color:var(--warn);border-color:var(--warn)}
+
+.banner{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px dashed var(--ink-3);border-radius:12px;padding:10px 12px;font-size:14px;color:var(--ink-2)}
+
+/* check-in scale */
+.metric{display:flex;flex-direction:column;gap:6px}
+.metric .lbl{display:flex;justify-content:space-between;font-size:14px}
+.scale{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.scale button{border:1px solid var(--rule);background:var(--paper);border-radius:9px;min-height:44px;font-family:var(--f-data);font-size:16px}
+.scale button[aria-pressed="true"]{background:var(--lab);border-color:var(--lab);color:var(--on-accent)}
+.ends{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-3)}
+.yn{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.yn button{border:1px solid var(--rule);background:var(--paper);border-radius:9px;min-height:40px}
+.yn button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+input[type=text],input[type=number],input[type=date],textarea,select{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:10px 12px}
+textarea{min-height:70px;resize:vertical}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--ink-2)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* progress */
+.prog{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--paper);border:1px solid var(--rule)}
+.prog i{display:block;height:100%}
+.prog .b{background:var(--ink-3)} .prog .t{background:var(--lab)}
+.prog-legend{display:flex;justify-content:space-between;font-family:var(--f-data);font-size:11px;color:var(--ink-3)}
+
+.list{display:flex;flex-direction:column}
+.item{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding-block:12px;border-top:1px solid var(--rule);text-align:left;background:none;border-left:none;border-right:none;border-bottom:none;width:100%}
+.item:first-child{border-top:none}
+.item .t{font-weight:700}
+.item > div{min-width:0}
+
+/* chips */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--rule);background:var(--paper);border-radius:999px;padding:7px 12px;font-size:14px;min-height:36px}
+.chip[aria-pressed="true"]{background:var(--quest);border-color:var(--quest);color:var(--on-accent)}
+.chips.labc .chip[aria-pressed="true"]{background:var(--lab);border-color:var(--lab)}
+.fgroup{display:flex;flex-direction:column;gap:6px}
+
+/* quest card */
+.qcard{position:relative;border:1px solid var(--quest);background:var(--quest-soft);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.qcard h3{font-family:var(--f-display);font-weight:500;font-size:19px;line-height:1.2}
+.qcard.roll{animation:deal .35s ease-out}
+@keyframes deal{from{transform:translateY(8px) rotate(-1.2deg);opacity:.4}to{transform:none;opacity:1}}
+.dice{font-family:var(--f-data);font-size:22px;line-height:1}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat b{font-family:var(--f-data);font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--ink-3)}
+
+table.res{width:100%;border-collapse:collapse;font-size:14px}
+table.res th{font-family:var(--f-data);font-weight:400;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:right;padding:6px 4px;border-bottom:1px solid var(--rule)}
+table.res th:first-child,table.res td:first-child{text-align:left}
+table.res td{padding:8px 4px;border-bottom:1px solid var(--rule);text-align:right;font-family:var(--f-data);font-variant-numeric:tabular-nums}
+table.res td:first-child{font-family:var(--f-body);font-weight:700}
+.tablewrap{overflow-x:auto}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+
+.verdict{border-left:3px solid var(--ink-3);padding-left:10px;display:flex;flex-direction:column;gap:2px}
+.verdict.good{border-color:var(--good)} .verdict.bad{border-color:var(--bad)} .verdict.warn{border-color:var(--warn)}
+.verdict b{font-size:15px}
+
+svg.chart{width:100%;height:auto;display:block}
+.chart .band-b{fill:var(--grid)} .chart .band-t{fill:var(--lab-soft)}
+.chart .axis{stroke:var(--rule);stroke-width:1}
+.chart .line{fill:none;stroke:var(--lab);stroke-width:2}
+.chart .dot{fill:var(--lab)} .chart .dot.b{fill:var(--ink-3)}
+.chart text{fill:var(--ink-3);font-family:var(--f-data);font-size:9px}
+.chart .mean{stroke-dasharray:4 3;stroke-width:1.5}
+.chart .mean.b{stroke:var(--ink-3)} .chart .mean.t{stroke:var(--lab)}
+
+/* bottom nav */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--sheet);border-top:1px solid var(--rule);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:6px calc(6px + env(safe-area-inset-bottom,0px))}
+nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+nav.tabs button{background:none;border:none;border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--ink-3);min-height:52px}
+nav.tabs button svg{width:22px;height:22px}
+nav.tabs button[aria-current="page"]{color:var(--ink);background:var(--paper)}
+nav.tabs button[data-tab="lab"][aria-current="page"]{color:var(--lab)}
+nav.tabs button[data-tab="quests"][aria-current="page"]{color:var(--quest)}
+
+/* sheet */
+.overlay{position:fixed;inset:0;z-index:20;background:rgba(10,14,18,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--sheet);width:100%;max-width:560px;max-height:88%;overflow-y:auto;border-radius:18px 18px 0 0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:18px calc(22px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:14px;font-weight:700;max-width:calc(100% - 32px)}
+.empty{border:1px dashed var(--rule);border-radius:12px;padding:16px;color:var(--ink-2);font-size:14px;text-align:center}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Fieldwork<small id="hdrSub">Field notes on your own life</small></div>
+    <button class="iconbtn" id="settingsBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+    </button>
+  </header>
+  <main id="main"></main>
+</div>
+
+<nav class="tabs" aria-label="Sections"><div class="in">
+  <button data-tab="today" aria-current="page">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Today</button>
+  <button data-tab="lab">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/><path d="M7.5 14h9"/></svg>Lab</button>
+  <button data-tab="quests">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg>Quests</button>
+</div></nav>
+
+<div id="layer"></div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- dates ---------- */
+const pad=n=>String(n).padStart(2,"0");
+const ds=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>{const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+const today=()=>ds(new Date());
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return ds(d)};
+const diffDays=(a,b)=>{const u=s=>{const [y,m,d]=s.split("-").map(Number);return Date.UTC(y,m-1,d)};return Math.round((u(b)-u(a))/864e5)};
+const fmt=(s,o)=>parse(s).toLocaleDateString(undefined,o||{month:"short",day:"numeric"});
+const uid=()=>Math.random().toString(36).slice(2,10);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- quest deck ---------- */
+// cost 0 free / 1 cheap / 2 splurge; time 1 ≤2h / 2 half day / 3 full day; who solo|group|any; set in|out|any
+const DECK=[
+ ["sunrise","Sunrise at the ocean","Get to a South Shore beach before sunrise with a coffee. Stay until the sun clears the horizon.","Outdoors",0,1,"any","out"],
+ ["montauk","Ride out to the end of the Island","Drive to Montauk Point, walk the bluffs by the lighthouse, and stop somewhere new to eat on the way back.","Outdoors",2,3,"any","out"],
+ ["fireisland","Ferry to Fire Island","Take a ferry over and walk the beach an hour in one direction, then back.","Outdoors",1,3,"any","out"],
+ ["newtrail","A trail you've never walked","Pick a park or preserve on the Island you've never set foot in and walk its longest loop.","Outdoors",0,2,"any","out"],
+ ["bike","Bike a new route","Ride 10+ miles round trip on roads you've never biked.","Outdoors",0,2,"solo","out"],
+ ["stars","Find three constellations","Drive somewhere dark enough to see stars and identify three constellations.","Outdoors",0,1,"any","out"],
+ ["paddle","Get on the water","Rent a kayak or paddleboard for an hour on a bay or harbor.","Outdoors",1,2,"any","out"],
+ ["highpoint","Sunset from the highest point","Find the highest spot you can reach within 30 minutes and watch the sun go down.","Outdoors",0,1,"any","out"],
+ ["cuisine","A cuisine you've never had","Eat a full meal from a cuisine you've never tried. Order whatever the staff recommends.","Food",1,1,"any","any"],
+ ["crawl","Three-stop food crawl","Pick one Queens neighborhood and eat one thing at three different spots.","Food",1,2,"group","any"],
+ ["farmstand","Farm stand to stove","Drive out east, buy something at a farm stand you've never cooked with, and cook it tonight.","Food",1,2,"any","any"],
+ ["diner","Diner after midnight","Late-night diner run. Order something you'd never order at noon.","Food",1,1,"group","any"],
+ ["hardDish","Cook the dish that scares you","Make a dish from scratch that intimidates you. Bread, dumplings, a proper risotto.","Food",1,2,"any","in"],
+ ["slice","Blind slice tribunal","Hit three pizzerias in one afternoon and score them blind with friends.","Food",1,2,"group","any"],
+ ["regular","Ask the regular","Go somewhere you've never been and ask a regular what to order.","Food",1,1,"solo","any"],
+ ["museum","A museum you've never entered","Pick a museum you've never been inside and find one thing you'd come back for.","Culture",1,2,"any","in"],
+ ["gallery","One gallery, one hour","Walk into a free gallery and choose a favorite piece. Figure out why.","Culture",0,1,"any","in"],
+ ["unknownact","See an act you've never heard of","Go to a live show where you don't know the performer.","Culture",1,1,"any","in"],
+ ["openmic","Comedy open mic","Watch an open mic night. Rate the sets on the drive home.","Culture",1,1,"group","in"],
+ ["library","Library deep cut","Browse a library section you'd never pick and check out one book.","Culture",0,1,"solo","in"],
+ ["historic","The place you always drive past","Visit a historic site or house on the Island you've passed a hundred times and never stopped at.","Culture",1,2,"any","any"],
+ ["unknownstop","Get off at an unknown stop","Ride the LIRR or subway to a stop you've never used. Explore for two hours, no map app for the first 30 minutes.","Explore",1,2,"solo","any"],
+ ["bridge","Walk a bridge","Walk across a bridge into or out of Manhattan.","Explore",0,1,"any","out"],
+ ["borough","Your least-visited borough","Spend an afternoon in the borough you've been to least.","Explore",1,3,"any","any"],
+ ["ferry","Ferry for no reason","Ride the Staten Island Ferry round trip at golden hour.","Explore",0,2,"any","any"],
+ ["hidden","Three hidden things","Find three things in your own town you've never noticed: a plaque, a mural, a dead-end street.","Explore",0,1,"solo","out"],
+ ["coin","Coin-flip walk","Leave the house with no plan. At every intersection, flip a coin.","Explore",0,2,"solo","out"],
+ ["dormant","Revive a dormant friendship","Text someone you haven't talked to in a year and make an actual plan.","Social",0,1,"solo","any"],
+ ["host","Host a themed dinner","Invite three to five people over for a dinner with a theme.","Social",1,2,"group","in"],
+ ["newgame","Game night, new game","Learn a board or card game none of you have played.","Social",1,2,"group","in"],
+ ["yourspot","Bring someone to your spot","Take a friend somewhere you love that they've never seen.","Social",0,2,"group","any"],
+ ["pickup","Join a pickup game","Show up alone to a pickup basketball or soccer game.","Social",0,1,"solo","out"],
+ ["dropin","One-night class","Take a single drop-in class: pottery, boxing, dance, improv.","Skill",1,1,"any","in"],
+ ["cardtrick","Learn a card trick","Learn one card trick well enough to perform it for someone today.","Skill",0,1,"any","in"],
+ ["phrases","Ten phrases","Learn ten phrases in a new language and use one on someone.","Skill",0,1,"solo","in"],
+ ["thrift","$20 thrift challenge","Find the strangest genuinely useful item you can for under $20.","Skill",1,1,"any","in"],
+ ["photo","Photo walk with one rule","Take 20 photos following one rule: only reflections, only red, only signs.","Skill",0,1,"solo","out"],
+ ["volunteer","One volunteer shift","Do a single shift at a food pantry or a beach cleanup.","Social",0,2,"any","any"],
+ ["fixit","Fix one broken thing","Pick something broken you've been ignoring and fix it yourself.","Skill",0,1,"solo","in"],
+ ["cages","Batting cage or driving range","Go hit something. Bonus if you've never been.","Skill",1,1,"any","out"]
+].map(a=>({id:a[0],title:a[1],detail:a[2],cat:a[3],cost:a[4],time:a[5],who:a[6],set:a[7]}));
+const COST=["Free","Cheap","Splurge"], TIME=["","Under 2 hrs","Half day","Full day"];
+
+/* ---------- experiment templates ---------- */
+const TEMPLATES=[
+ {title:"Does skipping my phone for the first hour make my days better?",change:"No phone for the first hour after waking",metrics:["energy","mood","focus"],baseDays:7,testDays:7},
+ {title:"Does a noon caffeine cutoff help?",change:"No caffeine after 12 p.m.",metrics:["energy","focus"],baseDays:7,testDays:7},
+ {title:"Does a walk after lunch fix the afternoon slump?",change:"10-minute walk after lunch",metrics:["energy","focus","output"],baseDays:7,testDays:7},
+ {title:"Do side quests make my weeks better?",change:"Complete a side quest at least every 3 days",metrics:["mood","energy"],baseDays:14,testDays:14,questLinked:true}
+];
+
+/* ---------- state ---------- */
+const KEY="fieldwork.v1";
+function blank(){return{v:1,
+  metrics:[{id:"energy",name:"Energy",lo:"Drained",hi:"Charged"},{id:"mood",name:"Mood",lo:"Low",hi:"Great"},{id:"focus",name:"Focus",lo:"Scattered",hi:"Locked in"},{id:"output",name:"Output",lo:"Nothing done",hi:"Crushed it"}],
+  checkins:{},experiments:[],quests:{active:null,log:[],custom:[],banned:[]},
+  prefs:{cost:1,time:2,who:"any",set:"any"}}}
+function seed(){
+  const S=blank(),t=today(),start=addDays(t,-11);
+  const base={energy:[3,2,3,3,2,3,4],mood:[3,3,2,4,3,3,3],focus:[2,3,3,2,3,2,3],output:[3,3,2,3,3,3,4]};
+  const test={energy:[4,3,4,4],mood:[4,4,3,5],focus:[4,3,4,4],output:[3,4,3,4]};
+  const id="ex-sample";
+  for(let i=0;i<11;i++){const d=addDays(start,i),m={};
+    for(const k in base)m[k]=i<7?base[k][i]:test[k][i-7];
+    S.checkins[d]={m,note:"",adh:i>=7?{[id]:true}:{},sample:true};}
+  S.experiments.push({id,sample:true,title:TEMPLATES[0].title,change:TEMPLATES[0].change,metrics:["energy","mood","focus"],start,baseDays:7,testDays:7,status:"active",created:start});
+  S.quests.log.push(
+    {id:uid(),qid:"unknownstop",title:"Get off at an unknown stop",cat:"Explore",date:addDays(t,-9),rating:5,note:"Ended up at a bakery I'll be back to.",sample:true},
+    {id:uid(),qid:"cuisine",title:"A cuisine you've never had",cat:"Food",date:addDays(t,-6),rating:4,note:"Georgian. Khachapuri is a problem now.",sample:true},
+    {id:uid(),qid:"sunrise",title:"Sunrise at the ocean",cat:"Outdoors",date:addDays(t,-2),rating:5,note:"Cold. Worth it.",sample:true});
+  [addDays(t,-9),addDays(t,-6),addDays(t,-2)].forEach(d=>{const c=S.checkins[d];if(c){c.m.mood=Math.min(5,c.m.mood+1)}});
+  S.hasSample=true;return S;}
+function load(){try{const r=localStorage.getItem(KEY);if(r){const s=JSON.parse(r);if(s&&s.v===1)return s}}catch(e){}return null}
+let S=load()||seed();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+const UI={tab:"today",labDetail:null,rolled:null,draft:null,metricView:null,eraseArm:false};
+try{const h=location.hash.replace("#","");if(["today","lab","quests"].includes(h))UI.tab=h}catch(e){}
+
+/* ---------- stats ---------- */
+const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+const sd=a=>{if(a.length<2)return 0;const m=mean(a);return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1))};
+function permP(a,b,n){n=n||4000;const obs=Math.abs(mean(b)-mean(a)),all=a.concat(b),na=a.length;let c=0;const x=all.slice();
+  for(let i=0;i<n;i++){for(let j=x.length-1;j>0;j--){const k=Math.floor(Math.random()*(j+1));const t=x[j];x[j]=x[k];x[k]=t}
+    let sa=0;for(let j=0;j<na;j++)sa+=x[j];let sb=0;for(let j=na;j<x.length;j++)sb+=x[j];
+    if(Math.abs(sb/(x.length-na)-sa/na)>=obs-1e-9)c++}
+  return (c+1)/(n+1)}
+function cohen(a,b){const na=a.length,nb=b.length;const p=Math.sqrt(((na-1)*sd(a)**2+(nb-1)*sd(b)**2)/(na+nb-2));const d=mean(b)-mean(a);if(!p)return d===0?0:Math.sign(d)*3;return d/p}
+function compare(a,b){
+  if(a.length<4||b.length<4)return{ok:false,na:a.length,nb:b.length};
+  const diff=mean(b)-mean(a),d=cohen(a,b),p=permP(a,b);
+  let v,cls;
+  if(p<0.05&&Math.abs(d)>=0.5){v=diff>0?"Real improvement":"Real decline";cls=diff>0?"good":"bad"}
+  else if(p<0.2){v=diff>0?"Leaning better":"Leaning worse";cls="warn"}
+  else{v="No clear difference";cls=""}
+  return{ok:true,ma:mean(a),mb:mean(b),diff,d,p,v,cls,na:a.length,nb:b.length}}
+window.__fieldworkStats={compare,mean,cohen,permP};
+
+/* ---------- experiments ---------- */
+const metric=id=>S.metrics.find(m=>m.id===id)||{id,name:id};
+function phaseOf(e){const total=e.baseDays+e.testDays,day=diffDays(e.start,today());
+  let phase=e.status!=="active"?e.status:day<0?"scheduled":day<e.baseDays?"baseline":day<total?"test":"complete";
+  return{day,total,phase}}
+function series(e,mid){const a=[],b=[],pts=[],total=e.baseDays+e.testDays;
+  Object.keys(S.checkins).sort().forEach(d=>{const k=diffDays(e.start,d);if(k<0||k>=total)return;const c=S.checkins[d];const v=c.m&&c.m[mid];if(v==null)return;
+    if(k<e.baseDays){a.push(v);pts.push({k,v,ph:"b"})}else{if(c.adh&&c.adh[e.id]===false)return;b.push(v);pts.push({k,v,ph:"t"})}});
+  return{a,b,pts,total}}
+function questDays(){return new Set(S.quests.log.map(q=>q.date))}
+
+/* ---------- rendering helpers ---------- */
+const main=document.getElementById("main"),layer=document.getElementById("layer");
+function phasePill(ph){const map={baseline:["Baseline",""],test:["Testing","lab"],complete:["Ready for results","good"],scheduled:["Starts soon",""],done:["Finished",""],abandoned:["Stopped","bad"]};const x=map[ph]||[ph,""];return `<span class="pill ${x[1]}">${x[0]}</span>`}
+function progBar(e){const {day,total}=phaseOf(e);const done=Math.max(0,Math.min(total,day+1));
+  const bw=Math.min(done,e.baseDays)/total*100,tw=Math.max(0,done-e.baseDays)/total*100;
+  return `<div class="prog" role="img" aria-label="Day ${Math.min(done,total)} of ${total}"><i class="b" style="width:${bw}%"></i><i class="t" style="width:${tw}%"></i></div>
+  <div class="prog-legend"><span>Day ${Math.max(0,Math.min(done,total))} of ${total}</span><span>${e.baseDays}d baseline · ${e.testDays}d test</span></div>`}
+function stars(n){return "●".repeat(n)+"○".repeat(5-n)}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),1800)}
+function sampleBanner(){return S.hasSample?`<div class="banner"><span>You're looking at example data so you can see how it works.</span><button class="link" data-act="clearSample">Clear examples</button></div>`:""}
+
+/* ---------- TODAY ---------- */
+function renderToday(){
+  const t=today(),c=S.checkins[t];
+  if(!UI.draft||UI.draft.date!==t)UI.draft={date:t,m:Object.assign({},c&&c.m),adh:Object.assign({},c&&c.adh),note:c?c.note:"",editing:!c};
+  const D=UI.draft,active=S.experiments.filter(e=>e.status==="active"),testing=active.filter(e=>phaseOf(e).phase==="test");
+  let h=sampleBanner();
+  h+=`<div><div class="eyebrow">${esc(fmt(t,{weekday:"long"}))}</div><h1>${esc(fmt(t,{month:"long",day:"numeric"}))}</h1></div>`;
+  // check-in
+  if(D.editing){
+    h+=`<section class="card lab" aria-labelledby="ciH"><div class="row between"><h2 id="ciH">Daily check-in</h2><span class="eyebrow">10 seconds</span></div>`;
+    S.metrics.forEach(m=>{h+=`<div class="metric"><div class="lbl"><b>${esc(m.name)}</b></div><div class="scale" role="group" aria-label="${esc(m.name)}">`;
+      for(let i=1;i<=5;i++)h+=`<button data-act="rate" data-m="${m.id}" data-v="${i}" aria-pressed="${D.m[m.id]===i}">${i}</button>`;
+      h+=`</div><div class="ends"><span>${esc(m.lo||"Low")}</span><span>${esc(m.hi||"High")}</span></div></div>`});
+    testing.forEach(e=>{const v=D.adh[e.id];h+=`<div class="metric"><div class="lbl"><b>Did you stick to it today?</b></div><div class="small muted">${esc(e.change)}</div>
+      <div class="yn"><button data-act="adh" data-e="${e.id}" data-v="1" aria-pressed="${v===true}">Yes</button><button data-act="adh" data-e="${e.id}" data-v="0" aria-pressed="${v===false}">No</button></div></div>`});
+    h+=`<label class="f" for="ciNote">Note (optional)<textarea id="ciNote" placeholder="Anything that made today unusual">${esc(D.note)}</textarea></label>
+      <button class="btn lab wide" data-act="saveCheckin" ${Object.keys(D.m).length?"":"disabled"}>Save check-in</button></section>`;
+  }else{
+    h+=`<section class="card lab"><div class="row between"><h2>Daily check-in</h2><span class="pill good">Logged</span></div>
+      <div class="row">${S.metrics.filter(m=>c.m[m.id]!=null).map(m=>`<span class="pill">${esc(m.name)} <b class="mono">${c.m[m.id]}</b></span>`).join("")}</div>
+      ${c.note?`<div class="small muted">${esc(c.note)}</div>`:""}<div><button class="link" data-act="editCheckin">Edit today's check-in</button></div></section>`;
+  }
+  // experiments
+  h+=`<section class="card"><div class="row between"><h2>Experiments running</h2><button class="link" data-act="goto" data-tab="lab">Open Lab</button></div>`;
+  if(!active.length)h+=`<div class="empty">No experiment running. Pick something you want to know about yourself and test it.<br><br><button class="btn lab" data-act="newExp">Start an experiment</button></div>`;
+  active.forEach(e=>{const ph=phaseOf(e);h+=`<button class="item" data-act="openExp" data-id="${e.id}"><div class="stack" style="gap:6px;flex:1"><div class="t">${esc(e.title)}</div>${progBar(e)}</div>${phasePill(ph.phase)}</button>`});
+  h+=`</section>`;
+  // quest
+  h+=questBlock(true);
+  const n=Object.keys(S.checkins).length;
+  h+=`<div class="small muted mono" style="text-align:center">${n} check-in${n===1?"":"s"} logged · ${S.quests.log.length} quest${S.quests.log.length===1?"":"s"} done</div>`;
+  main.innerHTML=h;
+}
+function questBlock(compact){
+  const a=S.quests.active;
+  if(a){return `<section class="qcard" aria-label="Active quest"><div class="row between"><span class="eyebrow">Active quest · ${esc(a.cat)}</span><span class="dice" aria-hidden="true">⚂</span></div>
+    <h3>${esc(a.title)}</h3><div class="small">${esc(a.detail)}</div>
+    <div class="row"><button class="btn quest" data-act="completeQuest">Mark complete</button><button class="btn ghost" data-act="dropQuest">Drop it</button></div></section>`}
+  if(compact)return `<section class="card quest"><div class="row between"><h2>Side quest</h2><span class="dice" aria-hidden="true">⚄</span></div><div class="small muted">Nothing on deck. Roll one for this week.</div><button class="btn quest" data-act="goto" data-tab="quests">Roll a quest</button></section>`;
+  return "";
+}
+
+/* ---------- LAB ---------- */
+function renderLab(){
+  if(UI.labDetail){const e=S.experiments.find(x=>x.id===UI.labDetail);if(e)return renderExp(e);UI.labDetail=null}
+  let h=sampleBanner();
+  h+=`<div><div class="eyebrow">Experiment Lab</div><h1>Test what actually works for you</h1></div>
+   <div class="small muted">Each experiment runs a baseline (live normally) then a test (make one change). Your daily check-ins are the data. The Lab tells you if the difference is real or noise.</div>
+   <button class="btn lab wide" data-act="newExp">New experiment</button>`;
+  const groups=[["Running",S.experiments.filter(e=>e.status==="active")],["Finished",S.experiments.filter(e=>e.status!=="active")]];
+  groups.forEach(([name,list])=>{if(!list.length&&name==="Finished")return;
+    h+=`<section class="card"><h2>${name}</h2><div class="list">`;
+    if(!list.length)h+=`<div class="empty">Nothing running yet.</div>`;
+    list.forEach(e=>{const ph=phaseOf(e);h+=`<button class="item" data-act="openExp" data-id="${e.id}"><div class="stack" style="gap:6px;flex:1"><div class="t">${esc(e.title)}</div><div class="small muted">Change: ${esc(e.change)}</div>${e.status==="active"?progBar(e):""}</div>${phasePill(ph.phase)}</button>`});
+    h+=`</div></section>`});
+  main.innerHTML=h;
+}
+function chartSVG(e,mid){
+  const {pts,total,a,b}=series(e,mid);const W=320,H=130,L=22,R=8,T=16,B=20;
+  const x=k=>L+(k+.5)/total*(W-L-R),y=v=>T+(5-v)/4*(H-T-B);
+  const bx=L+e.baseDays/total*(W-L-R);
+  let s=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(metric(mid).name)} by day, baseline versus test">`;
+  s+=`<rect class="band-b" x="${L}" y="${T}" width="${bx-L}" height="${H-T-B}"/><rect class="band-t" x="${bx}" y="${T}" width="${W-R-bx}" height="${H-T-B}"/>`;
+  for(let v=1;v<=5;v++)s+=`<line class="axis" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" opacity="${v===1?1:.5}"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${v}</text>`;
+  s+=`<text x="${L+4}" y="${T-5}">BASELINE</text><text x="${bx+4}" y="${T-5}">TEST</text>`;
+  if(a.length)s+=`<line class="mean b" x1="${L}" x2="${bx}" y1="${y(mean(a))}" y2="${y(mean(a))}"/>`;
+  if(b.length)s+=`<line class="mean t" x1="${bx}" x2="${W-R}" y1="${y(mean(b))}" y2="${y(mean(b))}"/>`;
+  if(pts.length>1)s+=`<polyline class="line" opacity=".35" points="${pts.map(p=>x(p.k)+","+y(p.v)).join(" ")}"/>`;
+  pts.forEach(p=>s+=`<circle class="dot ${p.ph}" cx="${x(p.k)}" cy="${y(p.v)}" r="3.5"/>`);
+  s+=`<text x="${L}" y="${H-6}">Day 1</text><text x="${W-R}" y="${H-6}" text-anchor="end">Day ${total}</text></svg>`;
+  return s;
+}
+function renderExp(e){
+  const ph=phaseOf(e);if(!UI.metricView||!e.metrics.includes(UI.metricView))UI.metricView=e.metrics[0];
+  let h=`<div><button class="link" data-act="backLab">← All experiments</button></div>
+   <div class="stack" style="gap:6px"><div class="row">${phasePill(ph.phase)}${e.sample?'<span class="pill">Example</span>':""}</div><h1>${esc(e.title)}</h1>
+   <div class="muted">The change: <b>${esc(e.change)}</b></div><div class="small muted mono">Started ${esc(fmt(e.start,{month:"short",day:"numeric",year:"numeric"}))}</div></div>`;
+  if(e.status==="active")h+=`<section class="card lab">${progBar(e)}<div class="small muted">${
+    ph.phase==="scheduled"?"Starts "+esc(fmt(e.start))+". Keep checking in.":
+    ph.phase==="baseline"?`Baseline: live normally for ${e.baseDays-ph.day} more day${e.baseDays-ph.day===1?"":"s"}. Don't start the change yet.`:
+    ph.phase==="test"?`Test phase: do the change every day. ${ph.total-ph.day} day${ph.total-ph.day===1?"":"s"} left.`:
+    "Both phases are done. Read your results below, then close the experiment."}</div></section>`;
+  // results
+  const rows=e.metrics.map(mid=>{const {a,b}=series(e,mid);return{mid,r:compare(a,b)}});
+  h+=`<section class="card"><div class="row between"><h2>Results so far</h2><span class="eyebrow">Baseline vs test</span></div>`;
+  const ready=rows.filter(x=>x.r.ok);
+  if(!ready.length){const r=rows[0].r;h+=`<div class="empty">Need at least 4 check-ins in each phase to judge. You have ${r.na} baseline and ${r.nb} test so far.</div>`}
+  else{
+    const best=ready.slice().sort((p,q)=>Math.abs(q.r.d)-Math.abs(p.r.d))[0];
+    h+=`<div class="verdict ${best.r.cls}"><b>${esc(metric(best.mid).name)}: ${esc(best.r.v)}</b><span class="small muted">${best.r.diff>=0?"+":""}${best.r.diff.toFixed(2)} points on a 5-point scale. ${best.r.p<0.05?"Unlikely to be chance.":best.r.p<0.2?"Could still be chance. More days would settle it.":"Looks like normal day-to-day noise."}</span></div>
+    <div class="tablewrap"><table class="res"><thead><tr><th>Metric</th><th>Base</th><th>Test</th><th>Change</th><th>Odds it's luck</th></tr></thead><tbody>`;
+    rows.forEach(({mid,r})=>{h+=r.ok?`<tr><td>${esc(metric(mid).name)}</td><td>${r.ma.toFixed(1)}</td><td>${r.mb.toFixed(1)}</td><td class="${r.diff>0.05?"pos":r.diff<-0.05?"neg":""}">${r.diff>=0?"+":""}${r.diff.toFixed(1)}</td><td>${r.p<0.01?"<1%":Math.round(r.p*100)+"%"}</td></tr>`:
+      `<tr><td>${esc(metric(mid).name)}</td><td colspan="4" style="text-align:right">needs data</td></tr>`});
+    h+=`</tbody></table></div><div class="small muted">"Odds it's luck" is how often shuffling your days at random produces a gap this big. Under 5% is a real signal.</div>`;
+  }
+  h+=`</section>`;
+  // chart
+  h+=`<section class="card"><div class="chips labc" role="group" aria-label="Metric">${e.metrics.map(m=>`<button class="chip" data-act="metricView" data-m="${m}" aria-pressed="${m===UI.metricView}">${esc(metric(m).name)}</button>`).join("")}</div>${chartSVG(e,UI.metricView)}
+   <div class="small muted">Dashed lines are each phase's average. Test days where you skipped the change are left out.</div></section>`;
+  // actions
+  h+=`<section class="row">${e.status==="active"?`<button class="btn ghost" data-act="finishExp" data-id="${e.id}">${ph.phase==="complete"?"Close experiment":"End early"}</button>`:`<button class="btn ghost" data-act="reopenExp" data-id="${e.id}">Reopen</button>`}<button class="btn danger" data-act="deleteExp" data-id="${e.id}">${UI.delArm===e.id?"Tap again to delete":"Delete"}</button></section>`;
+  main.innerHTML=h;
+}
+
+/* ---------- QUESTS ---------- */
+function pool(){return DECK.concat(S.quests.custom).filter(q=>!S.quests.banned.includes(q.id))}
+function eligible(){const P=S.prefs,recent=new Set(S.quests.log.filter(l=>diffDays(l.date,today())<60).map(l=>l.qid));
+  return pool().filter(q=>q.cost<=P.cost&&q.time<=P.time&&(P.who==="any"||q.who==="any"||q.who===P.who)&&(P.set==="any"||q.set==="any"||q.set===P.set)&&!recent.has(q.id)&&!(S.quests.active&&S.quests.active.id===q.id))}
+function chipGroup(label,key,opts){return `<div class="fgroup"><span class="eyebrow">${label}</span><div class="chips" role="group" aria-label="${label}">${opts.map(([v,t])=>`<button class="chip" data-act="pref" data-k="${key}" data-v="${v}" aria-pressed="${String(S.prefs[key])===String(v)}">${t}</button>`).join("")}</div></div>`}
+function renderQuests(){
+  let h=sampleBanner();
+  h+=`<div><div class="eyebrow">Side Quests</div><h1>Roll something you've never done</h1></div>`;
+  h+=questBlock(false);
+  h+=`<section class="card quest"><h2>Set the dice</h2>
+    ${chipGroup("Budget","cost",[[0,"Free"],[1,"Cheap"],[2,"Splurge OK"]])}
+    ${chipGroup("Time","time",[[1,"Under 2 hrs"],[2,"Half day"],[3,"Full day"]])}
+    ${chipGroup("Company","who",[["solo","Solo"],["group","Friends"],["any","Either"]])}
+    ${chipGroup("Setting","set",[["in","Indoors"],["out","Outdoors"],["any","Either"]])}
+    <button class="btn quest wide" data-act="roll">Roll a quest <span aria-hidden="true">⚅</span></button>
+    <div class="small muted mono" style="text-align:center">${eligible().length} quests match</div></section>`;
+  if(UI.rolled){const q=pool().find(x=>x.id===UI.rolled);if(q){
+    h+=`<section class="qcard roll" aria-live="polite"><div class="row between"><span class="eyebrow">${esc(q.cat)}</span><span class="dice" aria-hidden="true">⚃</span></div><h3>${esc(q.title)}</h3><div class="small">${esc(q.detail)}</div>
+      <div class="row"><span class="pill quest">${COST[q.cost]}</span><span class="pill quest">${TIME[q.time]}</span><span class="pill quest">${q.who==="any"?"Solo or friends":q.who==="solo"?"Solo":"Friends"}</span></div>
+      <div class="row"><button class="btn quest" data-act="acceptQuest" ${S.quests.active?"disabled":""}>${S.quests.active?"Finish your active quest first":"Accept quest"}</button><button class="btn ghost" data-act="roll">Reroll</button><button class="link" data-act="banQuest">Never show this</button></div></section>`}}
+  // stats
+  const L=S.quests.log,avg=L.length?(L.reduce((s,q)=>s+q.rating,0)/L.length).toFixed(1):"–",cats=new Set(L.map(q=>q.cat)).size;
+  h+=`<div class="stats"><div class="stat"><b>${L.length}</b><span>Quests done</span></div><div class="stat"><b>${avg}</b><span>Avg rating</span></div><div class="stat"><b>${cats}/6</b><span>Types tried</span></div></div>`;
+  h+=questEffect();
+  h+=`<section class="card"><div class="row between"><h2>Quest log</h2><button class="link" data-act="addQuest">Add your own idea</button></div><div class="list">`;
+  if(!L.length)h+=`<div class="empty">Finished quests land here with your rating and a note.</div>`;
+  L.slice().sort((a,b)=>b.date.localeCompare(a.date)).forEach(q=>{h+=`<div class="item"><div><div class="t">${esc(q.title)}</div><div class="small muted">${esc(q.note||"")}</div></div><div style="text-align:right;flex-shrink:0"><div class="mono small" aria-label="${q.rating} of 5">${stars(q.rating)}</div><div class="eyebrow">${esc(fmt(q.date))}</div></div></div>`});
+  h+=`</div></section>`;
+  main.innerHTML=h;
+}
+function questEffect(){
+  const qd=questDays(),dates=Object.keys(S.checkins);
+  const on=dates.filter(d=>qd.has(d)),off=dates.filter(d=>!qd.has(d));
+  let h=`<section class="card lab"><div class="row between"><h2>Do quests change your days?</h2><span class="pill lab">Lab link</span></div>`;
+  if(on.length<3||off.length<3){h+=`<div class="small muted">Once you've done 3 quests on days you also checked in, this compares your quest days to your regular days. ${on.length}/3 so far.</div></section>`;return h}
+  h+=`<div class="tablewrap"><table class="res"><thead><tr><th>Metric</th><th>Quest days</th><th>Other days</th><th>Gap</th></tr></thead><tbody>`;
+  S.metrics.forEach(m=>{const A=on.map(d=>S.checkins[d].m[m.id]).filter(v=>v!=null),B=off.map(d=>S.checkins[d].m[m.id]).filter(v=>v!=null);if(!A.length||!B.length)return;
+    const g=mean(A)-mean(B);h+=`<tr><td>${esc(m.name)}</td><td>${mean(A).toFixed(1)}</td><td>${mean(B).toFixed(1)}</td><td class="${g>0.05?"pos":g<-0.05?"neg":""}">${g>=0?"+":""}${g.toFixed(1)}</td></tr>`});
+  const linked=S.experiments.some(e=>e.questLinked&&e.status==="active");
+  h+=`</tbody></table></div><div class="small muted">This is a correlation: maybe quests lift your mood, maybe you only go questing on good days. ${linked?"Your side-quest experiment will settle it.":"Run the side-quest experiment to find out which."}</div>
+  ${linked?"":`<button class="btn ghost" data-act="newExp" data-tpl="3">Start the side-quest experiment</button>`}</section>`;
+  return h;
+}
+
+/* ---------- sheets ---------- */
+function openSheet(html){layer.innerHTML=`<div class="overlay" data-act="closeSheet"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;const f=layer.querySelector("input,textarea,button");if(f)f.focus()}
+function closeSheet(){layer.innerHTML=""}
+function newExpSheet(tplIdx){
+  const tp=tplIdx!=null?TEMPLATES[tplIdx]:null;
+  let h=`<div class="row between"><h2>New experiment</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
+   <div class="fgroup"><span class="eyebrow">Start from an idea</span><div class="chips labc">${TEMPLATES.map((t,i)=>`<button class="chip" data-act="useTpl" data-i="${i}" aria-pressed="${tplIdx===i}">${esc(t.change)}</button>`).join("")}</div></div>
+   <label class="f" for="exTitle">What do you want to find out?<input id="exTitle" type="text" value="${esc(tp?tp.title:"")}" placeholder="Does reading before bed help my focus?"></label>
+   <label class="f" for="exChange">The one change you'll make<input id="exChange" type="text" value="${esc(tp?tp.change:"")}" placeholder="20 minutes of reading, no screens after 10 p.m."></label>
+   <div class="fgroup"><span class="eyebrow">What should it move?</span><div class="chips labc" id="exMetrics">${S.metrics.map(m=>`<button class="chip" data-act="toggleChip" data-m="${m.id}" aria-pressed="${tp?tp.metrics.includes(m.id):["energy","mood"].includes(m.id)}">${esc(m.name)}</button>`).join("")}</div></div>
+   <div class="grid2"><label class="f" for="exBase">Baseline days<input id="exBase" type="number" min="4" max="60" value="${tp?tp.baseDays:7}"></label><label class="f" for="exTest">Test days<input id="exTest" type="number" min="4" max="60" value="${tp?tp.testDays:7}"></label></div>
+   <label class="f" for="exStart">Start date<input id="exStart" type="date" value="${today()}"></label>
+   <div class="small muted">Tip: 7 + 7 days catches big effects. Go 14 + 14 for subtle ones.</div>
+   <input type="hidden" id="exQL" value="${tp&&tp.questLinked?1:0}">
+   <button class="btn lab wide" data-act="createExp">Start experiment</button>`;
+  openSheet(h);
+}
+function completeSheet(){const a=S.quests.active;
+  openSheet(`<div class="row between"><h2>Quest complete</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
+   <div class="t" style="font-weight:700">${esc(a.title)}</div>
+   <div class="fgroup"><span class="eyebrow">How was it?</span><div class="scale" id="qRate">${[1,2,3,4,5].map(i=>`<button data-act="qrate" data-v="${i}" aria-pressed="${i===4}">${i}</button>`).join("")}</div><div class="ends"><span>Skip it</span><span>Do it again</span></div></div>
+   <label class="f" for="qDate">Date<input id="qDate" type="date" value="${today()}"></label>
+   <label class="f" for="qNote">Field note<textarea id="qNote" placeholder="What happened? What would you tell a friend?"></textarea></label>
+   <button class="btn quest wide" data-act="logQuest">Log it</button>`)}
+function addQuestSheet(){
+  openSheet(`<div class="row between"><h2>Add a quest idea</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
+   <label class="f" for="cqT">Quest<input id="cqT" type="text" placeholder="Try the dumpling spot in Flushing"></label>
+   <label class="f" for="cqD">Details<textarea id="cqD" placeholder="What makes it a quest"></textarea></label>
+   <div class="grid2"><label class="f" for="cqCat">Type<select id="cqCat">${["Outdoors","Food","Culture","Explore","Social","Skill"].map(c=>`<option>${c}</option>`).join("")}</select></label>
+   <label class="f" for="cqCost">Budget<select id="cqCost"><option value="0">Free</option><option value="1" selected>Cheap</option><option value="2">Splurge</option></select></label>
+   <label class="f" for="cqTime">Time<select id="cqTime"><option value="1">Under 2 hrs</option><option value="2" selected>Half day</option><option value="3">Full day</option></select></label>
+   <label class="f" for="cqSet">Setting<select id="cqSet"><option value="any">Either</option><option value="in">Indoors</option><option value="out">Outdoors</option></select></label></div>
+   <button class="btn quest wide" data-act="saveCustom">Add to the deck</button>`)}
+function settingsSheet(){
+  const custom=S.quests.custom.length;
+  openSheet(`<div class="row between"><h2>Settings</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
+   <div class="fgroup"><span class="eyebrow">Check-in metrics</span><div class="list">${S.metrics.map(m=>`<div class="item"><div><div class="t">${esc(m.name)}</div><div class="small muted">${esc(m.lo||"Low")} → ${esc(m.hi||"High")}</div></div>${S.metrics.length>1?`<button class="link" data-act="rmMetric" data-m="${m.id}">Remove</button>`:""}</div>`).join("")}</div>
+   <div class="grid2"><input id="nmName" type="text" placeholder="New metric, e.g. Sleep"><button class="btn ghost" data-act="addMetric">Add metric</button></div>
+   <div class="small muted">Removing a metric hides it from check-ins. Past data stays.</div></div>
+   <div class="fgroup"><span class="eyebrow">Backup</span><div class="small muted">Everything lives on this device only. Copy a backup now and then, or to move to a new phone.</div>
+   <div class="row"><button class="btn ghost" data-act="copyBackup">Copy backup</button><button class="btn ghost" data-act="showImport">Restore from backup</button></div>
+   <textarea id="bk" hidden></textarea><button class="btn lab" data-act="doImport" id="doImport" hidden>Restore this backup</button></div>
+   ${S.hasSample?`<button class="btn ghost" data-act="clearSample">Clear example data</button>`:""}
+   <div class="small muted mono">${Object.keys(S.checkins).length} check-ins · ${S.experiments.length} experiments · ${S.quests.log.length} quests · ${custom} custom ideas</div>
+   <button class="btn danger" data-act="eraseAll">${UI.eraseArm?"Tap again to erase everything":"Erase everything"}</button>`)}
+
+/* ---------- actions ---------- */
+function render(){
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===UI.tab?"page":"false"));
+  if(UI.tab==="today")renderToday();else if(UI.tab==="lab")renderLab();else renderQuests();
+}
+function go(tab){UI.tab=tab;UI.labDetail=null;render();window.scrollTo(0,0)}
+document.querySelector("nav.tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(b)go(b.dataset.tab)});
+document.getElementById("settingsBtn").addEventListener("click",()=>{UI.eraseArm=false;settingsSheet()});
+document.addEventListener("input",e=>{if(e.target.id==="ciNote"&&UI.draft)UI.draft.note=e.target.value});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&layer.innerHTML)closeSheet()});
+document.addEventListener("click",ev=>{
+  const el=ev.target.closest("[data-act]");if(!el)return;const act=el.dataset.act;
+  if(act==="closeSheet"){if(el.classList.contains("overlay")&&ev.target!==el)return;closeSheet();return}
+  const D=UI.draft;
+  switch(act){
+  case "goto":go(el.dataset.tab);break;
+  case "rate":D.m[el.dataset.m]=+el.dataset.v;renderToday();break;
+  case "adh":D.adh[el.dataset.e]=el.dataset.v==="1";renderToday();break;
+  case "saveCheckin":{const prev=S.checkins[D.date];S.checkins[D.date]={m:Object.assign({},D.m),adh:Object.assign({},D.adh),note:D.note||""};if(prev&&prev.sample)S.checkins[D.date].sample=true;D.editing=false;save();renderToday();toast("Check-in saved");break}
+  case "editCheckin":D.editing=true;renderToday();break;
+  case "clearSample":clearSample();break;
+  case "newExp":newExpSheet(el.dataset.tpl!=null?+el.dataset.tpl:null);break;
+  case "useTpl":newExpSheet(+el.dataset.i);break;
+  case "toggleChip":el.setAttribute("aria-pressed",el.getAttribute("aria-pressed")==="true"?"false":"true");break;
+  case "createExp":{
+    const title=document.getElementById("exTitle").value.trim(),change=document.getElementById("exChange").value.trim();
+    const ms=[...document.querySelectorAll("#exMetrics .chip[aria-pressed=true]")].map(b=>b.dataset.m);
+    const bd=Math.max(4,Math.min(60,+document.getElementById("exBase").value||7)),td=Math.max(4,Math.min(60,+document.getElementById("exTest").value||7));
+    const start=document.getElementById("exStart").value||today();
+    if(!change||!ms.length){toast(!change?"Add the change you'll make":"Pick at least one metric");break}
+    const e={id:uid(),title:title||("Does "+change.toLowerCase()+" help?"),change,metrics:ms,start,baseDays:bd,testDays:td,status:"active",created:today(),questLinked:document.getElementById("exQL").value==="1"};
+    S.experiments.push(e);save();closeSheet();UI.tab="lab";UI.labDetail=e.id;render();toast("Experiment started");break}
+  case "openExp":UI.tab="lab";UI.labDetail=el.dataset.id;UI.delArm=null;render();window.scrollTo(0,0);break;
+  case "backLab":UI.labDetail=null;renderLab();break;
+  case "metricView":UI.metricView=el.dataset.m;renderLab();break;
+  case "finishExp":{const e=S.experiments.find(x=>x.id===el.dataset.id);e.status="done";save();renderLab();toast("Experiment closed");break}
+  case "reopenExp":{const e=S.experiments.find(x=>x.id===el.dataset.id);e.status="active";save();renderLab();break}
+  case "deleteExp":{const id=el.dataset.id;if(UI.delArm!==id){UI.delArm=id;renderLab();break}
+    S.experiments=S.experiments.filter(x=>x.id!==id);Object.values(S.checkins).forEach(c=>{if(c.adh)delete c.adh[id]});UI.labDetail=null;UI.delArm=null;save();renderLab();toast("Experiment deleted");break}
+  case "pref":{const k=el.dataset.k,v=el.dataset.v;S.prefs[k]=(k==="cost"||k==="time")?+v:v;save();renderQuests();break}
+  case "roll":{const E=eligible().filter(q=>q.id!==UI.rolled);const P=E.length?E:eligible();if(!P.length){UI.rolled=null;renderQuests();toast("Nothing fits. Loosen a filter.");break}
+    UI.rolled=P[Math.floor(Math.random()*P.length)].id;renderQuests();const c=document.querySelector(".qcard.roll");if(c)c.scrollIntoView({behavior:"smooth",block:"center"});break}
+  case "acceptQuest":{const q=pool().find(x=>x.id===UI.rolled);if(!q||S.quests.active)break;S.quests.active=Object.assign({accepted:today()},q);UI.rolled=null;save();renderQuests();toast("Quest accepted");window.scrollTo(0,0);break}
+  case "banQuest":S.quests.banned.push(UI.rolled);UI.rolled=null;save();renderQuests();toast("Removed from the deck");break;
+  case "dropQuest":S.quests.active=null;save();render();toast("Quest dropped");break;
+  case "completeQuest":completeSheet();break;
+  case "qrate":document.querySelectorAll("#qRate button").forEach(b=>b.setAttribute("aria-pressed",b===el?"true":"false"));break;
+  case "logQuest":{const a=S.quests.active,r=+(document.querySelector("#qRate button[aria-pressed=true]")||{dataset:{v:4}}).dataset.v;
+    S.quests.log.push({id:uid(),qid:a.id,title:a.title,cat:a.cat,date:document.getElementById("qDate").value||today(),rating:r,note:document.getElementById("qNote").value.trim()});
+    S.quests.active=null;save();closeSheet();render();toast("Quest logged");break}
+  case "addQuest":addQuestSheet();break;
+  case "saveCustom":{const t=document.getElementById("cqT").value.trim();if(!t){toast("Name the quest");break}
+    S.quests.custom.push({id:"c-"+uid(),title:t,detail:document.getElementById("cqD").value.trim()||"Your own idea.",cat:document.getElementById("cqCat").value,cost:+document.getElementById("cqCost").value,time:+document.getElementById("cqTime").value,who:"any",set:document.getElementById("cqSet").value,custom:true});
+    save();closeSheet();renderQuests();toast("Added to the deck");break}
+  case "addMetric":{const n=document.getElementById("nmName").value.trim();if(!n)break;S.metrics.push({id:"m-"+uid(),name:n,lo:"Low",hi:"High"});save();UI.draft=null;settingsSheet();render();break}
+  case "rmMetric":{S.metrics=S.metrics.filter(m=>m.id!==el.dataset.m);save();UI.draft=null;settingsSheet();render();break}
+  case "copyBackup":{const txt=JSON.stringify(S),ta=document.getElementById("bk");ta.hidden=false;ta.value=txt;
+    const done=()=>toast("Backup copied. Paste it into Notes or email it to yourself.");
+    try{navigator.clipboard.writeText(txt).then(done,()=>{ta.select();toast("Select all and copy the text below")})}catch(e){ta.select();toast("Select all and copy the text below")}break}
+  case "showImport":{const ta=document.getElementById("bk");ta.hidden=false;ta.value="";ta.placeholder="Paste your backup here";document.getElementById("doImport").hidden=false;ta.focus();break}
+  case "doImport":{try{const s=JSON.parse(document.getElementById("bk").value);if(!s||s.v!==1||!s.checkins)throw 0;S=s;save();UI.draft=null;closeSheet();render();toast("Backup restored")}catch(e){toast("That doesn't look like a Fieldwork backup")}break}
+  case "eraseAll":if(!UI.eraseArm){UI.eraseArm=true;settingsSheet();break}S=blank();save();UI.eraseArm=false;UI.draft=null;UI.labDetail=null;closeSheet();render();toast("Everything erased");break;
+  }
+});
+function clearSample(){
+  for(const d in S.checkins)if(S.checkins[d].sample)delete S.checkins[d];
+  S.experiments=S.experiments.filter(e=>!e.sample);S.quests.log=S.quests.log.filter(q=>!q.sample);
+  S.hasSample=false;UI.draft=null;UI.labDetail=null;save();closeSheet();render();toast("Examples cleared. It's all yours.");
+}
+render();
+// Installed-app mode: cache for instant offline launch (no effect inside a preview).
+try{if("serviceWorker" in navigator&&document.documentElement.dataset.pwa==="1")navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}
+})();
+</script>
+
+</body></html>
