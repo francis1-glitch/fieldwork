@@ -247,7 +247,7 @@ nav.tabs button[data-tab="quests"][aria-current="page"]{color:var(--quest)}
 <script>
 (function(){
 "use strict";
-const VERSION="3.0";
+const VERSION="3.1";
 /* ---------- dates ---------- */
 const pad=n=>String(n).padStart(2,"0");
 const ds=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -328,7 +328,6 @@ const DECK=[
 const TWISTS=["Phone stays in your pocket the whole time.","Bring someone who's never done this.","Hard cap: $15 total.","Talk to one stranger while you're there.","One photo only. Make it count.","Take a route you've never taken to get there.","Say yes to the first suggestion anyone makes.","Do it at an hour you normally wouldn't.","Leave 30 minutes earlier than you planned.","Write a three-line field note before you leave."];
 const COST=["Free","Cheap","Splurge"], TIME=["","Under 2 hrs","Half day","Full day"];
 const CATS=["Outdoors","Food","Culture","Explore","Social","Skill"];
-const DEFAULT_LOC={lat:40.79,lon:-73.2,name:"Long Island"};
 
 /* ---------- experiment templates ---------- */
 const TEMPLATES=[
@@ -446,9 +445,13 @@ async function invite(text){
 /* ---------- weather ---------- */
 function wxIcon(code){if(code==null)return["·",""];if(code===0)return["☀️","Clear"];if(code<=3)return["⛅","Partly cloudy"];if(code<=48)return["🌫️","Fog"];if(code<=67)return["🌧️","Rain"];if(code<=77)return["❄️","Snow"];if(code<=82)return["🌦️","Showers"];if(code<=86)return["🌨️","Snow showers"];return["⛈️","Storms"]}
 const badDay=w=>!!w&&(w.pp>=50||(w.code>=51&&w.code!==45)||w.hi<38);
-function wxFor(d){return S.wx&&S.wx.days?S.wx.days[d]:null}
+function wxFor(d){return S.prefs.loc&&S.wx&&S.wx.days?S.wx.days[d]:null}
+async function findTown(q){
+  const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`);
+  if(!r.ok)throw new Error("bad");const j=await r.json();const g=j.results&&j.results[0];if(!g)return null;
+  return{lat:+g.latitude.toFixed(2),lon:+g.longitude.toFixed(2),name:[g.name,g.admin1].filter(Boolean).join(", ")}}
 async function loadWx(force){
-  const loc=S.prefs.loc||DEFAULT_LOC,key=loc.lat.toFixed(2)+","+loc.lon.toFixed(2);
+  const loc=S.prefs.loc;if(!loc){S.wx=null;return}const key=loc.lat.toFixed(2)+","+loc.lon.toFixed(2);
   if(!force&&S.wx&&S.wx.key===key&&Date.now()-S.wx.at<3*3600e3&&S.wx.days[today()])return;
   if(UI.wxLoading)return;UI.wxLoading=true;
   try{
@@ -644,12 +647,18 @@ function chipGroup(label,key,opts){return `<div class="fgroup"><span class="eyeb
 function dayPicker(){const day=questDay();
   let h=`<div class="fgroup"><span class="eyebrow">When</span><div class="fc" role="group" aria-label="Day">`;
   dayOpts().forEach(([d,l])=>{const w=wxFor(d),wi=w?wxIcon(w.code):null;
-    h+=`<button data-act="pickDay" data-d="${d}" aria-pressed="${d===day}" aria-label="${esc(l)}${w?", "+wi[1]+", high "+w.hi+", "+w.pp+" percent rain":""}"><span>${esc(l)}</span>${w?`<span class="wx" aria-hidden="true">${wi[0]}</span><b>${w.hi}°</b><span class="pp">${w.pp}% rain</span>`:`<span class="pp">${UI.wxLoading?"loading…":"no forecast"}</span>`}</button>`});
+    h+=`<button data-act="pickDay" data-d="${d}" aria-pressed="${d===day}" aria-label="${esc(l)}${w?", "+wi[1]+", high "+w.hi+", "+w.pp+" percent rain":""}"><span>${esc(l)}</span>${w?`<span class="wx" aria-hidden="true">${wi[0]}</span><b>${w.hi}°</b><span class="pp">${w.pp}% rain</span>`:`<span class="pp">${UI.wxLoading?"loading…":S.prefs.loc?"no forecast":fmt(d,{month:"short",day:"numeric"})}</span>`}</button>`});
   h+=`</div>`;
   const w=wxFor(day);
   if(w&&badDay(w))h+=`<div class="wxnote">${wxIcon(w.code)[1]} likely ${day===today()?"today":fmt(day,{weekday:"long"})}, so outdoor quests are held back. Pick "Outdoors" to override.</div>`;
-  else if(!S.wx&&UI.wxErr)h+=`<div class="wxnote">Forecast unavailable right now. Quests still work, they just won't account for weather.</div>`;
-  const loc=S.prefs.loc;h+=`<div class="small muted">Forecast for ${esc(loc?loc.name:DEFAULT_LOC.name)}. <button class="link" data-act="useLoc">${loc?"Update location":"Use my location"}</button></div></div>`;
+  else if(S.prefs.loc&&!S.wx&&UI.wxErr)h+=`<div class="wxnote">Forecast unavailable right now. Quests still work, they just won't account for weather.</div>`;
+  const loc=S.prefs.loc;
+  if(loc&&!UI.locEdit)h+=`<div class="small muted">Weather for ${esc(loc.name)}. <button class="link" data-act="locEdit">Change</button></div>`;
+  else h+=`<div class="stack" style="gap:8px;border:1px dashed var(--rule);border-radius:12px;padding:12px">
+    <div class="small"><b>Want weather-aware quests?</b> Add your town and the dice will skip outdoor quests on rainy days. It's optional and stays on your phone.</div>
+    <div class="row" style="flex-wrap:nowrap"><input id="townIn" type="text" placeholder="Town or ZIP" aria-label="Town or ZIP" autocomplete="address-level2"><button class="btn ghost" data-act="setTown">Set</button></div>
+    <div class="row"><button class="link" data-act="useLoc">Use my phone's location instead</button>${loc?`<button class="link" data-act="clearLoc">Turn weather off</button>`:""}</div></div>`;
+  h+=`</div>`;
   return h;
 }
 function renderQuests(){
@@ -844,8 +853,12 @@ document.addEventListener("click",ev=>{
   case "useLoc":{
     if(!("geolocation" in navigator)){toast("Location isn't available here");break}
     toast("Finding your location…");
-    try{navigator.geolocation.getCurrentPosition(p=>{S.prefs.loc={lat:+p.coords.latitude.toFixed(2),lon:+p.coords.longitude.toFixed(2),name:"your location"};save();loadWx(true);toast("Forecast updated")},()=>toast("Location blocked. Using Long Island."),{timeout:10000,maximumAge:3600e3})}catch(e){toast("Location blocked. Using Long Island.")}
+    try{navigator.geolocation.getCurrentPosition(p=>{S.prefs.loc={lat:+p.coords.latitude.toFixed(2),lon:+p.coords.longitude.toFixed(2),name:"your current area"};UI.locEdit=false;save();loadWx(true);toast("Forecast updated")},()=>toast("Location not allowed. Type your town instead."),{timeout:10000,maximumAge:3600e3})}catch(e){toast("Location not allowed. Type your town instead.")}
     break}
+  case "locEdit":UI.locEdit=true;renderQuests();break;
+  case "clearLoc":S.prefs.loc=null;S.wx=null;UI.locEdit=false;save();renderQuests();toast("Weather off");break;
+  case "setTown":{const q=(document.getElementById("townIn")||{}).value;if(!q||!q.trim()){toast("Type a town or ZIP");break}
+    toast("Looking it up…");findTown(q.trim()).then(loc=>{if(!loc){toast("Couldn't find that. Try adding the state.");return}S.prefs.loc=loc;S.wx=null;UI.locEdit=false;save();loadWx(true);renderQuests();toast("Weather set for "+loc.name)}).catch(()=>toast("Couldn't reach the lookup. Try again in a bit."));break}
   case "roll":{const E=eligible();if(!E.length){UI.rolled=null;renderQuests();toast("Nothing fits. Loosen a filter.");break}
     const P=E.length>1?E.filter(q=>q.id!==UI.rolled):E;const q=weightedPick(P);
     UI.rolled=q.id;UI.rolledTwist=S.prefs.twist?TWISTS[Math.floor(Math.random()*TWISTS.length)]:null;
