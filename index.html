@@ -203,6 +203,23 @@ nav.tabs button[data-tab="quests"][aria-current="page"]{color:var(--quest)}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--ink-3);transition:transform .15s}
 .switch[aria-checked="true"]{background:var(--quest);border-color:var(--quest)}
 .switch[aria-checked="true"]::after{transform:translateX(20px);background:var(--on-accent)}
+/* mission */
+.mission{background:var(--lab);color:var(--on-accent);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.mission .eyebrow{color:inherit;opacity:.85}
+.mission h3{font-family:var(--f-display);font-weight:700;font-size:21px;line-height:1.2}
+.mission .btn{background:var(--on-accent);color:var(--lab);align-self:flex-start}
+.mission .btn.done{background:transparent;border:1px solid currentColor;color:inherit}
+.mission .streak{font-family:var(--f-data);font-size:12px;letter-spacing:.04em;white-space:nowrap}
+.mission.wait{background:var(--sheet);color:var(--ink);border:1px dashed var(--lab)}
+.mission.wait .eyebrow{color:var(--lab)}
+.pat{display:flex;flex-direction:column;gap:4px;padding-block:12px;border-top:1px solid var(--rule)}
+.pat:first-child{border-top:none}
+.pat .meta{font-family:var(--f-data);font-size:11px;color:var(--ink-3)}
+.decide{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.decide button{border:1px solid var(--rule);background:var(--paper);border-radius:10px;min-height:44px;font-weight:700}
+.decide button[aria-pressed="true"][data-v="keep"]{background:var(--good);border-color:var(--good);color:var(--on-accent)}
+.decide button[aria-pressed="true"][data-v="drop"]{background:var(--bad);border-color:var(--bad);color:var(--on-accent)}
+.decide button[aria-pressed="true"][data-v="maybe"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -230,7 +247,7 @@ nav.tabs button[data-tab="quests"][aria-current="page"]{color:var(--quest)}
 <script>
 (function(){
 "use strict";
-const VERSION="2.0";
+const VERSION="3.0";
 /* ---------- dates ---------- */
 const pad=n=>String(n).padStart(2,"0");
 const ds=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -390,6 +407,41 @@ function series(e,mid){const a=[],b=[],pts=[],total=e.baseDays+e.testDays;
     if(k<e.baseDays){a.push(v);pts.push({k,v,ph:"b"})}else{if(c.adh&&c.adh[e.id]===false)return;b.push(v);pts.push({k,v,ph:"t"})}});
   return{a,b,pts,total}}
 function questDays(){return new Set(S.quests.log.map(q=>q.date))}
+const hasData=c=>!!(c&&c.m&&Object.keys(c.m).length);
+const loggedDates=()=>Object.keys(S.checkins).filter(d=>hasData(S.checkins[d])).sort();
+function streakOf(e){let n=0,d=today();const c0=S.checkins[d];if(!(c0&&c0.adh&&c0.adh[e.id]===true))d=addDays(d,-1);
+  while(phaseOn(e,d)==="test"){const c=S.checkins[d];if(c&&c.adh&&c.adh[e.id]===true){n++;d=addDays(d,-1)}else break}return n}
+const doneToday=e=>{const c=S.checkins[today()];return !!(c&&c.adh&&c.adh[e.id]===true)};
+function bestResult(e){const rows=e.metrics.map(mid=>{const {a,b}=series(e,mid);return{mid,m:metric(mid),r:compare(a,b,metric(mid))}}).filter(x=>x.r.ok);
+  return rows.sort((p,q)=>Math.abs(q.r.d)-Math.abs(p.r.d))[0]||null}
+function pearson(x,y){const mx=mean(x),my=mean(y);let n=0,a=0,b=0;for(let i=0;i<x.length;i++){const dx=x[i]-mx,dy=y[i]-my;n+=dx*dy;a+=dx*dx;b+=dy*dy}return a&&b?n/Math.sqrt(a*b):0}
+function patterns(){
+  const dates=loggedDates(),out=[],M=S.metrics;
+  for(let i=0;i<M.length;i++)for(let j=i+1;j<M.length;j++){const A=M[i],B=M[j],xs=[],ys=[];
+    dates.forEach(d=>{const m=S.checkins[d].m;if(m[A.id]!=null&&m[B.id]!=null){xs.push(m[A.id]);ys.push(m[B.id])}});
+    if(xs.length<10)continue;const r=pearson(xs,ys);if(Math.abs(r)>=0.4)out.push({kind:"pair",A,B,r,n:xs.length,w:Math.abs(r)})}
+  const qd=questDays();
+  M.forEach(m=>{const after=[],other=[];dates.forEach(d=>{const v=S.checkins[d].m[m.id];if(v==null)return;(qd.has(addDays(d,-1))?after:other).push(v)});
+    if(after.length<3||other.length<5)return;const d=cohen(other,after);if(Math.abs(d)>=0.5)out.push({kind:"quest",m,diff:mean(after)-mean(other),n:after.length,w:Math.min(1,Math.abs(d)/2)})});
+  return out.sort((p,q)=>q.w-p.w).slice(0,4)}
+const PUSH=["Every day you do it is a data point. Make today count.","Small change, real evidence. Go get it.","You set this up to find out. Today is how you find out.","Future you is reading these results. Give them something good.","Showing up is the whole experiment. Show up.","One more day of proof. Go."];
+function missionHTML(){
+  const act=S.experiments.filter(e=>e.status==="active");let h="";
+  act.filter(e=>phaseOn(e,today())==="test").forEach(e=>{const {day}=phaseOf(e),k=day-e.baseDays+1,st=streakOf(e),done=doneToday(e),best=bestResult(e);
+    let msg=PUSH[day%PUSH.length];
+    if(best&&best.r.g>0&&best.r.p<0.2)msg=`Early read: your ${best.m.name.toLowerCase()} is up ${fmtDiff(best.m,best.r.diff).replace("+","")}. It's working. Keep going.`;
+    if(done)msg=st>1?`${st} days in a row. That's how habits get built.`:"Done for today. Same time tomorrow.";
+    h+=`<section class="mission" aria-label="Today's mission"><div class="row between"><span class="eyebrow">Today's mission · day ${k} of ${e.testDays}</span>${st?`<span class="streak">${st}-day streak</span>`:""}</div>
+      <h3>${esc(e.change)}</h3><div class="small">${esc(msg)}</div>
+      ${done?`<button class="btn done" data-act="missionUndo" data-id="${e.id}">Done today ✓ · undo</button>`:`<button class="btn" data-act="missionDone" data-id="${e.id}">I did it today</button>`}</section>`});
+  act.filter(e=>{const p=phaseOn(e,today());return p==="baseline"||p==="scheduled"}).forEach(e=>{const left=e.baseDays-Math.max(0,diffDays(e.start,today()));
+    h+=`<section class="mission wait"><span class="eyebrow">Your change starts in ${left} day${left===1?"":"s"}</span><h3>${esc(e.change)}</h3><div class="small muted">Baseline first: live normally and keep checking in, so your change has something to beat.</div></section>`});
+  return h}
+function inviteText(q,twist,day){const when=!day?"This weekend":day===today()?"Today":day===addDays(today(),1)?"Tomorrow":fmt(day,{weekday:"long"});
+  return `Side quest, ${when}: ${q.title}. ${q.detail}${twist?" Twist: "+twist:""} You in?`}
+async function invite(text){
+  try{if(navigator.share){await navigator.share({text});return}}catch(e){if(e&&e.name==="AbortError")return}
+  try{await navigator.clipboard.writeText(text);toast("Invite copied. Paste it into your group chat.")}catch(e){openSheet(`<div class="row between"><h2>Invite friends</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div><div class="small muted">Copy this and send it:</div><textarea id="invTxt" readonly>${esc(text)}</textarea>`)}}
 
 /* ---------- weather ---------- */
 function wxIcon(code){if(code==null)return["·",""];if(code===0)return["☀️","Clear"];if(code<=3)return["⛅","Partly cloudy"];if(code<=48)return["🌫️","Fog"];if(code<=67)return["🌧️","Rain"];if(code<=77)return["❄️","Snow"];if(code<=82)return["🌦️","Showers"];if(code<=86)return["🌨️","Snow showers"];return["⛈️","Storms"]}
@@ -420,7 +472,7 @@ function toast(msg){document.querySelectorAll(".toast").forEach(t=>t.remove());c
 function sampleBanner(){return S.hasSample?`<div class="banner"><span>You're looking at example data so you can see how it works.</span><button class="link" data-act="clearSample">Clear examples</button></div>`:""}
 
 /* ---------- check-in fields (shared by Today and past-day sheet) ---------- */
-function newDraft(date){const c=S.checkins[date];return{date,m:Object.assign({},c&&c.m),adh:Object.assign({},c&&c.adh),note:c?c.note:"",editing:!c}}
+function newDraft(date){const c=S.checkins[date];return{date,m:Object.assign({},c&&c.m),adh:Object.assign({},c&&c.adh),note:c?c.note:"",editing:!hasData(c)}}
 const draftFor=ctx=>ctx==="sheet"?UI.sheetDraft:UI.draft;
 function checkinFields(D,ctx){
   let h="";
@@ -443,11 +495,11 @@ function summaryPills(c){return `<div class="row">${S.metrics.filter(m=>c.m[m.id
 function calendarHTML(){
   const [y,mo]=UI.calMonth.split("-").map(Number),first=new Date(y,mo-1,1),days=new Date(y,mo,0).getDate(),t=today(),qd=questDays();
   const atCurrent=UI.calMonth>=t.slice(0,7);
-  let missed=0;for(let i=1;i<=7;i++){if(!S.checkins[addDays(t,-i)])missed++}
+  let missed=0;for(let i=1;i<=7;i++){if(!hasData(S.checkins[addDays(t,-i)]))missed++}
   let h=`<section class="card"><div class="calhead"><button class="iconbtn" data-act="calNav" data-d="-1" aria-label="Previous month">‹</button><h2>${first.toLocaleDateString(undefined,{month:"long",year:"numeric"})}</h2><button class="iconbtn" data-act="calNav" data-d="1" aria-label="Next month" ${atCurrent?"disabled":""}>›</button></div>
    <div class="cal" role="grid">${["S","M","T","W","T","F","S"].map(d=>`<div class="dow" aria-hidden="true">${d}</div>`).join("")}`;
   for(let i=0;i<first.getDay();i++)h+=`<div></div>`;
-  for(let d=1;d<=days;d++){const date=`${y}-${pad(mo)}-${pad(d)}`,has=!!S.checkins[date],fut=date>t;
+  for(let d=1;d<=days;d++){const date=`${y}-${pad(mo)}-${pad(d)}`,has=hasData(S.checkins[date]),fut=date>t;
     h+=`<button class="${has?"has":""} ${date===t?"today":""}" data-act="openDay" data-date="${date}" ${fut?"disabled":""} aria-label="${fmt(date,{weekday:"long",month:"long",day:"numeric"})}${has?", logged":""}${qd.has(date)?", quest":""}">${d}${qd.has(date)?'<span class="qd"></span>':""}</button>`}
   h+=`</div><div class="legend"><span><i style="background:var(--lab-soft)"></i>Checked in</span><span><i style="background:var(--quest);border-radius:50%"></i>Quest day</span></div>
    <div class="small muted">${missed?`${missed} unlogged day${missed===1?"":"s"} in the past week. Tap any day to fill it in.`:"Every day this past week is logged."}</div></section>`;
@@ -461,7 +513,8 @@ function renderToday(){
   const D=UI.draft,active=S.experiments.filter(e=>e.status==="active");
   let h=sampleBanner();
   h+=`<div><div class="eyebrow">${esc(fmt(t,{weekday:"long"}))}</div><h1>${esc(fmt(t,{month:"long",day:"numeric"}))}</h1></div>`;
-  if(D.editing||!c){
+  h+=missionHTML();
+  if(D.editing||!hasData(c)){
     h+=`<section class="card lab" aria-labelledby="ciH"><div class="row between"><h2 id="ciH">Daily check-in</h2><span class="eyebrow">10 seconds</span></div>${checkinFields(D,"today")}
       <button class="btn lab wide" data-act="saveCheckin" data-ctx="today">Save check-in</button></section>`;
   }else{
@@ -469,7 +522,7 @@ function renderToday(){
       ${c.note?`<div class="small muted">${esc(c.note)}</div>`:""}<div><button class="link" data-act="editCheckin">Edit today's check-in</button></div></section>`;
   }
   h+=`<section class="card"><div class="row between"><h2>Experiments running</h2><button class="link" data-act="goto" data-tab="lab">Open Lab</button></div>`;
-  if(!active.length)h+=`<div class="empty">No experiment running. Pick something you want to know about yourself and test it.<br><br><button class="btn lab" data-act="newExp">Start an experiment</button></div>`;
+  if(!active.length)h+=`<div class="empty">No experiment running. Pick one change you keep meaning to make, and prove it works.<br><br><button class="btn lab" data-act="newExp">Start an experiment</button></div>`;
   active.forEach(e=>{const ph=phaseOf(e);h+=`<button class="item" data-act="openExp" data-id="${e.id}"><div class="stack" style="gap:6px;flex:1"><div class="t">${esc(e.title)}</div>${progBar(e)}</div>${phasePill(ph.phase)}</button>`});
   h+=`</section>`;
   h+=questBlock(true);
@@ -482,7 +535,7 @@ function questBlock(compact){
     return `<section class="qcard" aria-label="Active quest"><div class="row between"><span class="eyebrow">Active quest · ${esc(a.cat)}${a.day?" · "+esc(a.day===today()?"today":fmt(a.day,{weekday:"long"})):""}</span><span class="dice" aria-hidden="true">⚂</span></div>
     <h3>${esc(a.title)}</h3><div class="small">${esc(a.detail)}</div>${a.twist?`<div class="twist"><b>Twist:</b> ${esc(a.twist)}</div>`:""}
     ${w?`<div class="wxnote">${wi[0]} ${w.hi}° · ${w.pp}% chance of rain</div>`:""}
-    <div class="row"><button class="btn quest" data-act="completeQuest">Mark complete</button><button class="btn ghost" data-act="dropQuest">Drop it</button></div></section>`}
+    <div class="row"><button class="btn quest" data-act="completeQuest">Mark complete</button><button class="btn ghost" data-act="invite" data-src="active">Invite friends</button><button class="link" data-act="dropQuest">Drop it</button></div></section>`}
   if(compact)return `<section class="card quest"><div class="row between"><h2>Side quest</h2><span class="dice" aria-hidden="true">⚄</span></div><div class="small muted">Nothing on deck. Roll one for this week.</div><button class="btn quest" data-act="goto" data-tab="quests">Roll a quest</button></section>`;
   return "";
 }
@@ -491,17 +544,37 @@ function questBlock(compact){
 function renderLab(){
   if(UI.labDetail){const e=S.experiments.find(x=>x.id===UI.labDetail);if(e)return renderExp(e);UI.labDetail=null}
   let h=sampleBanner();
-  h+=`<div><div class="eyebrow">Experiment Lab</div><h1>Test what actually works for you</h1></div>
-   <div class="small muted">Each experiment runs a baseline (live normally) then a test (make one change). Your daily check-ins are the data. The Lab tells you if the difference is real or noise.</div>
-   <button class="btn lab wide" data-act="newExp">New experiment</button>`;
+  h+=`<div><div class="eyebrow">Experiment Lab</div><h1>Make one change. Prove it works.</h1></div>
+   <div class="small muted">Live normally for a baseline, then commit to one change. Your daily check-ins show whether it's actually making your days better, or if you're imagining it.</div>
+   <button class="btn lab wide" data-act="newExp">Start a new change</button>`;
+  h+=rulebookHTML();
   const groups=[["Running",S.experiments.filter(e=>e.status==="active")],["Finished",S.experiments.filter(e=>e.status!=="active")]];
   groups.forEach(([name,list])=>{if(!list.length&&name==="Finished")return;
     h+=`<section class="card"><h2>${name}</h2><div class="list">`;
     if(!list.length)h+=`<div class="empty">Nothing running yet.</div>`;
     list.forEach(e=>{const ph=phaseOf(e);h+=`<button class="item" data-act="openExp" data-id="${e.id}"><div class="stack" style="gap:6px;flex:1"><div class="t">${esc(e.title)}</div><div class="small muted">Change: ${esc(e.change)}</div>${e.status==="active"?progBar(e):""}</div>${phasePill(ph.phase)}</button>`});
     h+=`</div></section>`});
+  h+=patternsHTML();
   main.innerHTML=h;
 }
+function rulebookHTML(){const done=S.experiments.filter(e=>e.status==="done"&&e.decision);
+  if(!done.length)return `<section class="card"><h2>Your rulebook</h2><div class="small muted">Every change you finish becomes a rule here: what works for you, proven by your own data. Finish your first experiment to write rule #1.</div></section>`;
+  const order={keep:0,maybe:1,drop:2},lab={keep:["Keep doing it","good"],drop:["Dropped","bad"],maybe:["Undecided",""]};
+  let h=`<section class="card lab"><div class="row between"><h2>Your rulebook</h2><span class="eyebrow">${done.filter(e=>e.decision==="keep").length} rules kept</span></div><div class="list">`;
+  done.slice().sort((a,b)=>order[a.decision]-order[b.decision]).forEach(e=>{const r=e.result,l=lab[e.decision];
+    h+=`<button class="item" data-act="openExp" data-id="${e.id}"><div><div class="t">${esc(e.change)}</div>${e.takeaway?`<div class="small">${esc(e.takeaway)}</div>`:""}${r?`<div class="small muted mono">${esc(r.name)} ${esc(r.diff)} · ${esc(r.v.toLowerCase())}</div>`:""}</div><span class="pill ${l[1]}">${l[0]}</span></button>`});
+  return h+`</div></section>`}
+function patternsHTML(){const n=loggedDates().length,P=patterns();UI.patterns=P;
+  let h=`<section class="card"><div class="row between"><h2>Patterns in your data</h2><span class="eyebrow">${n} days</span></div>`;
+  if(n<10)return h+`<div class="small muted">After about 10 days of check-ins, the Lab scans for things that move together, like whether better sleep lines up with better focus. ${n}/10 so far.</div></section>`;
+  if(!P.length)return h+`<div class="small muted">Nothing strong yet. Patterns get clearer the more days you log.</div></section>`;
+  h+=`<div class="list">`;
+  P.forEach((p,i)=>{let txt,meta;
+    if(p.kind==="pair"){const up=p.r>0;txt=mt(p.A)==="yesno"?`On days you answer yes to ${p.A.name.toLowerCase()}, your ${p.B.name.toLowerCase()} tends to be ${up?"higher":"lower"}.`:`When your ${p.A.name.toLowerCase()} is higher, your ${p.B.name.toLowerCase()} tends to be ${up?"higher":"lower"} too.`;
+      meta=`${Math.abs(p.r)>=0.6?"Strong":"Moderate"} link · ${p.n} days`}
+    else{txt=`The day after a quest, your ${p.m.name.toLowerCase()} runs ${fmtDiff(p.m,p.diff)} compared to other days.`;meta=`${p.n} days after quests`}
+    h+=`<div class="pat"><div>${esc(txt)}</div><div class="row between"><span class="meta">${esc(meta)}</span>${p.kind==="pair"?`<button class="link" data-act="testPattern" data-i="${i}">Test it</button>`:""}</div></div>`});
+  return h+`</div><div class="small muted">Things that move together aren't proof that one causes the other. Test the interesting ones.</div></section>`}
 function yRange(m,pts){const t=mt(m);
   if(t==="scale")return{lo:1,hi:5,ticks:[1,2,3,4,5],lab:v=>String(v)};
   if(t==="yesno")return{lo:0,hi:1,ticks:[0,1],lab:v=>v?"Yes":"No"};
@@ -527,12 +600,12 @@ function renderExp(e){
   const ph=phaseOf(e);if(!UI.metricView||!e.metrics.includes(UI.metricView))UI.metricView=e.metrics[0];
   let h=`<div><button class="link" data-act="backLab">← All experiments</button></div>
    <div class="stack" style="gap:6px"><div class="row">${phasePill(ph.phase)}${e.sample?'<span class="pill">Example</span>':""}</div><h1>${esc(e.title)}</h1>
-   <div class="muted">The change: <b>${esc(e.change)}</b></div><div class="small muted mono">Started ${esc(fmt(e.start,{month:"short",day:"numeric",year:"numeric"}))}</div></div>`;
+   <div class="muted">The change: <b>${esc(e.change)}</b></div>${e.status==="done"&&e.decision?`<div class="row"><span class="pill ${e.decision==="keep"?"good":e.decision==="drop"?"bad":""}">${e.decision==="keep"?"In your rulebook":e.decision==="drop"?"Dropped":"Undecided"}</span></div>${e.takeaway?`<div class="small">${esc(e.takeaway)}</div>`:""}`:""}<div class="small muted mono">Started ${esc(fmt(e.start,{month:"short",day:"numeric",year:"numeric"}))}</div></div>`;
   if(e.status==="active")h+=`<section class="card lab">${progBar(e)}<div class="small muted">${
     ph.phase==="scheduled"?"Starts "+esc(fmt(e.start))+". Keep checking in.":
-    ph.phase==="baseline"?`Baseline: live normally for ${e.baseDays-ph.day} more day${e.baseDays-ph.day===1?"":"s"}. Don't start the change yet.`:
-    ph.phase==="test"?`Test phase: do the change every day. ${ph.total-ph.day} day${ph.total-ph.day===1?"":"s"} left.`:
-    "Both phases are done. Read your results below, then close the experiment."}</div></section>`;
+    ph.phase==="baseline"?`Baseline: live normally for ${e.baseDays-ph.day} more day${e.baseDays-ph.day===1?"":"s"}. Your change starts after that.`:
+    ph.phase==="test"?`You're in. Do it every day: ${ph.total-ph.day} day${ph.total-ph.day===1?"":"s"} to go.${streakOf(e)>1?" Current streak: "+streakOf(e)+" days.":""}`:
+    "You finished it. See what your data says, then decide if it earns a spot in your rulebook."}</div></section>`;
   const rows=e.metrics.map(mid=>{const {a,b}=series(e,mid);return{mid,m:metric(mid),r:compare(a,b,metric(mid))}});
   h+=`<section class="card"><div class="row between"><h2>Results so far</h2><span class="eyebrow">Baseline vs test</span></div>`;
   const ready=rows.filter(x=>x.r.ok);
@@ -548,7 +621,7 @@ function renderExp(e){
   h+=`</section>`;
   h+=`<section class="card"><div class="chips labc" role="group" aria-label="Metric">${e.metrics.map(m=>`<button class="chip" data-act="metricView" data-m="${m}" aria-pressed="${m===UI.metricView}">${esc(metric(m).name)}</button>`).join("")}</div>${chartSVG(e,UI.metricView)}
    <div class="small muted">Dashed lines are each phase's average. Test days where you skipped the change are left out.</div></section>`;
-  h+=`<section class="row">${e.status==="active"?`<button class="btn ghost" data-act="finishExp" data-id="${e.id}">${ph.phase==="complete"?"Close experiment":"End early"}</button>`:`<button class="btn ghost" data-act="reopenExp" data-id="${e.id}">Reopen</button>`}<button class="btn danger" data-act="deleteExp" data-id="${e.id}">${UI.delArm===e.id?"Tap again to delete":"Delete"}</button></section>`;
+  h+=`<section class="row">${e.status==="active"?`<button class="btn ${ph.phase==="complete"?"lab":"ghost"}" data-act="finishExp" data-id="${e.id}">${ph.phase==="complete"?"Write the rule":"End early"}</button>`:`<button class="btn ghost" data-act="reopenExp" data-id="${e.id}">Reopen</button>`}<button class="btn danger" data-act="deleteExp" data-id="${e.id}">${UI.delArm===e.id?"Tap again to delete":"Delete"}</button></section>`;
   main.innerHTML=h;
 }
 
@@ -597,7 +670,7 @@ function renderQuests(){
     h+=`<section class="qcard roll" aria-live="polite"><div class="row between"><span class="eyebrow">${esc(q.cat)}${q.season?" · "+q.season+" only":""}</span><span class="dice" aria-hidden="true">⚃</span></div><h3>${esc(q.title)}</h3><div class="small">${esc(q.detail)}</div>
       ${UI.rolledTwist?`<div class="twist"><b>Twist:</b> ${esc(UI.rolledTwist)}</div>`:""}
       <div class="row"><span class="pill quest">${COST[q.cost]}</span><span class="pill quest">${TIME[q.time]}</span><span class="pill quest">${q.who==="any"?"Solo or friends":q.who==="solo"?"Solo":"Friends"}</span></div>
-      <div class="row"><button class="btn quest" data-act="acceptQuest" ${S.quests.active?"disabled":""}>${S.quests.active?"Finish your active quest first":"Accept quest"}</button><button class="btn ghost" data-act="roll">Reroll</button><button class="link" data-act="banQuest">Never show this</button></div></section>`}}
+      <div class="row"><button class="btn quest" data-act="acceptQuest" ${S.quests.active?"disabled":""}>${S.quests.active?"Finish your active quest first":"Accept quest"}</button><button class="btn ghost" data-act="roll">Reroll</button><button class="btn ghost" data-act="invite" data-src="rolled">Invite friends</button><button class="link" data-act="banQuest">Never show this</button></div></section>`}}
   const L=S.quests.log,avg=L.length?(L.reduce((s,q)=>s+q.rating,0)/L.length).toFixed(1):"–",cats=new Set(L.map(q=>q.cat)).size;
   h+=`<div class="stats"><div class="stat"><b>${L.length}</b><span>Quests done</span></div><div class="stat"><b>${avg}</b><span>Avg rating</span></div><div class="stat"><b>${cats}/6</b><span>Types tried</span></div></div>`;
   const taste=tasteWeights(),tk=Object.keys(taste);
@@ -610,7 +683,7 @@ function renderQuests(){
   main.innerHTML=h;
 }
 function questEffect(){
-  const qd=questDays(),dates=Object.keys(S.checkins);
+  const qd=questDays(),dates=loggedDates();
   const on=dates.filter(d=>qd.has(d)),off=dates.filter(d=>!qd.has(d));
   let h=`<section class="card lab"><div class="row between"><h2>Do quests change your days?</h2><span class="pill lab">Lab link</span></div>`;
   if(on.length<3||off.length<3){h+=`<div class="small muted">Once you've done 3 quests on days you also checked in, this compares your quest days to your regular days. ${on.length}/3 so far.</div></section>`;return h}
@@ -626,14 +699,14 @@ function questEffect(){
 /* ---------- sheets ---------- */
 function openSheet(html,keepFocus){layer.innerHTML=`<div class="overlay" data-act="closeSheet"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;if(!keepFocus){const f=layer.querySelector(".sheet button");if(f)f.focus()}}
 function closeSheet(){layer.innerHTML=""}
-function daySheet(){const D=UI.sheetDraft,c=S.checkins[D.date],qs=S.quests.log.filter(q=>q.date===D.date);
+function daySheet(){const D=UI.sheetDraft,c=hasData(S.checkins[D.date])?S.checkins[D.date]:null,qs=S.quests.log.filter(q=>q.date===D.date);
   openSheet(`<div class="row between"><div><div class="eyebrow">${D.date===today()?"Today":esc(fmt(D.date,{weekday:"long"}))}</div><h2>${esc(fmt(D.date,{month:"long",day:"numeric",year:"numeric"}))}</h2></div><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
    ${qs.length?`<div class="row">${qs.map(q=>`<span class="pill quest">Quest: ${esc(q.title)}</span>`).join("")}</div>`:""}
    ${checkinFields(D,"sheet")}
    <button class="btn lab wide" data-act="saveCheckin" data-ctx="sheet">${c?"Save changes":"Log this day"}</button>
    ${c?`<button class="btn danger" data-act="delCheckin">${UI.delDay===D.date?"Tap again to delete this day":"Delete this check-in"}</button>`:""}`,true)}
-function newExpSheet(tplIdx){
-  const tp=tplIdx!=null?TEMPLATES[tplIdx]:null;
+function newExpSheet(x){
+  const tplIdx=typeof x==="number"?x:null,tp=typeof x==="number"?TEMPLATES[x]:(x||null);
   openSheet(`<div class="row between"><h2>New experiment</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
    <div class="fgroup"><span class="eyebrow">Start from an idea</span><div class="chips labc">${TEMPLATES.map((t,i)=>`<button class="chip" data-act="useTpl" data-i="${i}" aria-pressed="${tplIdx===i}">${esc(t.change)}</button>`).join("")}</div></div>
    <label class="f" for="exTitle">What do you want to find out?<input id="exTitle" type="text" value="${esc(tp?tp.title:"")}" placeholder="Does reading before bed help my focus?"></label>
@@ -644,6 +717,15 @@ function newExpSheet(tplIdx){
    <div class="small muted">Tip: 7 + 7 days catches big effects. Go 14 + 14 for subtle ones.</div>
    <input type="hidden" id="exQL" value="${tp&&tp.questLinked?1:0}">
    <button class="btn lab wide" data-act="createExp">Start experiment</button>`)}
+function closeExpSheet(e){const best=bestResult(e);UI.closing={id:e.id,decision:best&&best.r.cls==="good"?"keep":best&&best.r.cls==="bad"?"drop":"maybe"};drawClose()}
+function drawClose(){const e=S.experiments.find(x=>x.id===UI.closing.id),best=bestResult(e),dec=UI.closing.decision;
+  const suggest=best?(best.r.cls==="good"?`${e.change} lifts my ${best.m.name.toLowerCase()}.`:best.r.cls==="bad"?`${e.change} made my ${best.m.name.toLowerCase()} worse.`:`${e.change} didn't clearly change anything for me.`):"";
+  openSheet(`<div class="row between"><h2>Write the rule</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
+   <div style="font-weight:700">${esc(e.change)}</div>
+   ${best?`<div class="verdict ${best.r.cls}"><b>${esc(best.m.name)}: ${esc(best.r.v)}</b><span class="small muted">${esc(fmtDiff(best.m,best.r.diff))} ${scaleNote(best.m)}</span></div>`:`<div class="small muted">Not enough days to judge. You can still decide based on how it felt.</div>`}
+   <div class="fgroup"><span class="eyebrow">Does it make your rulebook?</span><div class="decide" role="group" aria-label="Decision">${[["keep","Keep it"],["maybe","Undecided"],["drop","Drop it"]].map(([v,t])=>`<button data-act="setDecision" data-v="${v}" aria-pressed="${dec===v}">${t}</button>`).join("")}</div></div>
+   <label class="f" for="takeaway">Your takeaway<textarea id="takeaway" placeholder="${esc(suggest||"What did you learn?")}">${esc(UI.closing.takeaway||"")}</textarea></label>
+   <button class="btn lab wide" data-act="confirmClose">Save to rulebook</button>`)}
 function completeSheet(){const a=S.quests.active;
   openSheet(`<div class="row between"><h2>Quest complete</h2><button class="iconbtn" data-act="closeSheet" aria-label="Close">✕</button></div>
    <div style="font-weight:700">${esc(a.title)}</div>${a.twist?`<div class="small muted">Twist: ${esc(a.twist)}</div>`:""}
@@ -742,8 +824,18 @@ document.addEventListener("click",ev=>{
   case "openExp":UI.tab="lab";UI.labDetail=el.dataset.id;UI.delArm=null;render();window.scrollTo(0,0);break;
   case "backLab":UI.labDetail=null;renderLab();break;
   case "metricView":UI.metricView=el.dataset.m;renderLab();break;
-  case "finishExp":{const e=S.experiments.find(x=>x.id===el.dataset.id);e.status="done";save();renderLab();toast("Experiment closed");break}
-  case "reopenExp":{const e=S.experiments.find(x=>x.id===el.dataset.id);e.status="active";save();renderLab();break}
+  case "finishExp":{const e=S.experiments.find(x=>x.id===el.dataset.id);closeExpSheet(e);break}
+  case "setDecision":UI.closing.takeaway=(document.getElementById("takeaway")||{}).value||"";UI.closing.decision=el.dataset.v;drawClose();break;
+  case "confirmClose":{const e=S.experiments.find(x=>x.id===UI.closing.id),best=bestResult(e),ta=document.getElementById("takeaway");
+    e.status="done";e.decision=UI.closing.decision;e.takeaway=ta.value.trim()||ta.placeholder.replace("What did you learn?","");e.closed=today();
+    e.result=best?{name:best.m.name,diff:fmtDiff(best.m,best.r.diff),v:best.r.v,cls:best.r.cls}:null;
+    save();closeSheet();UI.labDetail=null;renderLab();window.scrollTo(0,0);toast(e.decision==="keep"?"Added to your rulebook":"Saved");break}
+  case "missionDone":{const id=el.dataset.id,t=today(),c=S.checkins[t]||{m:{},adh:{},note:""};c.adh=Object.assign({},c.adh,{[id]:true});S.checkins[t]=c;if(UI.draft&&UI.draft.date===t)UI.draft.adh[id]=true;
+    save();renderToday();const st=streakOf(S.experiments.find(x=>x.id===id));toast(st>1?`${st} days straight. Keep it rolling.`:"Logged. Nice work.");break}
+  case "missionUndo":{const id=el.dataset.id,t=today(),c=S.checkins[t];if(c&&c.adh){delete c.adh[id];if(!hasData(c)&&!Object.keys(c.adh).length&&!c.note)delete S.checkins[t]}if(UI.draft&&UI.draft.date===t)delete UI.draft.adh[id];save();renderToday();break}
+  case "testPattern":{const p=(UI.patterns||[])[+el.dataset.i];if(!p)break;newExpSheet({title:`Does improving my ${p.A.name.toLowerCase()} change my ${p.B.name.toLowerCase()}?`,change:"",metrics:[p.A.id,p.B.id],baseDays:7,testDays:7});break}
+  case "invite":{let q,tw,day;if(el.dataset.src==="active"){q=S.quests.active;tw=q.twist;day=q.day}else{q=pool().find(x=>x.id===UI.rolled);tw=UI.rolledTwist;day=questDay()}if(q)invite(inviteText(q,tw,day));break}
+  case "reopenExp":{const e=S.experiments.find(x=>x.id===el.dataset.id);e.status="active";delete e.decision;save();renderLab();break}
   case "deleteExp":{const id=el.dataset.id;if(UI.delArm!==id){UI.delArm=id;renderLab();break}
     S.experiments=S.experiments.filter(x=>x.id!==id);Object.values(S.checkins).forEach(c=>{if(c.adh)delete c.adh[id]});UI.labDetail=null;UI.delArm=null;save();renderLab();toast("Experiment deleted");break}
   case "pref":{const k=el.dataset.k,v=el.dataset.v;S.prefs[k]=(k==="cost"||k==="time")?+v:v;save();renderQuests();break}
