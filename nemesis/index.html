@@ -1,0 +1,672 @@
+<!doctype html><html lang="en" data-pwa="1"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0F1216">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Nemesis">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Nemesis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-column phone scoreboard with a bottom tab bar. Amber = you, cobalt = Nemesis; everything else cold graphite. */
+:root{
+  --bg:#eef0f2; --surface:#ffffff; --line:#d5d9de; --fg:#15191e; --muted:#5d6670;
+  --you:#b86a00; --you-soft:#f6e6cc; --nem:#2747c9; --nem-soft:#dfe5fa;
+  --good:#1f7a4a; --bad:#b3261e; --scrim:rgba(10,12,16,.45);
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --navh:64px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0f1216; --surface:#171b21; --line:#2a3039; --fg:#e7eaee; --muted:#8a939e;
+  --you:#f0a33a; --you-soft:#3a2a12; --nem:#7d96ff; --nem-soft:#1c2547;
+  --good:#5cc48c; --bad:#ff7d72; --scrim:rgba(0,0,0,.6); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);-webkit-tap-highlight-color:transparent;
+  padding-top:env(safe-area-inset-top,0px)}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:12px calc(var(--navh) + 28px + env(safe-area-inset-bottom,0px))}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:600}
+button{font:inherit;cursor:pointer;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--nem);outline-offset:2px}
+
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;padding-top:4px}
+.brand{font-family:var(--display);font-size:34px;line-height:1;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.brand span{color:var(--nem)}
+.meta{text-align:right;display:flex;flex-direction:column;gap:2px}
+.meta .num{font-size:13px}
+
+.match{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.side{display:flex;flex-direction:column;gap:2px;min-width:0}
+.side.r{text-align:right}
+.side .who{font-family:var(--display);font-size:20px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.side.you .who{color:var(--you)} .side.nem .who{color:var(--nem)}
+.side .big{font-family:var(--display);font-size:44px;line-height:1;font-weight:700}
+.vs{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.countdown{grid-column:1/-1;border-top:1px dashed var(--line);padding-top:10px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px}
+
+.banner{background:var(--nem);color:#fff;border-radius:6px;padding:14px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.banner h3{font-size:22px;color:#fff}
+.banner p{margin:2px 0 0;font-size:13px;opacity:.92}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:4px;padding:10px 14px;font-weight:600}
+.btn.solid{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.btn.you{background:var(--you);border-color:var(--you);color:#fff}
+.btn.wide{width:100%}
+.banner .btn{background:#fff;color:#1a2a6b;border-color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+
+.tracks{display:flex;flex-direction:column;gap:8px}
+.track{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
+.track:active{border-color:var(--muted)}
+.trow{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.tname{font-family:var(--display);font-size:20px;letter-spacing:.03em;text-transform:uppercase;font-weight:700}
+.tunit{font-size:12px;color:var(--muted)}
+.score{display:flex;gap:12px;align-items:baseline}
+.score .y{color:var(--you);font-size:20px} .score .n{color:var(--nem);font-size:20px}
+.score .sep{color:var(--muted);font-size:12px}
+.bars{display:flex;flex-direction:column;gap:3px}
+.bar{height:5px;background:var(--bg);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px}
+.bar.y i{background:var(--you)} .bar.n i{background:var(--nem)}
+.state{font-size:12px;font-weight:600;font-family:var(--mono)}
+.state.lead{color:var(--good)} .state.trail{color:var(--bad)} .state.even{color:var(--muted)}
+
+.voice{border-left:3px solid var(--nem);padding:4px 0 4px 12px;display:flex;flex-direction:column;gap:4px}
+.voice p{margin:0;font-family:var(--mono);font-size:13.5px;line-height:1.6;white-space:pre-wrap}
+.voice .label{color:var(--nem)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.card h3{font-size:24px;text-transform:uppercase}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12px;font-weight:600;color:var(--muted)}
+input,select,textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:10px;width:100%}
+textarea{min-height:150px;resize:vertical;line-height:1.55}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.entries{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.entry{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:6px}
+.entry .t{min-width:0;overflow-wrap:anywhere}
+.x{border:0;background:none;color:var(--muted);font-size:13px;padding:6px}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.checks{display:flex;flex-direction:column;gap:8px}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.check input{width:20px;height:20px;flex:none;margin-top:2px}
+
+.board{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 12px;font-size:13px;align-items:baseline}
+.board .h{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.board .yv{color:var(--you)} .board .nv{color:var(--nem)}
+
+.hist{display:flex;flex-direction:column;gap:10px}
+.week{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.wtop{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.outcome{font-family:var(--display);font-size:20px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.outcome.W{color:var(--you)} .outcome.L{color:var(--nem)} .outcome.T{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--mono);font-size:11.5px;border-radius:3px;padding:2px 7px;border:1px solid var(--line)}
+.chip.W{background:var(--you-soft);border-color:transparent}
+.chip.L{background:var(--nem-soft);border-color:transparent}
+
+.timer{font-family:var(--mono);font-size:28px;font-variant-numeric:tabular-nums}
+.timer.over{color:var(--bad)}
+.grade{font-family:var(--display);font-size:52px;line-height:1;color:var(--you);font-weight:700}
+.empty{border:1px dashed var(--line);border-radius:6px;padding:16px;color:var(--muted);font-size:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--navh) + 16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:4px;font-size:13.5px;max-width:calc(100% - 32px);z-index:30}
+
+/* bottom tab bar */
+.nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:10;
+  padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+.nav .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);height:var(--navh)}
+.nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--muted);font-family:var(--display);font-size:13.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.nav button[aria-current="page"]{color:var(--fg)}
+.nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+.nav button[aria-current="page"] svg{stroke:var(--nem)}
+
+/* bottom sheet */
+.overlay{position:fixed;inset:0;background:var(--scrim);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:560px;max-height:88vh;overflow:auto;border-radius:12px 12px 0 0;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  display:flex;flex-direction:column;gap:14px}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line);align-self:center}
+.sheet h3{font-size:26px;text-transform:uppercase}
+.close{border:0;background:none;color:var(--muted);font-size:14px;padding:6px}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .5s ease}.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+@media (max-width:380px){.side .big{font-size:36px}.brand{font-size:28px}}
+</style>
+</head><body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="brand">Neme<span>sis</span></div>
+      <div class="label" id="seasonLabel">Season 1</div>
+    </div>
+    <div class="meta">
+      <span class="label">Lifetime</span>
+      <span class="num" id="lifetime">0–0–0</span>
+    </div>
+  </header>
+
+  <section class="match" aria-label="This week">
+    <div class="side you"><span class="who">You</span><span class="big num" id="youWins">0</span><span class="label">tracks leading</span></div>
+    <div class="vs">vs</div>
+    <div class="side nem r"><span class="who">Nemesis</span><span class="big num" id="nemWins">0</span><span class="label">tracks leading</span></div>
+    <div class="countdown"><span>Showdown <strong>Sunday 9:00 pm</strong></span><span class="num" id="countdown">—</span></div>
+  </section>
+
+  <div id="banner" hidden></div>
+  <main id="view"></main>
+</div>
+
+<nav class="nav" aria-label="Sections"><div class="in">
+  <button id="nav-week" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Week</button>
+  <button id="nav-teach"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg>Teach</button>
+  <button id="nav-hist"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Showdowns</button>
+  <button id="nav-set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
+</div></nav>
+<div id="layer"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------------- constants ---------------- */
+const TRACKS = [
+  {id:'gym',    name:'Gym',        unit:'lifting sessions',       kind:'count', def:3, cap:6,  sdMin:.7},
+  {id:'cardio', name:'Cardio',     unit:'sessions',               kind:'count', def:2, cap:7,  sdMin:.7},
+  {id:'cpa',    name:'CPA hours',  unit:'hours studied',          kind:'hours', def:8, cap:35, sdMin:1.2},
+  {id:'chess',  name:'Chess',      unit:'Lichess rating change',  kind:'chess', def:0},
+  {id:'cold',   name:'Cold opens', unit:'conversations started',  kind:'count', def:3, cap:20, sdMin:.8},
+  {id:'teach',  name:'Teach-back', unit:'score out of 10',        kind:'score', def:6, cap:10, sdMin:.8},
+];
+const TBYID = Object.fromEntries(TRACKS.map(t => [t.id, t]));
+const SEASON_LEN = 10;
+const LIFTS = [['bench','Bench'],['squat','Squat'],['deadlift','Deadlift']];
+const STORE = 'nemesis.v1', KEYSTORE = 'nemesis.apiKey';
+const MODEL_SMART = 'claude-sonnet-5-5', MODEL_FAST = 'claude-haiku-5-5';
+
+/* Teach-back topic bank. Each topic has the key points a good 60-second answer must hit. */
+const TOPICS = [
+  {cat:'FAR', topic:'Lease accounting under ASC 842', ask:'Explain why operating leases now show up on the balance sheet and what the lessee records.', points:['Lessee records a right-of-use asset and a lease liability for leases over 12 months','Liability = present value of the remaining lease payments','Operating leases: single straight-line lease cost on the income statement','Finance leases: separate amortization and interest expense (front-loaded)']},
+  {cat:'FAR', topic:'The five steps of revenue recognition (ASC 606)', ask:'Walk through the five-step model and why it exists.', points:['Identify the contract with the customer','Identify the separate performance obligations','Determine the transaction price (including variable consideration)','Allocate the price to obligations by standalone selling price','Recognize revenue when (or as) each obligation is satisfied (control transfers)']},
+  {cat:'FAR', topic:'Deferred tax liabilities', ask:'Explain what creates a deferred tax liability, with an example.', points:['Arises from temporary differences between book and tax bases','Book income higher than taxable income now, reversing later','Example: accelerated tax depreciation vs straight-line book depreciation','Measured at enacted future tax rates']},
+  {cat:'FAR', topic:'Goodwill impairment testing', ask:'Explain how a company tests goodwill for impairment today.', points:['Goodwill is not amortized by public companies; tested at least annually','Optional qualitative assessment first (more likely than not)','Quantitative test compares reporting unit fair value to carrying amount','Impairment = excess of carrying amount over fair value, capped at goodwill (single-step after ASU 2017-04)']},
+  {cat:'FAR', topic:'Bond premium amortization (effective interest method)', ask:'Explain why a bond sells at a premium and how the premium is amortized.', points:['Premium when the stated rate is above the market rate','Interest expense = carrying value × market (effective) rate','Cash paid = face × stated rate; difference reduces the premium','Carrying value moves toward face value by maturity']},
+  {cat:'FAR', topic:'Loss contingencies (ASC 450)', ask:'Explain when a company must record a lawsuit loss versus just disclose it.', points:['Accrue if the loss is probable AND reasonably estimable','If a range, accrue the best estimate (or the minimum if none is better)','Reasonably possible: disclose only, no accrual','Remote: generally no disclosure; gain contingencies are not recognized']},
+  {cat:'FAR', topic:'Diluted EPS and the treasury stock method', ask:'Explain how options affect diluted EPS.', points:['Diluted EPS assumes dilutive securities are exercised or converted','Treasury stock method: assume options exercised, proceeds buy back shares at average market price','Net new shares added to the denominator','Antidilutive securities (that would raise EPS) are excluded']},
+  {cat:'FAR', topic:'Indirect method for operating cash flow', ask:'Explain how the indirect method gets from net income to operating cash flow.', points:['Start with net income','Add back non-cash expenses like depreciation and amortization','Remove gains and add losses on asset sales (they belong in investing)','Adjust for changes in working capital: increases in current assets subtract, increases in current liabilities add']},
+  {cat:'History', topic:'The Battle of Cannae (216 BC)', ask:'Explain how Hannibal destroyed a much larger Roman army at Cannae.', points:['Romans massed a deep, heavy infantry center to punch through','Hannibal let his center bend back in a crescent while it held','African infantry on the flanks turned inward on the Roman sides','Carthaginian cavalry beat the Roman horse and closed the rear: a double envelopment']},
+  {cat:'History', topic:'The Battle of Zama (202 BC)', ask:'Explain how Scipio beat Hannibal at Zama.', points:['Scipio arranged his maniples in columns, leaving lanes','Hannibal\'s war elephants were funneled through the lanes and driven off with noise and missiles','Roman and Numidian cavalry (Masinissa) drove off Hannibal\'s cavalry','The cavalry returned to hit Hannibal\'s rear lines and decided the battle']},
+  {cat:'History', topic:'The Battle of Agincourt (1415)', ask:'Explain how a smaller English army beat the French at Agincourt.', points:['Narrow, muddy field between woods limited French numbers and movement','English longbowmen behind stakes on the flanks','Heavily armored French knights bogged down and were shot and crowded together','Exhausted French men-at-arms were cut down in the crush']},
+  {cat:'History', topic:'The Battle of Midway (1942)', ask:'Explain why Midway was the turning point of the Pacific War.', points:['US codebreakers learned the target and timing of the Japanese attack','US carriers waited in ambush northeast of Midway','Dive bombers caught Japanese carriers while rearming and refueling','Japan lost four fleet carriers and many trained aircrew it could not replace']},
+  {cat:'History', topic:'Operation Uranus at Stalingrad (1942)', ask:'Explain how the Soviets trapped the German 6th Army.', points:['German 6th Army was committed to street fighting inside the city','Its flanks were held by weaker Romanian armies','Soviet pincers broke the flanks north and south and met at Kalach','Encircled army could not be supplied by air and surrendered in early 1943']},
+  {cat:'History', topic:'William at Hastings (1066)', ask:'Explain how William of Normandy won at Hastings.', points:['Harold\'s army held a ridge in a shield wall after a forced march from Stamford Bridge','Norman archers, infantry and cavalry attacked in combination','Feigned or real retreats drew English troops off the ridge, where they were cut down','Harold was killed and the English line collapsed']},
+  {cat:'How it works', topic:'How GPS finds your location', ask:'Explain how a phone figures out where it is from satellites.', points:['Satellites broadcast their position and a precise time','Receiver measures travel time of signals to compute distance to each satellite','Needs at least four satellites: three for position, one to solve its own clock error (trilateration)','Satellite clocks are corrected for relativity']},
+  {cat:'How it works', topic:'How a credit card payment goes through', ask:'Explain what happens between tapping your card and the merchant getting paid.', points:['Merchant\'s acquirer sends an authorization request over the card network','Issuing bank approves or declines based on funds, limits and fraud checks','Transactions are batched, cleared and settled later (usually 1-2 days)','Interchange and network fees are taken out before the merchant is paid']},
+  {cat:'How it works', topic:'How a refrigerator gets cold', ask:'Explain how a fridge moves heat out of the box.', points:['Refrigerant evaporates in coils inside, absorbing heat','Compressor pressurizes the gas, raising its temperature','Hot gas releases heat through coils outside the box and condenses','Expansion valve drops pressure so the cycle repeats']},
+  {cat:'How it works', topic:'How noise-cancelling headphones work', ask:'Explain how headphones cancel outside noise.', points:['Microphones pick up outside sound','Processor generates an inverted (opposite-phase) waveform','Opposite waves add up to near silence (destructive interference)','Works best on steady low-frequency noise; padding blocks high frequencies']},
+  {cat:'How it works', topic:'How HTTPS keeps your data private', ask:'Explain what the padlock in your browser actually protects.', points:['Server proves its identity with a certificate signed by a trusted authority','Browser and server agree on shared session keys (key exchange)','Traffic is encrypted with those keys so others on the network cannot read it','Integrity checks detect tampering']},
+  {cat:'Chess', topic:'Zugzwang', ask:'Explain zugzwang with an example.', points:['A position where any move worsens your position','You would rather pass, but passing is not allowed','Most common in king and pawn endgames','Example: opposition, where the side to move must give ground']},
+  {cat:'Chess', topic:'The opposition in king and pawn endings', ask:'Explain the opposition and why it decides pawn endgames.', points:['Kings face each other with one square between them','The side NOT to move has the opposition','Having it lets your king get in front of or past the enemy king','Decides whether a pawn promotes or the game is drawn']},
+  {cat:'Chess', topic:'The Lucena position', ask:'Explain how to win the Lucena position.', points:['Rook + pawn vs rook, your pawn on the 7th, king on the queening square','Enemy king cut off, your rook cuts it off on a file','Bring your rook to the 4th rank ("build a bridge")','Rook blocks checks so your king can escape and the pawn promotes']},
+  {cat:'Chess', topic:'The isolated queen\'s pawn', ask:'Explain the strengths and weaknesses of an isolated d-pawn.', points:['No pawn on the adjacent files can defend it','Weakness: a long-term target, and the square in front is a blockade outpost','Strength: open lines, space, and outposts on e5/c5 for active pieces','The IQP side wants attack and piece play; the other side wants trades and the endgame']},
+  {cat:'Economics', topic:'How the Fed raises interest rates', ask:'Explain what the Fed actually does to raise rates.', points:['Sets a target range for the federal funds rate','Main tool: raises interest on reserve balances paid to banks','Overnight reverse repo rate sets a floor for other lenders','Higher short rates pass through to loans, mortgages and asset prices']},
+  {cat:'Economics', topic:'Why bond prices fall when rates rise', ask:'Explain why existing bonds lose value when interest rates go up.', points:['Existing bonds pay fixed coupons','New bonds pay more, so old ones must fall in price to compete','Price = present value of future cash flows at the higher discount rate','Longer duration bonds fall more']},
+  {cat:'Economics', topic:'Comparative advantage', ask:'Explain comparative advantage and why trade helps both sides.', points:['Based on opportunity cost, not absolute ability','Each side specializes in what it gives up least to produce','Trade lets both consume beyond what they could make alone','True even if one side is better at everything']},
+  {cat:'Economics', topic:'An inverted yield curve', ask:'Explain what an inverted yield curve is and why people watch it.', points:['Short-term rates higher than long-term rates','Markets expect future rate cuts (slower growth or lower inflation)','Squeezes bank lending margins (borrow short, lend long)','Has preceded most US recessions, with variable lag']},
+];
+const CATS = ['FAR','History','How it works','Chess','Economics'];
+
+/* ---------------- dates: week = Sunday 9pm to Sunday 9pm, keyed by its Monday ---------------- */
+const pad = n => String(n).padStart(2,'0');
+const fmt = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parseKey = k => { const [y,m,d] = k.split('-').map(Number); return {y,m,d}; };
+function wkKey(date){ const s = new Date(date.getTime()+3*36e5); const day=(s.getDay()+6)%7; return fmt(new Date(s.getFullYear(), s.getMonth(), s.getDate()-day)); }
+function addWeeks(k,n){ const {y,m,d}=parseKey(k); return fmt(new Date(y,m-1,d+7*n)); }
+function openTime(k){ const {y,m,d}=parseKey(k); return new Date(new Date(y,m-1,d).getTime()-3*36e5); }
+function closeTime(k){ const {y,m,d}=parseKey(k); return new Date(new Date(y,m-1,d+7).getTime()-3*36e5); }
+function weeksBetween(a,b){ const A=parseKey(a),B=parseKey(b); return Math.round((new Date(B.y,B.m-1,B.d)-new Date(A.y,A.m-1,A.d))/(7*864e5)); }
+function shortDate(k){ const {y,m,d}=parseKey(k); return new Date(y,m-1,d).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+const now = () => new Date();
+
+/* ---------------- seeded randomness ---------------- */
+function hash(str){ let h=1779033703^str.length; for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;} return ()=>{h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;}; }
+function rng(seedStr){ let a=hash(seedStr)(); return ()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}; }
+function normal(r){ let u=0,v=0; while(!u)u=r(); while(!v)v=r(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const roundTo=(x,s)=>Math.round(x/s)*s;
+
+/* ---------------- storage (on this phone) ---------------- */
+let S = load();
+function load(){ try{ const raw = localStorage.getItem(STORE); if (raw) return JSON.parse(raw); }catch(e){} return {meta:null, weeks:{}, shows:{}}; }
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); return true; }catch(e){ toast('Couldn’t save on this device. Storage may be full or blocked.'); return false; } }
+function getKey(){ try{ return localStorage.getItem(KEYSTORE)||''; }catch(e){ return ''; } }
+function setKey(k){ try{ if(k) localStorage.setItem(KEYSTORE,k); else localStorage.removeItem(KEYSTORE); }catch(e){} }
+
+function init(){
+  if (S.meta) return;
+  const cur = wkKey(now());
+  const day = (new Date(now().getTime()+3*36e5).getDay()+6)%7; // 0 = Monday
+  const late = day >= 3; // Thursday or later: this week is a preseason
+  S.meta = {seasonStart: late ? addWeeks(cur,1) : cur, preseason: late ? cur : null,
+    seed: Math.random().toString(36).slice(2,10), edge:0.10, created:new Date().toISOString(),
+    chessRating:null, bestLifts:{}, firstLifts:{}};
+  save();
+}
+
+/* ---------------- your weekly numbers ---------------- */
+const entriesOf = wk => (S.weeks[wk] && S.weeks[wk].entries) || [];
+function youValues(wk){
+  const e = entriesOf(wk), w = S.weeks[wk] || {}, v = {};
+  for (const t of TRACKS){
+    if (t.kind==='count') v[t.id] = e.filter(x=>x.track===t.id).reduce((s,x)=>s+(Number(x.value)||1),0);
+    else if (t.kind==='hours') v[t.id] = roundTo(e.filter(x=>x.track===t.id).reduce((s,x)=>s+(Number(x.value)||0),0),.25);
+    else if (t.kind==='chess'){ const c=e.filter(x=>x.track==='chess'); v.chess = c.length && w.chessStart!=null ? Number(c[c.length-1].value)-Number(w.chessStart) : 0; }
+    else v[t.id] = w.teach && w.teach.score!=null ? Number(w.teach.score) : 0;
+  }
+  return v;
+}
+
+/* ---------------- Nemesis engine ---------------- */
+function nemesisPlan(wk, edge){
+  const prior = Object.keys(S.shows).filter(k=>k<wk).sort().slice(-4).map(k=>S.shows[k]);
+  const r = rng(S.meta.seed+'|'+wk);
+  const plan = {};
+  const slump = r() < 0.12 ? TRACKS[Math.floor(r()*TRACKS.length)].id : null;
+  for (const t of TRACKS){
+    const hist = prior.map(s=>s.you && s.you[t.id]).filter(x=>typeof x==='number');
+    const base = hist.length ? hist.reduce((a,b)=>a+b,0)/hist.length : t.def;
+    if (t.kind==='chess'){ plan.chess = Math.round(base + 4 + edge*30 + normal(r)*16); continue; }
+    const target = Math.max(base, t.def*0.5)*(1+edge);
+    let x = target + normal(r)*Math.max(t.sdMin, target*0.16);
+    if (slump===t.id) x *= 0.55;
+    const step = t.kind==='count' ? 1 : .5;
+    plan[t.id] = clamp(roundTo(x,step), t.kind==='score'?3:0, t.cap);
+  }
+  const pace = {}; for (const t of TRACKS) pace[t.id] = 0.85 + r()*0.3;
+  return {plan, pace, slump};
+}
+function liveNemesis(wk, plan, pace){
+  const f = clamp((now()-openTime(wk))/(closeTime(wk)-openTime(wk)),0,1), out = {};
+  for (const t of TRACKS){
+    const p = clamp(f*pace[t.id],0,1);
+    if (t.kind==='score') out[t.id] = f>=1 ? plan[t.id] : null;
+    else if (t.kind==='chess') out[t.id] = Math.round(plan[t.id]*p);
+    else { const step = t.kind==='hours'?.5:1; out[t.id] = Math.floor(plan[t.id]*p/step)*step; }
+  }
+  return out;
+}
+function compare(you, nem){
+  const res={}; let w=0,l=0;
+  for (const t of TRACKS){ const a=you[t.id], b=nem[t.id]; if (b==null){res[t.id]='T';continue;}
+    res[t.id] = a>b?'W':a<b?'L':'T'; if(res[t.id]==='W')w++; else if(res[t.id]==='L')l++; }
+  return {res, w, l, outcome: w>l?'W':w<l?'L':'T'};
+}
+function settleClosedWeeks(){
+  const cur = wkKey(now());
+  let wk = S.meta.preseason || S.meta.seasonStart, edge = Number(S.meta.edge), did = false;
+  while (wk < cur){
+    if (!S.shows[wk]){
+      const pre = wk === S.meta.preseason;
+      const {plan, slump} = nemesisPlan(wk, edge);
+      const you = youValues(wk), c = compare(you, plan), before = edge;
+      if (!pre) edge = clamp(edge + (c.outcome==='W'?.05 : c.outcome==='L'?-.07 : -.01), -.15, .35);
+      S.shows[wk] = {week:wk, preseason:pre, you, nem:plan, results:c.res, w:c.w, l:c.l, outcome:c.outcome, edgeBefore:before, edgeAfter:edge, slump, report:'', revealed:false, settledAt:new Date().toISOString(), teachTopic:(S.weeks[wk]&&S.weeks[wk].teach&&S.weeks[wk].teach.topic)||null};
+      did = true;
+    }
+    wk = addWeeks(wk,1);
+  }
+  if (did){ S.meta.edge = edge; save(); }
+}
+
+/* ---------------- records ---------------- */
+const counted = () => Object.values(S.shows).filter(s=>!s.preseason);
+function record(list){ let w=0,l=0,t=0; for(const s of list){ if(s.outcome==='W')w++; else if(s.outcome==='L')l++; else t++; } return w+'–'+l+'–'+t; }
+function seasonInfo(wk){
+  if (wk < S.meta.seasonStart) return {pre:true, season:1, week:0};
+  const n = weeksBetween(S.meta.seasonStart, wk);
+  return {pre:false, season:Math.floor(n/SEASON_LEN)+1, week:n%SEASON_LEN+1};
+}
+
+/* ---------------- entries ---------------- */
+function ensureWeek(wk){ if (!S.weeks[wk]) S.weeks[wk] = {week:wk, entries:[]}; return S.weeks[wk]; }
+function addEntry(track, value, extra){
+  const wk = wkKey(now()), w = ensureWeek(wk);
+  w.entries.push(Object.assign({t:new Date().toISOString(), track, value}, extra||{}));
+  if (track==='chess'){ if (w.chessStart==null) w.chessStart = S.meta.chessRating!=null ? Number(S.meta.chessRating) : Number(value); S.meta.chessRating = Number(value); }
+  if (track==='gym' && extra && extra.lift && extra.e1rm){
+    if (!S.meta.bestLifts[extra.lift] || extra.e1rm > S.meta.bestLifts[extra.lift]) S.meta.bestLifts[extra.lift] = extra.e1rm;
+    if (!S.meta.firstLifts[extra.lift]) S.meta.firstLifts[extra.lift] = {e1rm:extra.e1rm, wk};
+  }
+  if (save()) toast('Logged.');
+  render();
+}
+function removeEntry(wk, idx){ S.weeks[wk].entries.splice(idx,1); save(); render(); }
+
+/* ---------------- Claude (optional, uses your own API key) ---------------- */
+async function askClaude(prompt, model, maxTokens){
+  const key = getKey(); if (!key) throw {code:'no_key'};
+  let res;
+  try{
+    res = await fetch('https://api.anthropic.com/v1/messages', {method:'POST', headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body: JSON.stringify({model, max_tokens:maxTokens||600, messages:[{role:'user', content:prompt}]})});
+  }catch(e){ throw {code:'offline'}; }
+  if (!res.ok){ let msg=''; try{ msg=(await res.json()).error.message; }catch(e){} throw {code: res.status===401?'bad_key':res.status===429?'rate':'api', message:msg}; }
+  const j = await res.json();
+  return (j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('').trim();
+}
+function parseJSON(text){ try{ return JSON.parse(text); }catch(e){} const a=text.indexOf('{'), b=text.lastIndexOf('}'); if(a>=0&&b>a){ try{ return JSON.parse(text.slice(a,b+1)); }catch(e){} } return null; }
+function aiError(e){ return e.code==='bad_key' ? 'Your API key was rejected. Check it in Settings.' : e.code==='rate' ? 'Claude is rate-limiting this key. Try again in a minute.' : e.code==='offline' ? 'No connection. Try again when you’re online.' : 'Claude didn’t answer. Try again.'; }
+
+/* ---------------- canned voice (used without an API key) ---------------- */
+function pick(r, arr){ return arr[Math.floor(r()*arr.length)]; }
+function cannedReport(k){
+  const s = S.shows[k], r = rng(S.meta.seed+'|report|'+k);
+  const margins = TRACKS.map(t=>({t, d:(s.you[t.id]-s.nem[t.id])/(Math.abs(s.nem[t.id])+1)}));
+  const best = margins.slice().sort((a,b)=>b.d-a.d)[0], worst = margins.slice().sort((a,b)=>a.d-b.d)[0];
+  const notes = (S.weeks[k]&&S.weeks[k].entries||[]).filter(e=>e.note).map(e=>e.note);
+  const out = [];
+  if (s.preseason) out.push('Preseason. Nothing counted. I still logged it.');
+  if (s.outcome==='L') out.push(pick(r,[`${s.l}–${s.w}. As projected.`, `Final: ${s.l} tracks to ${s.w}. This is not a rivalry. It is a measurement.`, `I took ${s.l} of 6. You took ${s.w}. Filed.`]));
+  else if (s.outcome==='W') out.push(pick(r,[`You won ${s.w}–${s.l}. Recorded. Not repeated.`, `${s.w}–${s.l}, your week. Statistically, that happens.`, `Noted: ${s.w} tracks to my ${s.l}. Adjusting.`]));
+  else out.push(pick(r,[`${s.w}–${s.l}. A tie is a loss you haven’t noticed yet.`, `Even at ${s.w}. Neither of us should be satisfied. Only one of us is.`]));
+  const fv = (t,v)=>fmtVal(t,v);
+  if (worst.d < 0) out.push(`${worst.t.name}: ${fv(worst.t,s.you[worst.t.id])} to my ${fv(worst.t,s.nem[worst.t.id])}. That gap is the story.`);
+  if (best.d > 0) out.push(`${best.t.name} went your way, ${fv(best.t,s.you[best.t.id])} to ${fv(best.t,s.nem[best.t.id])}. I’ve noted it.`);
+  if (s.slump) out.push(`My ${TBYID[s.slump].name.toLowerCase()} number was down. Irrelevant.`);
+  if (notes.length) out.push(`You wrote “${notes[notes.length-1].slice(0,60)}”. I don’t write notes.`);
+  out.push(s.outcome==='W' ? pick(r,['Next week’s numbers are already set. They are higher.','Enjoy the evening.']) : pick(r,['Same time next Sunday.','Try harder. Or don’t. My plan doesn’t change.','I’ll be at the gym.']));
+  return out.join(' ');
+}
+function weekLine(live, np){
+  const a=live.w, b=live.l;
+  let line = b>a ? 'Current margin: '+b+' tracks to '+a+'. I’m not adjusting anything.' : a>b ? 'You lead '+a+' to '+b+'. Most of my week happens after you stop paying attention.' : 'Level at '+a+'–'+b+'. That won’t hold through Sunday.';
+  if (np.slump) line += '\n(Minor setback on '+TBYID[np.slump].name.toLowerCase()+' this week. Irrelevant.)';
+  return line;
+}
+
+/* ---------------- UI helpers ---------------- */
+const $ = s => document.querySelector(s);
+function el(tag, attrs, ...kids){
+  const n = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})){
+    if (k==='class') n.className=v; else if (k==='text') n.textContent=v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (v===true) n.setAttribute(k,''); else if (v!==false && v!=null) n.setAttribute(k,v);
+  }
+  for (const c of kids.flat()) if (c!=null) n.append(c.nodeType?c:document.createTextNode(String(c)));
+  return n;
+}
+let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true, 2600); }
+function fmtVal(t, v){ if (v==null) return 'sealed'; if (t.kind==='chess') return (v>0?'+':'')+v; return String(Math.round(v*100)/100); }
+function openSheet(build){
+  const layer = $('#layer'); layer.replaceChildren();
+  const sh = el('div',{class:'sheet',role:'dialog','aria-modal':'true'}, el('div',{class:'grab'}));
+  const ov = el('div',{class:'overlay', onclick:e=>{ if(e.target===ov) closeSheet(); }}, sh);
+  build(sh); layer.append(ov);
+  const f = sh.querySelector('input,textarea,select'); if (f && f.type!=='checkbox') setTimeout(()=>f.focus(),60);
+}
+function closeSheet(){ $('#layer').replaceChildren(); }
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeSheet(); });
+
+/* ---------------- render ---------------- */
+let tab = 'week', teachStart = null, teachTick = null, teachDraft = '', revealing = false;
+function render(){
+  settleClosedWeeks();
+  const cur = wkKey(now()), si = seasonInfo(cur);
+  $('#seasonLabel').textContent = si.pre ? 'Preseason · season 1 starts Monday' : 'Season '+si.season+' · Week '+si.week+' of '+SEASON_LEN;
+  $('#lifetime').textContent = record(counted());
+  tickCountdown();
+
+  const you = youValues(cur), np = nemesisPlan(cur, Number(S.meta.edge)), nl = liveNemesis(cur, np.plan, np.pace), live = compare(you, nl);
+  $('#youWins').textContent = live.w; $('#nemWins').textContent = live.l;
+
+  const latest = Object.keys(S.shows).sort().pop(), b = $('#banner'); b.replaceChildren();
+  if (latest && !S.shows[latest].revealed){
+    const s = S.shows[latest]; b.className='banner'; b.hidden=false;
+    b.append(el('div',{style:'min-width:0'}, el('h3',{text: s.preseason?'Preseason showdown':'Showdown ready'}), el('p',{text:'Week of '+shortDate(latest)+' is settled.'})),
+      el('button',{class:'btn', text: revealing?'Writing…':'Reveal', disabled:revealing, onclick:()=>reveal(latest)}));
+  } else b.hidden = true;
+
+  for (const id of ['week','teach','hist','set']) $('#nav-'+id).setAttribute('aria-current', tab===id ? 'page' : 'false');
+  const v = $('#view'); v.replaceChildren();
+  if (tab==='week') renderWeek(v, cur, you, nl, np, live);
+  else if (tab==='teach') renderTeach(v, cur);
+  else if (tab==='hist') renderHist(v);
+  else renderSettings(v);
+}
+function tickCountdown(){
+  const ms = closeTime(wkKey(now())) - now();
+  const d=Math.floor(ms/864e5), h=Math.floor(ms%864e5/36e5), m=Math.floor(ms%36e5/6e4);
+  $('#countdown').textContent = (d?d+'d ':'')+h+'h '+pad(m)+'m to go';
+}
+
+function renderWeek(v, cur, you, nl, np, live){
+  if (!Object.keys(S.weeks).length && !Object.keys(S.shows).length)
+    v.append(el('div',{class:'empty',style:'margin-bottom:12px'}, 'Tap a track to log it. Nemesis’s numbers tick up through the week. Everything locks Sunday at 9:00 pm.'));
+  const list = el('div',{class:'tracks'});
+  for (const t of TRACKS){
+    const a = you[t.id], bv = nl[t.id];
+    const max = Math.max(1, Math.abs(a), Math.abs(bv||0), t.kind==='chess'?20:0), st = live.res[t.id];
+    const stTxt = bv==null?'sealed until Sunday':st==='W'?'leading':st==='L'?'behind':'even';
+    const stCls = bv==null?'even':st==='W'?'lead':st==='L'?'trail':'even';
+    list.append(el('button',{class:'track', onclick:()=>{ if(t.id==='teach'){ tab='teach'; render(); } else openLog(t); }},
+      el('div',{class:'trow'}, el('div',{}, el('div',{class:'tname',text:t.name}), el('div',{class:'tunit',text:t.unit})),
+        el('div',{class:'score'}, el('span',{class:'y num',text:fmtVal(t,a)}), el('span',{class:'sep',text:'vs'}), el('span',{class:'n num',text:fmtVal(t,bv)}))),
+      el('div',{class:'bars'}, el('div',{class:'bar y'}, el('i',{style:'width:'+clamp(Math.abs(a)/max*100,0,100)+'%'})),
+        el('div',{class:'bar n'}, el('i',{style:'width:'+(bv==null?0:clamp(Math.abs(bv)/max*100,0,100))+'%'}))),
+      el('span',{class:'state '+stCls,text:stTxt})));
+  }
+  v.append(list);
+  v.append(el('div',{class:'voice',style:'margin-top:14px'}, el('span',{class:'label',text:'Nemesis'}), el('p',{text:weekLine(live,np)})));
+
+  const best = S.meta.bestLifts||{}, first = S.meta.firstLifts||{}, rows = LIFTS.filter(([k])=>best[k]);
+  if (rows.length){
+    const board = el('div',{class:'board'}, el('span',{class:'h',text:'Est. 1-rep max'}), el('span',{class:'h',text:'You'}), el('span',{class:'h',text:'Nemesis'}));
+    for (const [k,name] of rows){
+      const wksIn = Math.max(0, weeksBetween(first[k].wk, cur));
+      const nem = Math.round(first[k].e1rm*(1.04 + wksIn*0.006*(1+Number(S.meta.edge))));
+      board.append(el('span',{text:name}), el('span',{class:'num yv',text:best[k]+' lb'}), el('span',{class:'num nv',text:nem+' lb'}));
+    }
+    v.append(el('div',{class:'card',style:'margin-top:14px'}, el('span',{class:'label',text:'Strength board · not scored, just noted'}), board));
+  }
+}
+
+function openLog(t){
+  openSheet(sh => {
+    const cur = wkKey(now());
+    sh.append(el('div',{class:'trow'}, el('h3',{text:t.name}), el('button',{class:'close',text:'Close',onclick:closeSheet})));
+    const note = el('input',{id:'note', type:'text', maxlength:'140', placeholder: t.id==='cold' ? 'Who / where (optional)' : 'Anything to explain? Nemesis keeps these.'});
+    const done = (val, extra) => { closeSheet(); addEntry(t.id, val, extra); };
+    if (t.kind==='count'){
+      let liftSel, w, r;
+      if (t.id==='gym'){
+        liftSel = el('select',{id:'lift','aria-label':'Lift'}, el('option',{value:'',text:'No top set'}), LIFTS.map(([k,n])=>el('option',{value:k,text:n})));
+        w = el('input',{id:'liftw',type:'number',inputmode:'decimal',min:'0',step:'2.5',placeholder:'lb','aria-label':'Weight in pounds'});
+        r = el('input',{id:'liftr',type:'number',inputmode:'numeric',min:'1',max:'20',step:'1',placeholder:'reps','aria-label':'Reps'});
+        sh.append(el('div',{class:'field'}, el('label',{for:'lift',text:'Top set (optional, feeds the strength board)'}), el('div',{class:'grid3'}, liftSel, w, r)));
+      }
+      sh.append(el('div',{class:'field'}, el('label',{for:'note',text:'Note'}), note));
+      sh.append(el('button',{class:'btn you wide',text:'+1 '+(t.id==='cold'?'conversation':'session'), onclick:()=>{
+        const extra = {}; if (note.value.trim()) extra.note = note.value.trim();
+        if (liftSel && liftSel.value && Number(w.value)>0 && Number(r.value)>0){ extra.lift=liftSel.value; extra.weight=Number(w.value); extra.reps=Number(r.value); extra.e1rm=Math.round(extra.weight*(1+extra.reps/30)); }
+        done(1, extra);
+      }}));
+    } else if (t.kind==='hours'){
+      const hrs = el('input',{id:'hrs',type:'number',inputmode:'decimal',min:'0.25',max:'12',step:'0.25',placeholder:'1.5'});
+      sh.append(el('div',{class:'field'}, el('label',{for:'hrs',text:'Hours studied'}), hrs), el('div',{class:'field'}, el('label',{for:'note',text:'Note'}), note));
+      sh.append(el('button',{class:'btn you wide',text:'Log hours', onclick:()=>{ const x=Number(hrs.value); if(x>0&&x<=12) done(roundTo(x,.25), note.value.trim()?{note:note.value.trim()}:{}); else toast('Enter between 0.25 and 12 hours.'); }}));
+    } else if (t.kind==='chess'){
+      const rt = el('input',{id:'rating',type:'number',inputmode:'numeric',min:'100',max:'3500',step:'1',placeholder: S.meta.chessRating ? String(S.meta.chessRating) : 'e.g. 1450'});
+      sh.append(el('p',{class:'hint',text:'Enter your current Lichess rating. Pick one time control and stick with it. Your weekly score is the change since your first entry this week.'}));
+      sh.append(el('div',{class:'field'}, el('label',{for:'rating',text:'Current rating'}), rt));
+      sh.append(el('button',{class:'btn you wide',text:'Log rating', onclick:()=>{ const x=Math.round(Number(rt.value)); if(x>=100&&x<=3500) done(x,{}); else toast('Enter a rating between 100 and 3500.'); }}));
+    }
+    const entries = entriesOf(cur).map((e,i)=>({e,i})).filter(x=>x.e.track===t.id);
+    if (entries.length){
+      const box = el('div',{class:'entries'}, el('span',{class:'label',text:'This week'}));
+      for (const {e,i} of entries.slice().reverse()){
+        let txt = new Date(e.t).toLocaleDateString(undefined,{weekday:'short'})+' · '+(t.kind==='hours'?e.value+' h':t.kind==='chess'?'rating '+e.value:'+1');
+        if (e.lift) txt += ' · '+e.lift+' '+e.weight+'×'+e.reps+' (e1RM '+e.e1rm+')';
+        if (e.note) txt += ' · '+e.note;
+        box.append(el('div',{class:'entry'}, el('span',{class:'t',text:txt}), el('button',{class:'x',text:'Remove',onclick:()=>{ removeEntry(cur,i); closeSheet(); openLog(t); }})));
+      }
+      sh.append(box);
+    }
+  });
+}
+
+/* ---------------- Teach-back ---------------- */
+function topicFor(wk){
+  const used = new Set(Object.values(S.weeks).map(w=>w.teach&&w.teach.topic).filter(Boolean));
+  const idx = Math.abs(weeksBetween(S.meta.preseason||S.meta.seasonStart, wk));
+  const cat = CATS[idx % CATS.length];
+  const pool = TOPICS.filter(t=>t.cat===cat && !used.has(t.topic));
+  const any = pool.length ? pool : TOPICS.filter(t=>!used.has(t.topic));
+  const list = any.length ? any : TOPICS;
+  return list[Math.floor(rng(S.meta.seed+'|topic|'+wk)()*list.length)];
+}
+function renderTeach(v, cur){
+  const w = S.weeks[cur] || {}, tb = w.teach || {};
+  const card = el('div',{class:'card'}, el('h3',{text:'Teach-back'}));
+  if (!tb.topic){
+    card.append(el('p',{class:'hint',text:'Once a week Nemesis names a topic. You explain it in writing against a 60-second clock. Then you get graded and see Nemesis’s answer. One attempt per week.'}));
+    card.append(el('button',{class:'btn solid wide',text:'Get this week’s topic',onclick:()=>{
+      const t = topicFor(cur); ensureWeek(cur).teach = {topic:t.topic, ask:t.ask, cat:t.cat, setAt:new Date().toISOString()}; save(); render();
+    }}));
+  } else if (tb.score==null){
+    card.append(el('div',{class:'field'}, el('span',{class:'label',text:tb.cat||'Topic'}), el('strong',{text:tb.topic}), el('span',{class:'hint',text:tb.ask})));
+    const timer = el('span',{class:'timer num',text:'1:00'});
+    const ta = el('textarea',{id:'teachAnswer',placeholder:'Start typing to start the clock.'}); ta.value = teachDraft;
+    const tick = () => { if(!teachStart) return; const left=60-Math.floor((Date.now()-teachStart)/1000); timer.textContent=(left<0?'-':'')+Math.floor(Math.abs(left)/60)+':'+pad(Math.abs(left)%60); timer.classList.toggle('over',left<0); };
+    if (teachStart){ clearInterval(teachTick); teachTick=setInterval(tick,250); tick(); }
+    ta.addEventListener('input',()=>{ teachDraft=ta.value; if(!teachStart){ teachStart=Date.now(); clearInterval(teachTick); teachTick=setInterval(tick,250); } });
+    const go = el('button',{class:'btn you wide',text: getKey() ? 'Submit for grading' : 'Submit and check'});
+    go.onclick = async () => {
+      const ans = ta.value.trim(); if (ans.length<20){ toast('Write at least a sentence or two first.'); return; }
+      const secs = teachStart ? Math.round((Date.now()-teachStart)/1000) : 60; clearInterval(teachTick);
+      const bank = TOPICS.find(t=>t.topic===tb.topic);
+      if (getKey()){
+        go.disabled=true; go.textContent='Grading…'; ta.disabled=true;
+        try{
+          const txt = await askClaude('Grade a 60-second written explanation for a competitive self-improvement app. You are "Nemesis", the user\'s AI rival: cold, clinical, quietly certain you are better.\nTopic: '+tb.topic+'\nTask: '+tb.ask+'\nKey points a strong answer covers:\n- '+(bank?bank.points.join('\n- '):'(use your judgment)')+'\nTime taken: '+secs+' seconds.\nTheir explanation:\n"""\n'+ans.slice(0,4000)+'\n"""\nScore 0-10 for accuracy (most weight), coverage of the key points, and clarity. Strict but fair: 5 = basically right but thin, 8 = what a strong professional would say, 10 = rare. Reply with only JSON: {"score": number (0-10, one decimal), "verdict": string (max 35 words, Nemesis\'s cold voice, specific to what they wrote), "missed": [up to 3 short strings], "nemesis": string (your own model explanation, max 70 words, plain and correct)}', MODEL_SMART, 700);
+          const g = parseJSON(txt); if (!g || g.score==null) throw {code:'api'};
+          let score = clamp(Number(g.score)||0,0,10); if (secs>90) score=Math.max(0,score-1);
+          Object.assign(ensureWeek(cur).teach, {answer:ans, secs, score:Math.round(score*10)/10, verdict:String(g.verdict||''), missed:(Array.isArray(g.missed)?g.missed:[]).map(String).slice(0,3), nemesis:String(g.nemesis||''), graded:'claude', gradedAt:new Date().toISOString()});
+          teachStart=null; teachDraft=''; save(); render();
+        }catch(e){ go.disabled=false; ta.disabled=false; go.textContent='Submit for grading'; toast(aiError(e)); }
+      } else {
+        // honor-system check against the key points
+        ensureWeek(cur).teach.pending = {answer:ans, secs}; save();
+        openSheet(sh => {
+          sh.append(el('h3',{text:'Check your answer'}), el('p',{class:'hint',text:'Tick only the points you clearly covered. Nemesis is watching.'}));
+          const boxes = (bank?bank.points:[]).map((p,i)=>{ const c=el('input',{type:'checkbox',id:'kp'+i}); return {c, row:el('label',{class:'check',for:'kp'+i}, c, el('span',{text:p}))}; });
+          sh.append(el('div',{class:'checks'}, boxes.map(b=>b.row)));
+          sh.append(el('button',{class:'btn you wide',text:'Score it',onclick:()=>{
+            const hit = boxes.filter(b=>b.c.checked).length, tot = Math.max(1,boxes.length);
+            let score = roundTo(10*hit/tot,.5); if (secs>90) score=Math.max(0,score-1);
+            const missed = boxes.map((b,i)=>b.c.checked?null:bank.points[i]).filter(Boolean).slice(0,3);
+            const verdict = hit===tot ? 'Every point. Self-reported. I’ll assume honesty this once.' : hit>=tot-1 ? 'Close. Close is a word people use when they lost.' : 'You covered '+hit+' of '+tot+'. I covered all of them.';
+            Object.assign(ensureWeek(cur).teach, {answer:ans, secs, score, verdict, missed, nemesis: bank? bank.points.join('. ')+'.' : '', graded:'self', gradedAt:new Date().toISOString()});
+            delete S.weeks[cur].teach.pending; teachStart=null; teachDraft=''; save(); closeSheet(); render();
+          }}));
+        });
+      }
+    };
+    card.append(el('div',{class:'trow'}, el('span',{class:'label',text:'Clock'}), timer), ta, go);
+  } else {
+    card.append(el('div',{class:'field'}, el('span',{class:'label',text:tb.cat||'Topic'}), el('strong',{text:tb.topic})));
+    card.append(el('div',{class:'trow'}, el('span',{class:'grade num',text:String(tb.score)}), el('span',{class:'hint',text:'out of 10 · '+tb.secs+'s · '+(tb.graded==='claude'?'graded by Claude':'self-checked')+' · Nemesis’s score stays sealed until Sunday'})));
+    card.append(el('div',{class:'voice'}, el('span',{class:'label',text:'Nemesis'}), el('p',{text:tb.verdict})));
+    if (tb.missed && tb.missed.length) card.append(el('div',{class:'field'}, el('span',{class:'label',text:'You missed'}), el('ul',{style:'margin:0;padding-left:18px'}, tb.missed.map(m=>el('li',{text:m})))));
+    if (tb.nemesis) card.append(el('div',{class:'field'}, el('span',{class:'label',text:'Nemesis’s answer'}), el('p',{class:'hint',style:'color:var(--fg)',text:tb.nemesis})));
+  }
+  v.append(card);
+}
+
+/* ---------------- Showdowns ---------------- */
+function renderHist(v){
+  const ks = Object.keys(S.shows).sort().reverse();
+  if (!ks.length){ v.append(el('div',{class:'empty',text:'No showdowns yet. The first one settles Sunday at 9:00 pm.'})); return; }
+  const box = el('div',{class:'hist'});
+  for (const k of ks){
+    const s = S.shows[k];
+    const card = el('div',{class:'week'},
+      el('div',{class:'wtop'}, el('span',{class:'label',text:(s.preseason?'Preseason · ':'')+'Week of '+shortDate(k)}),
+        el('span',{class:'outcome '+s.outcome, text: s.outcome==='W'?'You won '+s.w+'–'+s.l : s.outcome==='L'?'Nemesis '+s.l+'–'+s.w : 'Tied '+s.w+'–'+s.l})),
+      el('div',{class:'chips'}, TRACKS.map(t=>el('span',{class:'chip '+(s.results[t.id]||'T'), text:t.name+' '+fmtVal(t,s.you[t.id])+'–'+fmtVal(t,s.nem[t.id])}))));
+    if (s.revealed && s.report) card.append(el('div',{class:'voice'}, el('span',{class:'label',text:'Nemesis'}), el('p',{text:s.report})));
+    else if (!s.revealed) card.append(el('button',{class:'btn',text:'Reveal report',disabled:revealing,onclick:()=>reveal(k)}));
+    box.append(card);
+  }
+  v.append(box);
+}
+async function reveal(k){
+  if (revealing) return;
+  const s = S.shows[k];
+  if (getKey()){
+    revealing = true; render();
+    const prior = Object.keys(S.shows).filter(x=>x<k).sort();
+    let streak=1; for (const x of prior.slice().reverse()){ if (S.shows[x].outcome===s.outcome) streak++; else break; }
+    const si = seasonInfo(k);
+    const seasonRec = record(Object.keys(S.shows).filter(x=>x<=k && !S.shows[x].preseason && seasonInfo(x).season===si.season).map(x=>S.shows[x]));
+    const notes = Object.keys(S.weeks).filter(x=>x<=k).sort().slice(-4).flatMap(x=>(S.weeks[x].entries||[]).filter(e=>e.note).map(e=>shortDate(x)+' '+TBYID[e.track].name+': '+e.note)).slice(-8);
+    const lines = TRACKS.map(t=>t.name+' ('+t.unit+'): you '+fmtVal(t,s.you[t.id])+', Nemesis '+fmtVal(t,s.nem[t.id])+' → '+({W:'you won',L:'Nemesis won',T:'tie'})[s.results[t.id]]).join('\n');
+    const prompt = 'Write the weekly showdown report for "Nemesis", an AI rival in a self-improvement app. Voice: smug but so certain of its superiority that it reads cold and clinical. Short declarative sentences. Precise numbers. No exclamation marks, no emojis, no hashtags, no pep talk, no insults about anything outside these tracks. If the user won, concede facts with grudging, minimal respect and promise correction. If Nemesis won, state it like a measurement. Reference the user\'s own notes below when relevant (quote at most a few words). 70-110 words. Plain text only.\n\n'+(s.preseason?'This was a PRESEASON week; it does not count.\n':'Season '+si.season+', week '+si.week+' of '+SEASON_LEN+'. Season record (user W-L-T): '+seasonRec+'.\n')+'Week of '+shortDate(k)+'. Result: '+(s.outcome==='W'?'USER WON':s.outcome==='L'?'NEMESIS WON':'TIE')+' '+s.w+'-'+s.l+'. Streak: '+streak+' '+(s.outcome==='W'?'user wins':s.outcome==='L'?'Nemesis wins':'ties')+' in a row.\n'+(s.slump?'Nemesis had an off week on '+TBYID[s.slump].name+' (call it irrelevant).\n':'')+(s.teachTopic?'Teach-back topic: '+s.teachTopic+'.\n':'')+'\n'+lines+'\n\nUser notes:\n'+(notes.join('\n')||'(none)');
+    try{ s.report = await askClaude(prompt, MODEL_SMART, 400); }
+    catch(e){ toast(aiError(e)+' Showing the standard report.'); s.report = cannedReport(k); }
+    revealing = false;
+  } else s.report = cannedReport(k);
+  s.revealed = true; save(); tab='hist'; render();
+}
+
+/* ---------------- Settings ---------------- */
+function renderSettings(v){
+  const key = getKey();
+  const kc = el('div',{class:'card'}, el('h3',{text:'Claude'}),
+    el('p',{class:'hint',text: key ? 'Connected. Nemesis writes your Sunday report and grades teach-back with Claude, billed to your Anthropic API account.' : 'Optional. Add an Anthropic API key and Nemesis writes your Sunday report and grades teach-back with Claude. Without one, the app uses built-in lines and a self-check. The key stays on this phone and is only sent to Anthropic.'}));
+  const inp = el('input',{id:'apikey',type:'password',autocomplete:'off',placeholder:'sk-ant-…','aria-label':'Anthropic API key'});
+  if (key) kc.append(el('div',{class:'actions'}, el('button',{class:'btn',text:'Remove key',onclick:()=>{ setKey(''); toast('Key removed.'); render(); }})));
+  else kc.append(el('div',{class:'field'}, el('label',{for:'apikey',text:'API key (from console.anthropic.com)'}), inp), el('button',{class:'btn solid',text:'Save key',onclick:()=>{ const k=inp.value.trim(); if(!k.startsWith('sk-')){ toast('That doesn’t look like an Anthropic key.'); return; } setKey(k); toast('Key saved on this phone.'); render(); }}));
+  v.append(kc);
+
+  const bc = el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Backup'}), el('p',{class:'hint',text:'Your log lives only on this phone. Copy a backup now and then, and restore it if you switch phones or clear your browser.'}));
+  const data = JSON.stringify(S);
+  bc.append(el('div',{class:'actions'},
+    el('button',{class:'btn',text:'Copy backup',onclick:async()=>{ try{ await navigator.clipboard.writeText(data); toast('Backup copied.'); }catch(e){ ta.value=data; ta.select(); toast('Select and copy the text below.'); } }}),
+    el('button',{class:'btn',text:'Download backup',onclick:()=>{ const a=el('a',{href:URL.createObjectURL(new Blob([data],{type:'application/json'})),download:'nemesis-backup-'+fmt(now())+'.json'}); document.body.append(a); a.click(); a.remove(); }})));
+  const ta = el('textarea',{id:'restore',placeholder:'Paste a backup here to restore it.',style:'min-height:90px'});
+  const confirmRow = el('div',{class:'actions',hidden:true}, el('span',{class:'hint',text:'This replaces everything on this phone.'}),
+    el('button',{class:'btn you',text:'Yes, restore',onclick:()=>{ try{ const d=JSON.parse(ta.value); if(!d.meta||!d.weeks||!d.shows) throw 0; S=d; save(); toast('Restored.'); tab='week'; render(); }catch(e){ toast('That backup couldn’t be read.'); } }}));
+  bc.append(el('div',{class:'field'}, el('label',{for:'restore',text:'Restore'}), ta), el('button',{class:'btn',text:'Restore from backup',onclick:()=>{ if(ta.value.trim()) confirmRow.hidden=false; else toast('Paste a backup first.'); }}), confirmRow);
+  v.append(bc);
+
+  v.append(el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Rules'}),
+    el('p',{class:'hint',text:'Weeks run Sunday 9:00 pm to Sunday 9:00 pm. Each track is won, lost or tied; most tracks takes the week. Seasons are 10 weeks. Nemesis sets its numbers at the start of each week from your last four weeks, plus an edge that grows when you win and shrinks when you lose, so it stays just ahead of you. Its gains are capped at realistic weekly jumps.'})));
+}
+
+/* ---------------- boot ---------------- */
+for (const id of ['week','teach','hist','set']) $('#nav-'+id).addEventListener('click',()=>{ tab=id; closeSheet(); render(); window.scrollTo(0,0); });
+init();
+render();
+let lastWk = wkKey(now());
+setInterval(()=>{
+  const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+  if (wkKey(now())!==lastWk){ lastWk=wkKey(now()); if(!typing) render(); }
+  tickCountdown();
+}, 30000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ const a=document.activeElement; if(!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))&&!$('#layer').children.length) render(); } });
+try{ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){}
+})();
+</script>
+</body></html>
