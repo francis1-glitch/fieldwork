@@ -1,0 +1,381 @@
+<!doctype html><html lang="en" data-pwa="1"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2C1A0E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Brain">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Second Brain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: a pocket notebook. Warm paper, ink-brown text, one copper accent; serif for what you wrote, sans for the controls. */
+:root{
+  --paper:#faf6f0; --page:#fffaf3; --rule:#e8dbc6; --ink:#2c1a0e; --ink-2:#6b5444; --ink-3:#9a8574;
+  --copper:#b5651d; --copper-dk:#8b4c16; --copper-lt:#fdf0e3; --hl:#fde3b4; --tag:#f6e2c4;
+  --danger:#b3261e; --scrim:rgba(44,26,14,.4);
+  --serif:"Lora",Georgia,"Times New Roman",serif;
+  --sans:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --navh:62px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#17120d; --page:#211a13; --rule:#3a2e22; --ink:#f1e6d8; --ink-2:#c3b09c; --ink-3:#8f7c69;
+  --copper:#e0934a; --copper-dk:#f0ac68; --copper-lt:#33241a; --hl:#5a4120; --tag:#3a2b1d;
+  --danger:#ff8a7e; --scrim:rgba(0,0,0,.6); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font:15.5px/1.55 var(--sans);-webkit-tap-highlight-color:transparent;padding-top:env(safe-area-inset-top,0px)}
+.wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:14px calc(var(--navh) + 28px + env(safe-area-inset-bottom,0px))}
+h1,h2,h3{font-family:var(--serif);margin:0;text-wrap:balance;font-weight:700}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-3);font-weight:600}
+.muted{color:var(--ink-3)} .small{font-size:13px}
+
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.top h1{font-size:30px;line-height:1.1}
+.top .count{font-size:13px;color:var(--ink-3)}
+
+.capture{background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.capture textarea{border:0;background:transparent;resize:none;min-height:46px;font:16px/1.5 var(--serif);color:var(--ink);padding:2px;outline:none;width:100%}
+.capture .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
+.search{width:100%;background:var(--page);border:1px solid var(--rule);border-radius:999px;padding:10px 14px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--rule);background:var(--page);border-radius:999px;padding:6px 12px;font-size:13.5px;color:var(--ink-2);white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chip .n{opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
+
+.btn{border:1px solid var(--rule);background:var(--page);border-radius:6px;padding:9px 14px;font-weight:600;font-size:14.5px}
+.btn.primary{background:var(--copper);border-color:var(--copper);color:#fff}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--danger)}
+.btn:disabled{opacity:.5}
+
+.list{display:flex;flex-direction:column;gap:8px}
+.note{background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;text-align:left;width:100%;display:flex;flex-direction:column;gap:5px}
+.note .t{font-family:var(--serif);font-weight:600;font-size:17px;line-height:1.3}
+.note .ex{color:var(--ink-2);font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.note .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-3)}
+.pin{color:var(--copper);font-weight:600}
+.tag{background:var(--tag);color:var(--copper-dk);border-radius:4px;padding:1px 7px;font-size:12px}
+.sec{border:1px solid var(--rule);border-radius:4px;padding:0 6px;font-size:11.5px}
+.empty{border:1px dashed var(--rule);border-radius:8px;padding:18px;color:var(--ink-3);font-size:14px;text-align:center}
+
+/* editor */
+.overlay{position:fixed;inset:0;background:var(--scrim);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--paper);width:100%;max-width:620px;height:94vh;border-radius:14px 14px 0 0;display:flex;flex-direction:column;
+  padding:12px max(16px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));gap:10px}
+.sheet.short{height:auto;max-height:80vh;overflow:auto}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.bar .grp{display:flex;gap:4px;align-items:center}
+.icon{border:0;background:none;padding:8px 10px;border-radius:6px;font-size:14.5px;font-weight:600;color:var(--ink-2)}
+.icon[aria-pressed="true"]{color:var(--copper)}
+.titlein{border:0;background:transparent;font:700 24px/1.25 var(--serif);padding:4px 0;outline:none;width:100%}
+.bodyin{flex:1;border:0;background:transparent;font:16.5px/1.65 var(--serif);padding:4px 0;outline:none;resize:none;width:100%;min-height:200px}
+.render{flex:1;overflow:auto;font:16.5px/1.65 var(--serif);overflow-wrap:anywhere}
+.render h2{font-size:21px;margin:.8em 0 .3em} .render h3{font-size:18px;margin:.7em 0 .2em}
+.render p{margin:0 0 .7em} .render ul{margin:0 0 .7em;padding-left:22px} .render li{margin:.15em 0}
+.render mark{background:var(--hl);color:inherit;padding:0 2px;border-radius:2px}
+.render a{color:var(--copper-dk)}
+.render code{font-family:ui-monospace,Menlo,monospace;font-size:.88em;background:var(--copper-lt);padding:1px 4px;border-radius:3px}
+.render blockquote{border-left:3px solid var(--copper);margin:0 0 .7em;padding:2px 0 2px 12px;color:var(--ink-2)}
+.metarow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--rule);padding-top:10px}
+.metarow select{background:var(--page);border:1px solid var(--rule);border-radius:6px;padding:7px 8px;font-size:14px}
+.tagbox{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1;min-width:180px}
+.tagbox input{border:0;background:transparent;outline:none;min-width:90px;flex:1;font-size:14px;padding:6px 2px}
+.tagx{border:0;background:var(--tag);color:var(--copper-dk);border-radius:4px;padding:2px 7px;font-size:12.5px}
+.hint{font-size:12.5px;color:var(--ink-3);margin:0}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--copper-lt);border-radius:6px;padding:8px 10px;font-size:13.5px}
+
+.card{background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.card h2{font-size:20px}
+.card textarea{width:100%;min-height:90px;background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:10px}
+.tagcloud{display:flex;flex-wrap:wrap;gap:8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.nav{position:fixed;left:0;right:0;bottom:0;background:var(--page);border-top:1px solid var(--rule);z-index:10;
+  padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+.nav .in{max-width:620px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);height:var(--navh)}
+.nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--ink-3);font-size:12px;font-weight:600;letter-spacing:.04em}
+.nav button[aria-current="page"]{color:var(--ink)}
+.nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+.nav button[aria-current="page"] svg{stroke:var(--copper)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--navh) + 16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:6px;font-size:13.5px;z-index:40;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .2s ease-out}@keyframes up{from{transform:translateY(20px);opacity:.7}}}
+</style>
+</head><body>
+<div class="wrap" id="app"></div>
+<nav class="nav" aria-label="Sections"><div class="in">
+  <button id="nav-notes" aria-current="page"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h4"/></svg>Notes</button>
+  <button id="nav-tags"><svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/></svg>Tags</button>
+  <button id="nav-set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
+</div></nav>
+<div id="layer"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const STORE = 'brain.v1';
+/* Sections follow the PARA method from Building a Second Brain. */
+const SECTIONS = [
+  {id:'inbox',     name:'Inbox',     hint:'Captured, not sorted yet'},
+  {id:'projects',  name:'Projects',  hint:'Active work with an end date'},
+  {id:'areas',     name:'Areas',     hint:'Ongoing parts of your life'},
+  {id:'resources', name:'Resources', hint:'Things you want to keep for later'},
+  {id:'archive',   name:'Archive',   hint:'Done or inactive'},
+];
+const SBYID = Object.fromEntries(SECTIONS.map(s=>[s.id,s]));
+
+/* ---------- storage on this phone ---------- */
+let S = load();
+function load(){ try{ const r = localStorage.getItem(STORE); if (r){ const d = JSON.parse(r); if (Array.isArray(d.notes)) return d; } }catch(e){} return {notes:[]}; }
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); return true; }catch(e){ toast('Couldn’t save. Your phone’s storage may be full.'); return false; } }
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const nowIso = () => new Date().toISOString();
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+function el(tag, attrs, ...kids){
+  const n = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})){
+    if (k==='class') n.className=v; else if (k==='text') n.textContent=v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (v===true) n.setAttribute(k,''); else if (v!==false && v!=null) n.setAttribute(k,v);
+  }
+  for (const c of kids.flat()) if (c!=null && c!==false) n.append(c.nodeType?c:document.createTextNode(String(c)));
+  return n;
+}
+let toastT; function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2400); }
+function when(iso){
+  const d = new Date(iso), n = new Date(), diff = (n-d)/1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60)+'m ago';
+  if (d.toDateString()===n.toDateString()) return d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  if (diff < 6*86400) return d.toLocaleDateString(undefined,{weekday:'short'});
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year: d.getFullYear()===n.getFullYear()?undefined:'numeric'});
+}
+function plain(body){ return body.replace(/[#*>`=\-\[\]()]/g,'').replace(/\s+/g,' ').trim(); }
+function allTags(){ const m = new Map(); for (const n of S.notes) for (const t of n.tags) m.set(t,(m.get(t)||0)+1); return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
+function cleanTag(t){ return t.trim().replace(/^#/,'').replace(/\s+/g,'-').toLowerCase().slice(0,30); }
+
+/* light Markdown: # headings, - lists, > quotes, **bold**, *italic*, ==highlight==, `code`, links. Built with DOM nodes, never innerHTML. */
+function inline(text){
+  const out = []; const re = /(\*\*[^*]+\*\*|==[^=]+==|\*[^*]+\*|`[^`]+`|https?:\/\/[^\s)]+)/g; let last = 0, m;
+  while ((m = re.exec(text))){
+    if (m.index > last) out.push(document.createTextNode(text.slice(last, m.index)));
+    const s = m[0];
+    if (s.startsWith('**')) out.push(el('strong',{text:s.slice(2,-2)}));
+    else if (s.startsWith('==')) out.push(el('mark',{text:s.slice(2,-2)}));
+    else if (s.startsWith('`')) out.push(el('code',{text:s.slice(1,-1)}));
+    else if (s.startsWith('*')) out.push(el('em',{text:s.slice(1,-1)}));
+    else out.push(el('a',{href:s,target:'_blank',rel:'noopener',text:s}));
+    last = m.index + s.length;
+  }
+  if (last < text.length) out.push(document.createTextNode(text.slice(last)));
+  return out;
+}
+function renderBody(body){
+  const root = el('div',{class:'render'}); let ul = null, para = [];
+  const flush = () => { if (para.length){ root.append(el('p',{}, inline(para.join(' ')))); para = []; } };
+  for (const raw of body.split('\n')){
+    const line = raw.trimEnd();
+    if (/^\s*[-*]\s+/.test(line)){ flush(); if (!ul){ ul = el('ul'); root.append(ul); } ul.append(el('li',{}, inline(line.replace(/^\s*[-*]\s+/,'')))); continue; }
+    ul = null;
+    if (!line.trim()){ flush(); continue; }
+    if (/^##\s+/.test(line)){ flush(); root.append(el('h3',{}, inline(line.replace(/^##\s+/,'')))); continue; }
+    if (/^#\s+/.test(line)){ flush(); root.append(el('h2',{}, inline(line.replace(/^#\s+/,'')))); continue; }
+    if (/^>\s?/.test(line)){ flush(); root.append(el('blockquote',{}, inline(line.replace(/^>\s?/,'')))); continue; }
+    para.push(line);
+  }
+  flush();
+  if (!body.trim()) root.append(el('p',{class:'muted',text:'Nothing written yet. Tap Edit.'}));
+  return root;
+}
+
+/* ---------- state ---------- */
+let tab = 'notes', query = '', section = 'all', tagFilter = null;
+
+function filtered(){
+  const q = query.trim().toLowerCase();
+  return S.notes.filter(n =>
+    (section==='all' ? n.section!=='archive' : n.section===section) &&
+    (!tagFilter || n.tags.includes(tagFilter)) &&
+    (!q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q) || n.tags.some(t=>t.includes(q.replace(/^#/,''))))
+  ).sort((a,b)=> (b.pinned?1:0)-(a.pinned?1:0) || b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function render(){
+  for (const id of ['notes','tags','set']) $('#nav-'+id).setAttribute('aria-current', tab===id?'page':'false');
+  const app = $('#app'); app.replaceChildren();
+  if (tab==='notes') renderNotes(app);
+  else if (tab==='tags') renderTags(app);
+  else renderSettings(app);
+}
+
+function renderNotes(app){
+  const live = S.notes.filter(n=>n.section!=='archive').length;
+  app.append(el('header',{class:'top'}, el('h1',{text:'Second Brain'}), el('span',{class:'count',text: live+' note'+(live===1?'':'s')})));
+
+  // quick capture
+  const cap = el('textarea',{id:'capture',rows:'2',placeholder:'Capture a thought…','aria-label':'Capture a thought'});
+  const saveCap = () => {
+    const txt = cap.value.trim(); if (!txt) return;
+    const lines = txt.split('\n'); const first = lines[0].slice(0,90);
+    const tags = [...new Set((txt.match(/#[\w-]+/g)||[]).map(cleanTag))];
+    const n = {id:uid(), title:first.replace(/#[\w-]+/g,'').trim() || 'Untitled', body: lines.length>1 ? lines.slice(1).join('\n').trim() : (lines[0].length>90 ? txt : ''), tags, section:'inbox', pinned:false, createdAt:nowIso(), updatedAt:nowIso()};
+    S.notes.unshift(n); if (save()){ cap.value=''; toast('Saved to Inbox.'); render(); }
+  };
+  cap.addEventListener('keydown', e => { if (e.key==='Enter' && (e.metaKey||e.ctrlKey)) saveCap(); });
+  app.append(el('div',{class:'capture'}, cap,
+    el('div',{class:'row'}, el('span',{class:'hint',text:'First line becomes the title. Add #tags anywhere.'}),
+      el('div',{class:'actions'}, el('button',{class:'btn ghost',text:'Full note',onclick:()=>openEditor(null, cap.value)}), el('button',{class:'btn primary',text:'Save',onclick:saveCap})))));
+
+  // search + sections
+  const search = el('input',{class:'search',id:'search',type:'search',placeholder:'Search notes and #tags',value:query,'aria-label':'Search notes'});
+  search.addEventListener('input', () => { query = search.value; drawList(); });
+  app.append(search);
+  const counts = s => S.notes.filter(n => s==='all' ? n.section!=='archive' : n.section===s).length;
+  app.append(el('div',{class:'chips',role:'group','aria-label':'Sections'},
+    [{id:'all',name:'All'}].concat(SECTIONS).map(s => el('button',{class:'chip','aria-pressed':String(section===s.id), title:s.hint||'', onclick:()=>{ section=s.id; render(); }}, s.name, el('span',{class:'n',text:counts(s.id)})))));
+  if (tagFilter) app.append(el('div',{class:'chips'}, el('button',{class:'chip','aria-pressed':'true',onclick:()=>{ tagFilter=null; render(); }}, '#'+tagFilter+'  ✕')));
+
+  const list = el('div',{class:'list',id:'list'}); app.append(list);
+  drawList();
+}
+function drawList(){
+  const list = $('#list'); if (!list) return; list.replaceChildren();
+  const items = filtered();
+  if (!S.notes.length){ list.append(el('div',{class:'empty'}, 'Your second brain is empty. Capture anything above: an idea, a quote, something you learned, a person’s name and how you met. Sort it later.')); return; }
+  if (!items.length){ list.append(el('div',{class:'empty',text: query ? 'No notes match “'+query+'”.' : 'Nothing in '+(SBYID[section]?SBYID[section].name:'this view')+' yet.'})); return; }
+  for (const n of items){
+    const ex = plain(n.body);
+    list.append(el('button',{class:'note',onclick:()=>openNote(n.id)},
+      el('span',{class:'t',text:n.title}),
+      ex ? el('span',{class:'ex',text:ex}) : null,
+      el('span',{class:'meta'}, n.pinned ? el('span',{class:'pin',text:'Pinned'}) : null,
+        section==='all' ? el('span',{class:'sec',text:SBYID[n.section].name}) : null,
+        n.tags.slice(0,4).map(t=>el('span',{class:'tag',text:'#'+t})), el('span',{text:when(n.updatedAt)}))));
+  }
+}
+
+/* ---------- note view / editor ---------- */
+function closeLayer(){ $('#layer').replaceChildren(); }
+function sheet(cls){ const sh = el('div',{class:'sheet '+(cls||''),role:'dialog','aria-modal':'true'}); const ov = el('div',{class:'overlay',onclick:e=>{ if(e.target===ov) closeLayer(); }}, sh); $('#layer').replaceChildren(ov); return sh; }
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeLayer(); });
+
+function openNote(id){
+  const n = S.notes.find(x=>x.id===id); if (!n) return;
+  const sh = sheet();
+  sh.append(el('div',{class:'bar'},
+    el('button',{class:'icon',text:'Close',onclick:()=>{ closeLayer(); render(); }}),
+    el('div',{class:'grp'},
+      el('button',{class:'icon','aria-pressed':String(!!n.pinned),text:n.pinned?'Pinned':'Pin',onclick:()=>{ n.pinned=!n.pinned; save(); openNote(id); }}),
+      el('button',{class:'icon',text:'Edit',onclick:()=>openEditor(id)}))));
+  sh.append(el('h2',{style:'font-size:24px',text:n.title}));
+  sh.append(el('div',{class:'meta small muted',style:'display:flex;gap:8px;flex-wrap:wrap;align-items:center'},
+    el('span',{class:'sec',text:SBYID[n.section].name}), n.tags.map(t=>el('button',{class:'tagx',text:'#'+t,onclick:()=>{ tagFilter=t; section='all'; tab='notes'; closeLayer(); render(); }})), el('span',{text:'Edited '+when(n.updatedAt)})));
+  sh.append(renderBody(n.body));
+}
+
+function openEditor(id, seed){
+  const existing = id ? S.notes.find(x=>x.id===id) : null;
+  const d = existing ? {...existing, tags:[...existing.tags]} : {id:uid(), title:'', body:'', tags:[], section:'inbox', pinned:false, createdAt:nowIso(), updatedAt:nowIso()};
+  if (!existing && seed){ const lines = seed.split('\n'); d.title = lines[0].slice(0,90); d.body = lines.slice(1).join('\n'); }
+  let saved = !!existing;
+  const sh = sheet();
+  const title = el('input',{class:'titlein',id:'noteTitle',type:'text',placeholder:'Title',value:d.title,'aria-label':'Title'});
+  const body = el('textarea',{class:'bodyin',id:'noteBody',placeholder:'Write it down. Use # for headings, - for lists, **bold**, and ==highlight== for the part that matters most.','aria-label':'Note'});
+  body.value = d.body;
+  const sec = el('select',{id:'noteSection','aria-label':'Section'}, SECTIONS.map(s=>el('option',{value:s.id,text:s.name, selected: s.id===d.section})));
+  const tagIn = el('input',{id:'tagInput',type:'text',placeholder:'+ tag',autocapitalize:'off','aria-label':'Add a tag'});
+  const tagBox = el('div',{class:'tagbox'});
+  const drawTags = () => { tagBox.replaceChildren(...d.tags.map(t=>el('button',{class:'tagx','aria-label':'Remove tag '+t,text:'#'+t+' ✕',onclick:()=>{ d.tags=d.tags.filter(x=>x!==t); drawTags(); persist(); }})), tagIn); };
+  tagIn.addEventListener('keydown', e => { if (e.key==='Enter' || e.key===',' || e.key===' '){ e.preventDefault(); addTag(); } });
+  tagIn.addEventListener('blur', addTag);
+  function addTag(){ const t = cleanTag(tagIn.value); tagIn.value=''; if (t && !d.tags.includes(t)){ d.tags.push(t); drawTags(); persist(); } }
+  drawTags();
+
+  let tmr; const status = el('span',{class:'hint',text: existing ? 'Saved' : ''});
+  function persist(){
+    d.title = title.value.trim(); d.body = body.value; d.section = sec.value;
+    if (!d.title && !d.body.trim()) return;
+    if (!d.title) d.title = (d.body.trim().split('\n')[0]||'Untitled').replace(/^#+\s*/,'').slice(0,90);
+    d.updatedAt = nowIso();
+    const i = S.notes.findIndex(x=>x.id===d.id);
+    if (i>=0) S.notes[i] = {...d, tags:[...d.tags]}; else { S.notes.unshift({...d, tags:[...d.tags]}); saved = true; }
+    if (save()) status.textContent = 'Saved';
+  }
+  const later = () => { status.textContent = 'Saving…'; clearTimeout(tmr); tmr = setTimeout(persist, 500); };
+  title.addEventListener('input', later); body.addEventListener('input', later); sec.addEventListener('change', persist);
+
+  const confirm = el('div',{class:'confirm',hidden:true}, el('span',{text:'Delete this note for good?'}),
+    el('button',{class:'btn danger',text:'Delete',onclick:()=>{ S.notes = S.notes.filter(x=>x.id!==d.id); save(); closeLayer(); toast('Deleted.'); render(); }}),
+    el('button',{class:'btn',text:'Keep',onclick:()=>{ confirm.hidden=true; }}));
+  const done = () => { clearTimeout(tmr); persist(); closeLayer(); if (saved) openNote(d.id); else render(); };
+
+  sh.append(el('div',{class:'bar'},
+    el('button',{class:'icon',text:'Done',onclick:done}),
+    el('div',{class:'grp'}, status, existing ? el('button',{class:'icon',style:'color:var(--danger)',text:'Delete',onclick:()=>{ confirm.hidden=false; }}) : null)));
+  sh.append(confirm, title, body, el('div',{class:'metarow'}, sec, tagBox));
+  setTimeout(()=> (existing ? body : (d.title ? body : title)).focus(), 80);
+}
+
+/* ---------- tags ---------- */
+function renderTags(app){
+  app.append(el('header',{class:'top'}, el('h1',{text:'Tags'})));
+  const tags = allTags();
+  if (!tags.length){ app.append(el('div',{class:'empty',text:'No tags yet. Add #tags when you capture or edit a note.'})); return; }
+  app.append(el('div',{class:'tagcloud'}, tags.map(([t,c])=>el('button',{class:'chip',onclick:()=>{ tagFilter=t; section='all'; query=''; tab='notes'; render(); }}, '#'+t, el('span',{class:'n',text:c})))));
+  const secs = el('div',{class:'card'}, el('h2',{text:'Sections'}), el('p',{class:'hint',text:'Sort notes by how actionable they are: Projects (active, with an end), Areas (ongoing), Resources (keep for later), Archive (done). New captures land in Inbox.'}));
+  for (const s of SECTIONS){ const c = S.notes.filter(n=>n.section===s.id).length;
+    secs.append(el('button',{class:'note',onclick:()=>{ section=s.id; tagFilter=null; tab='notes'; render(); }}, el('span',{class:'t',text:s.name+' · '+c}), el('span',{class:'ex',text:s.hint}))); }
+  app.append(secs);
+}
+
+/* ---------- settings ---------- */
+function renderSettings(app){
+  app.append(el('header',{class:'top'}, el('h1',{text:'Settings'})));
+  const data = JSON.stringify(S);
+  const ta = el('textarea',{id:'restore',placeholder:'Paste a backup here to restore it.'});
+  const confirm = el('div',{class:'confirm',hidden:true}, el('span',{text:'This replaces every note on this phone.'}),
+    el('button',{class:'btn primary',text:'Yes, restore',onclick:()=>{ try{ const d=JSON.parse(ta.value); if(!Array.isArray(d.notes)) throw 0; S={notes:d.notes}; save(); toast('Restored '+S.notes.length+' notes.'); tab='notes'; render(); }catch(e){ toast('That backup couldn’t be read.'); } }}),
+    el('button',{class:'btn',text:'Cancel',onclick:()=>{ confirm.hidden=true; }}));
+  app.append(el('div',{class:'card'}, el('h2',{text:'Backup'}),
+    el('p',{class:'hint',text:'Your notes live only on this phone. Copy a backup now and then, and restore it if you switch phones or clear your browser.'}),
+    el('div',{class:'actions'},
+      el('button',{class:'btn',text:'Copy backup',onclick:async()=>{ try{ await navigator.clipboard.writeText(data); toast('Backup copied.'); }catch(e){ ta.value=data; ta.select(); toast('Select and copy the text below.'); } }}),
+      el('button',{class:'btn',text:'Download backup',onclick:()=>{ const a=el('a',{href:URL.createObjectURL(new Blob([data],{type:'application/json'})),download:'second-brain-'+new Date().toISOString().slice(0,10)+'.json'}); document.body.append(a); a.click(); a.remove(); }}),
+      el('button',{class:'btn',text:'Export as Markdown',onclick:()=>{ const md = S.notes.map(n=>'# '+n.title+'\n\n'+(n.tags.length?n.tags.map(t=>'#'+t).join(' ')+'\n\n':'')+n.body).join('\n\n---\n\n'); const a=el('a',{href:URL.createObjectURL(new Blob([md],{type:'text/markdown'})),download:'second-brain-'+new Date().toISOString().slice(0,10)+'.md'}); document.body.append(a); a.click(); a.remove(); }})),
+    el('label',{class:'label',for:'restore',text:'Restore'}), ta,
+    el('div',{class:'actions'}, el('button',{class:'btn',text:'Restore from backup',onclick:()=>{ if (ta.value.trim()) confirm.hidden=false; else toast('Paste a backup first.'); }})), confirm));
+
+  const wipe = el('div',{class:'confirm',hidden:true}, el('span',{text:'Erase every note on this phone? This can’t be undone without a backup.'}),
+    el('button',{class:'btn danger',text:'Erase all',onclick:()=>{ S={notes:[]}; save(); toast('Erased.'); tab='notes'; render(); }}),
+    el('button',{class:'btn',text:'Cancel',onclick:()=>{ wipe.hidden=true; }}));
+  app.append(el('div',{class:'card'}, el('h2',{text:'Start over'}), el('p',{class:'hint',text:'Delete all notes on this phone.'}),
+    el('div',{class:'actions'}, el('button',{class:'btn danger',text:'Erase all notes',onclick:()=>{ wipe.hidden=false; }})), wipe));
+
+  app.append(el('div',{class:'card'}, el('h2',{text:'Writing tips'}),
+    el('p',{class:'hint',text:'# Heading  ·  - list item  ·  > quote  ·  **bold**  ·  *italic*  ·  ==highlight==  ·  `code`. Links become tappable. On the capture box, the first line is the title and #tags are picked up automatically.'})));
+}
+
+/* ---------- boot ---------- */
+for (const id of ['notes','tags','set']) $('#nav-'+id).addEventListener('click',()=>{ tab=id; closeLayer(); render(); window.scrollTo(0,0); });
+render();
+try{ if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{ try{ r.update(); }catch(e){} }).catch(()=>{});
+  let reloaded=false; navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(reloaded) return; reloaded=true; const a=document.activeElement; if(!(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName))&&!$('#layer').children.length) location.reload(); });
+} }catch(e){}
+})();
+</script>
+</body></html>

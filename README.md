@@ -15,3 +15,9 @@ After the first open it runs entirely from your phone, even offline. Your data s
 
 ## Moving data
 Settings (gear) → Copy backup, then Restore from backup on the other device.
+
+## Other apps in this repo
+- **Nemesis** (AI rival): `https://<your-username>.github.io/fieldwork/nemesis/`
+- **Second Brain** (notes): `https://<your-username>.github.io/fieldwork/brain/`
+
+Each installs separately (open its link, then Add to Home Screen) and keeps its own data on the phone.
