@@ -651,6 +651,16 @@ function renderSettings(v){
   bc.append(el('div',{class:'field'}, el('label',{for:'restore',text:'Restore'}), ta), el('button',{class:'btn',text:'Restore from backup',onclick:()=>{ if(ta.value.trim()) confirmRow.hidden=false; else toast('Paste a backup first.'); }}), confirmRow);
   v.append(bc);
 
+  const wipeConfirm = el('div',{class:'actions',hidden:true}, el('span',{class:'hint',text:'This erases every log, showdown and your season record on this phone. It can’t be undone unless you have a backup.'}),
+    el('button',{class:'btn you',text:'Yes, erase everything',onclick:()=>{
+      try{ localStorage.removeItem(STORE); }catch(e){}
+      S = {meta:null, weeks:{}, shows:{}}; teachStart=null; teachDraft=''; init(); tab='week'; render(); window.scrollTo(0,0); toast('Erased. Fresh start.');
+    }}),
+    el('button',{class:'btn',text:'Cancel',onclick:()=>{ wipeConfirm.hidden=true; }}));
+  v.append(el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Start over'}),
+    el('p',{class:'hint',text:'Delete all your data and start a new season from this week. Your API key stays.'}),
+    el('button',{class:'btn',text:'Erase all data',onclick:()=>{ wipeConfirm.hidden=false; }}), wipeConfirm));
+
   v.append(el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Rules'}),
     el('p',{class:'hint',text:'Weeks run Sunday 9:00 pm to Sunday 9:00 pm. Each track is won, lost or tied; most tracks takes the week. Seasons are 10 weeks. Nemesis sets its numbers at the start of each week from your last four weeks, plus an edge that grows when you win and shrinks when you lose, so it stays just ahead of you. Its gains are capped at realistic weekly jumps.'})));
 }
