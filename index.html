@@ -247,7 +247,7 @@ nav.tabs button[data-tab="quests"][aria-current="page"]{color:var(--quest)}
 <script>
 (function(){
 "use strict";
-const VERSION="3.1";
+const VERSION="4.0";
 /* ---------- dates ---------- */
 const pad=n=>String(n).padStart(2,"0");
 const ds=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -323,9 +323,38 @@ const DECK=[
  Q("outdoormovie","Outdoor movie","Watch a movie outside: a park screening or a projector in the backyard.","Social",0,2,"group","out","summer"),
  Q("fish","Catch a fish","Go fishing off a pier or a party boat. One catch is the goal.","Outdoors",1,2,"any","out","summer"),
  Q("fireworks","Fireworks from a new spot","Watch fireworks from somewhere you've never watched them before.","Social",0,2,"group","out","summer"),
- Q("bonfire","Beach bonfire","Do a fire on a beach that permits it. Bring something to cook.","Social",0,2,"group","out","summer")
+ Q("bonfire","Beach bonfire","Do a fire on a beach that permits it. Bring something to cook.","Social",0,2,"group","out","summer"),
+ // anywhere classics
+ Q("reversetourist","Reverse tourist","Pick the most famous thing to do in your area that you've somehow never done. Do it like a tourist: photos, souvenir, the works.","Explore",1,2,"any","any"),
+ Q("fivemile","The five-mile circle","Picture a five-mile circle around home. Go to the one place inside it you've never set foot in.","Explore",0,1,"any","any"),
+ Q("lastStop","Ride to the last stop","Take a bus or train line all the way to its final stop. Find one good thing to eat there before heading back.","Explore",1,2,"solo","any"),
+ Q("maproulette","Map roulette","Open a map, zoom out to about 15 miles around you, close your eyes, and tap. Go to whatever's nearest that spot.","Explore",0,2,"any","out"),
+ Q("nightwalk","Night walk","Walk your neighborhood after 10 p.m. Notice three things that are different from daytime.","Explore",0,1,"any","out"),
+ Q("askthree","Three strangers, one spot","Ask three different people for their favorite local spot. Go to the one that comes up twice, or the weirdest one.","Explore",0,2,"solo","any"),
+ Q("silenthour","Silent hour","Sit somewhere public for an hour with no phone and a notebook. Write down five things you'd never have noticed.","Explore",0,1,"solo","any"),
+ Q("wikiwalk","Wikipedia walk","Read your town's Wikipedia page and go see the most obscure thing it mentions.","Culture",0,2,"any","any"),
+ Q("oldestbuilding","Oldest building in town","Find the oldest building in your town and learn who built it and why.","Culture",0,1,"any","any"),
+ Q("birthyear","Born-year double feature","Watch the top movie from the year you were born, then the top movie from this year. Decide which one holds up.","Culture",0,2,"any","in"),
+ Q("newsport","A sport you've never watched live","Go watch a sport live that you've never seen in person: hockey, lacrosse, rugby, roller derby, anything.","Social",1,2,"any","any"),
+ Q("countrymeal","Cook the country you want to visit","Pick the country you most want to visit and cook a full meal from it tonight.","Food",1,2,"any","in"),
+ Q("childhood","Recreate a childhood meal","Make a meal you loved as a kid, exactly how it was made back then. Ask whoever made it for the details.","Food",1,1,"any","in"),
+ Q("blindtaste","Blind taste test","Line up five versions of the same thing (chips, coffee, hot sauce, seltzer) and rank them blind with friends.","Food",1,1,"group","in"),
+ Q("speedcook","30-minute speedrun","Cook something you've never made in under 30 minutes, start to plate.","Food",1,1,"any","in"),
+ Q("realpicnic","Picnic with real plates","Sunset picnic with actual plates, real food, and a blanket. No paper anything.","Outdoors",1,1,"group","out"),
+ Q("teachit","Teach a skill in 30 minutes","Teach someone something you're good at in half an hour. Then have them teach you something back.","Social",0,1,"group","any"),
+ Q("oldstory","The story you've never heard","Ask an older relative or friend to tell you a story from their life you've never heard. Write it down after.","Social",0,1,"solo","any"),
+ Q("callnottext","Call, don't text","Call someone you only ever text. At least 20 minutes.","Social",0,1,"solo","any"),
+ Q("handletter","Write a real letter","Handwrite a letter to someone who'd never expect it and mail it.","Social",0,1,"solo","in"),
+ Q("karaoke","One song, all the way","Do karaoke and sing one full song start to finish. No tapping out.","Social",1,1,"group","in"),
+ Q("juggle","Learn to juggle","Learn to juggle three things in one afternoon. Film your best run.","Skill",0,1,"solo","in"),
+ Q("sketch","Draw a building","Sit across from a building and sketch it for 30 minutes. No erasing.","Skill",0,1,"solo","out"),
+ Q("build","Build something","Build something useful with your hands: a shelf, a planter, a birdhouse.","Skill",1,2,"any","in"),
+ Q("nospend","No-spend Saturday","A full day of fun for exactly $0. Plan it the night before.","Explore",0,3,"any","any")
 ];
-const TWISTS=["Phone stays in your pocket the whole time.","Bring someone who's never done this.","Hard cap: $15 total.","Talk to one stranger while you're there.","One photo only. Make it count.","Take a route you've never taken to get there.","Say yes to the first suggestion anyone makes.","Do it at an hour you normally wouldn't.","Leave 30 minutes earlier than you planned.","Write a three-line field note before you leave."];
+// quests that only make sense around Long Island / NYC
+const LOCAL_LI=new Set(["sunrise","montauk","fireisland","crawl","farmstand","unknownstop","bridge","borough","ferry","apples","historic"]);
+const inLI=loc=>!loc||(loc.lat>40.45&&loc.lat<41.25&&loc.lon>-74.3&&loc.lon<-71.8);
+const TWISTS=["Phone stays in your pocket the whole time.","Go somewhere you can walk or bike to. No car.","Whoever's with you picks one thing you have to do there.","Bring something to leave behind for a stranger: a note, a book, a good rock.","Rate it out loud like a food critic the whole time.","You have to learn one person's name there.","Order or choose the second option every time.","Go by yourself, then tell someone the whole story after.","Start before 9 a.m.","Bring someone who's never done this.","Hard cap: $15 total.","Talk to one stranger while you're there.","One photo only. Make it count.","Take a route you've never taken to get there.","Say yes to the first suggestion anyone makes.","Do it at an hour you normally wouldn't.","Leave 30 minutes earlier than you planned.","Write a three-line field note before you leave."];
 const COST=["Free","Cheap","Splurge"], TIME=["","Under 2 hrs","Half day","Full day"];
 const CATS=["Outdoors","Food","Culture","Explore","Social","Skill"];
 
@@ -446,6 +475,155 @@ async function invite(text){
 function wxIcon(code){if(code==null)return["·",""];if(code===0)return["☀️","Clear"];if(code<=3)return["⛅","Partly cloudy"];if(code<=48)return["🌫️","Fog"];if(code<=67)return["🌧️","Rain"];if(code<=77)return["❄️","Snow"];if(code<=82)return["🌦️","Showers"];if(code<=86)return["🌨️","Snow showers"];return["⛈️","Storms"]}
 const badDay=w=>!!w&&(w.pp>=50||(w.code>=51&&w.code!==45)||w.hi<38);
 function wxFor(d){return S.prefs.loc&&S.wx&&S.wx.days?S.wx.days[d]:null}
+/* ---------- real places nearby (OpenStreetMap) ---------- */
+const KM=1.609344;
+function distKm(a,b){const R=6371,dl=(b.lat-a.lat)*Math.PI/180,dn=(b.lon-a.lon)*Math.PI/180,x=Math.sin(dl/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function compass(a,b){const y=Math.sin((b.lon-a.lon)*Math.PI/180)*Math.cos(b.lat*Math.PI/180),x=Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180)-Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lon-a.lon)*Math.PI/180);
+  const deg=(Math.atan2(y,x)*180/Math.PI+360)%360;return["north","northeast","east","southeast","south","southwest","west","northwest"][Math.round(deg/45)%8]}
+const miles=km=>{const m=km/KM;return m<1?"under a mile":Math.round(m)+" mi"};
+const prettyCuisine=c=>{const x=String(c||"").split(";")[0].replace(/_/g," ").trim();return x?x.charAt(0).toUpperCase()+x.slice(1):""};
+const SKIP_CUISINE=new Set(["american","pizza","burger","sandwich","coffee_shop","chicken","fast_food","regional","deli","bagel","breakfast","diner","italian_pizza","hot_dog","wings","international","fish_and_chips","ice_cream","donut"]);
+// kind -> quest templates. {n}=place name, {c}=cuisine
+const T=(title,detail,cat,cost,time,who,set,season)=>({title,detail,cat,cost,time,who:who||"any",set:set||"any",season:season||null});
+const KINDS={
+ park:{label:"Park",big:false,t:[
+  T("Every path in {n}","Walk every trail and path in {n} until you've covered the whole map.","Outdoors",0,1,"any","out"),
+  T("The empty spot in {n}","Find the one spot in {n} nobody else is using. Sit there 20 minutes, phone face-down.","Outdoors",0,1,"solo","out"),
+  T("Recruit a game at {n}","Bring a ball, frisbee, or cards to {n} and get at least one stranger to play.","Social",0,1,"group","out")]},
+ reserve:{label:"Nature preserve",big:true,t:[
+  T("End to end: {n}","Hike {n} from one end to the other. Pack a snack for the far side.","Outdoors",0,2,"any","out"),
+  T("Five species at {n}","Identify five birds, trees, or plants at {n}. An app like Seek or Merlin helps.","Outdoors",0,2,"any","out")]},
+ garden:{label:"Garden",big:false,t:[
+  T("Strangest plant at {n}","Walk all of {n} and find the strangest plant there. Learn where it's from.","Outdoors",0,1,"any","out")]},
+ beach:{label:"Beach",big:true,t:[
+  T("Sunrise at {n}","Get to {n} before sunrise with something warm to drink. Stay until the sun clears the horizon.","Outdoors",0,1,"any","out"),
+  T("Beachcomb {n}","Walk {n} until you find something worth keeping: sea glass, a shell, a strange rock.","Outdoors",0,1,"any","out"),
+  T("Stone-skipping final at {n}","Head to {n} and hold a stone-skipping tournament. Best of five.","Outdoors",0,1,"group","out")]},
+ peak:{label:"Summit",big:true,t:[T("Summit {n}","Make it to the top of {n}. Take one photo at the top, facing the direction you came from.","Outdoors",0,2,"any","out")]},
+ waterfall:{label:"Waterfall",big:true,t:[T("Find {n}","Track down {n}. Sit by it for ten minutes before you leave.","Outdoors",0,2,"any","out")]},
+ viewpoint:{label:"Lookout",big:true,t:[
+  T("Golden hour at {n}","Catch the last hour of daylight at {n}.","Outdoors",0,1,"any","out"),
+  T("Same view, twice: {n}","Take the same photo from {n} at sunrise and at sunset on the same day.","Outdoors",0,3,"solo","out")]},
+ lighthouse:{label:"Lighthouse",big:true,t:[T("Visit {n}","Go to {n} and find out the year it was first lit and who kept it.","Culture",0,2,"any","out")]},
+ historic:{label:"Historic site",big:true,t:[
+  T("The story of {n}","Visit {n} and come back with one story about it most people around here don't know.","Culture",0,1,"any","any"),
+  T("Every plaque at {n}","Go to {n} and read every sign and plaque on site. Pick the best fact for the group chat.","Culture",0,1,"any","any")]},
+ memorial:{label:"Memorial",big:false,t:[T("Learn {n}","Visit {n} and learn who or what it honors and why it's there.","Culture",0,1,"solo","any")]},
+ museum:{label:"Museum",big:true,t:[
+  T("One favorite at {n}","Spend an hour in {n} and leave with exactly one favorite thing. Tell someone why.","Culture",1,2,"any","in"),
+  T("Oldest object in {n}","At {n}, find the oldest thing in the building. Ask staff if you can't tell.","Culture",1,2,"any","in")]},
+ gallery:{label:"Gallery",big:false,t:[T("Pick a piece at {n}","Walk through {n}, pick a favorite piece, and figure out why it got you.","Culture",0,1,"any","in")]},
+ zoo:{label:"Zoo",big:true,t:[T("A morning at {n}","Spend a morning at {n}. Come back with one animal fact nobody you know has heard.","Outdoors",2,2,"any","out")]},
+ aquarium:{label:"Aquarium",big:true,t:[T("Down under at {n}","Spend two hours at {n}. Find the tank most people walk past and stay there.","Culture",2,2,"any","in")]},
+ library:{label:"Library",big:false,t:[T("Deep cut at {n}","Go to {n}, walk to a section you'd never browse, and check out one book from it.","Culture",0,1,"solo","in")]},
+ theatre:{label:"Theater",big:false,t:[T("Whatever's on at {n}","See whatever is playing next at {n}. No reviews, no research.","Culture",1,1,"any","in")]},
+ cinema:{label:"Movie theater",big:false,t:[T("Next showing at {n}","Walk into {n} and buy a ticket for whatever starts soonest.","Culture",1,1,"any","in")]},
+ stars:{label:"Planetarium",big:true,t:[T("Look up at {n}","Catch a show or public night at {n}.","Culture",1,1,"any","in")]},
+ market:{label:"Market",big:false,t:[T("New ingredient from {n}","Go to {n}, buy one thing you've never cooked with, and cook it tonight.","Food",1,1,"any","any")]},
+ farm:{label:"Farm stand",big:true,t:[T("Farm stand to stove: {n}","Go to {n}, buy whatever's most in season, and build dinner around it.","Food",1,2,"any","any")]},
+ restaurant:{label:"Restaurant",big:false,t:[
+  T("{c} at {n}","Eat at {n}. Ask the staff what they'd order for themselves and get that.","Food",1,1,"any","any"),
+  T("First time trying {c}: {n}","Go to {n} and order three things you can't pronounce yet.","Food",1,1,"group","any")]},
+ bakery:{label:"Bakery",big:false,t:[T("Weirdest thing at {n}","Go to {n} and buy the strangest-looking thing in the case.","Food",1,1,"any","any")]},
+ icecream:{label:"Ice cream",big:false,t:[T("Wrong flavor at {n}","At {n}, order the flavor you'd never normally pick.","Food",1,1,"any","any")]},
+ sweets:{label:"Sweet shop",big:false,t:[T("Taste test at {n}","Buy three things you've never tried at {n} and rank them.","Food",1,1,"any","any")]},
+ books:{label:"Bookstore",big:false,t:[T("First-sentence pick at {n}","At {n}, buy a book based only on its first sentence. No covers, no blurbs.","Culture",1,1,"solo","in")]},
+ thrift:{label:"Thrift store",big:false,t:[T("$20 challenge at {n}","Find the strangest genuinely useful thing at {n} for under $20.","Skill",1,1,"any","in")]},
+ records:{label:"Record store",big:false,t:[T("Cover judge at {n}","At {n}, buy a record by an artist you've never heard of based only on the cover.","Culture",1,1,"any","in")]},
+ antiques:{label:"Antique shop",big:false,t:[T("Oldest affordable thing at {n}","Find the oldest thing at {n} you could actually afford. Learn its story.","Culture",1,1,"any","in")]},
+ bowling:{label:"Bowling",big:false,t:[
+  T("Wrong-handed bowling at {n}","Bowl a full game at {n} with your opposite hand. Then one normally to compare.","Social",1,1,"group","in")]},
+ minigolf:{label:"Mini golf",big:false,t:[T("Stakes on every hole: {n}","Play {n} with a small bet on every hole. Loser buys dessert.","Social",1,1,"group","out")]},
+ escape:{label:"Escape room",big:false,t:[T("Break out of {n}","Book a room at {n} and get out with time to spare.","Social",2,1,"group","in")]},
+ arcade:{label:"Arcade",big:false,t:[T("$10 ticket war at {n}","Everyone gets $10 at {n}. Most tickets picks where you eat after.","Social",1,1,"group","in")]},
+ rink:{label:"Ice rink",big:false,t:[T("Skate {n}","Go skating at {n}. Stay until you've done a full lap without the wall.","Outdoors",1,1,"any","any")]},
+ climbing:{label:"Climbing",big:false,t:[T("First climb at {n}","Take an intro or day-pass session at {n}. Top out one route.","Skill",1,1,"any","in")]},
+ waterfront:{label:"Waterfront",big:false,t:[T("End of {n}","Walk out to the end of {n} at golden hour.","Outdoors",0,1,"any","out")]}
+};
+// crawl kinds: three of the same kind close together
+const CRAWLS={bakery:"Bakery tribunal",icecream:"Ice cream tribunal",books:"Bookstore crawl",thrift:"Thrift crawl",records:"Crate-digging crawl",sweets:"Sweet tooth crawl"};
+function classify(t){
+  if(t.leisure==="nature_reserve")return"reserve"; if(t.leisure==="park")return"park"; if(t.leisure==="garden")return"garden";
+  if(t.natural==="beach"||t.leisure==="beach_resort")return"beach"; if(t.natural==="peak")return"peak"; if(t.natural==="waterfall")return"waterfall";
+  if(t.tourism==="viewpoint")return"viewpoint"; if(t.man_made==="lighthouse"||t.historic==="lighthouse")return"lighthouse";
+  if(t.historic==="memorial"||t.historic==="monument")return"memorial"; if(t.historic)return"historic";
+  if(t.tourism==="museum")return"museum"; if(t.tourism==="gallery"||t.amenity==="arts_centre")return"gallery";
+  if(t.tourism==="zoo")return"zoo"; if(t.tourism==="aquarium")return"aquarium";
+  if(t.amenity==="library")return"library"; if(t.amenity==="theatre")return"theatre"; if(t.amenity==="cinema")return"cinema";
+  if(t.amenity==="planetarium"||t.man_made==="observatory")return"stars"; if(t.amenity==="marketplace")return"market"; if(t.shop==="farm")return"farm";
+  if(t.amenity==="restaurant")return"restaurant"; if(t.shop==="bakery")return"bakery"; if(t.amenity==="ice_cream")return"icecream";
+  if(t.shop==="chocolate"||t.shop==="confectionery"||t.shop==="cheese")return"sweets";
+  if(t.shop==="books")return"books"; if(t.shop==="second_hand")return"thrift"; if(t.shop==="music")return"records"; if(t.shop==="antiques")return"antiques";
+  if(t.leisure==="bowling_alley")return"bowling"; if(t.leisure==="miniature_golf")return"minigolf"; if(t.leisure==="escape_game")return"escape";
+  if(t.leisure==="amusement_arcade")return"arcade"; if(t.leisure==="ice_rink")return"rink"; if(t.sport==="climbing")return"climbing";
+  if(t.leisure==="marina"||t.man_made==="pier")return"waterfront";
+  return null}
+function overpassQuery(loc){const a=(r)=>`(around:${r},${loc.lat},${loc.lon})`,near=a(20000),mid=a(40000),far=a(80000);
+  const g=(sel,n)=>`(${sel})->.x;.x out tags center ${n};`;
+  return `[out:json][timeout:40];`+
+   g(`nwr["leisure"="park"]["name"]${near};`,90)+
+   g(`nwr["leisure"~"^(nature_reserve|garden)$"]["name"]${mid};nwr["natural"~"^(beach|peak|waterfall)$"]["name"]${far};nwr["tourism"="viewpoint"]["name"]${far};nwr["leisure"~"^(marina)$"]["name"]${near};nwr["man_made"="pier"]["name"]${mid};`,160)+
+   g(`nwr["tourism"~"^(museum|gallery|zoo|aquarium)$"]["name"]${far};nwr["man_made"~"^(lighthouse|observatory)$"]["name"]${far};nwr["historic"~"^(castle|fort|manor|ruins|ship|battlefield|archaeological_site|lighthouse|building|house|mill)$"]["name"]${mid};nwr["historic"~"^(monument|memorial)$"]["name"]${near};`,180)+
+   g(`nwr["amenity"~"^(library|theatre|cinema|planetarium|arts_centre|marketplace)$"]["name"]${mid};nwr["shop"="farm"]["name"]${far};`,120)+
+   g(`nwr["amenity"="restaurant"]["cuisine"]["name"]${a(16000)};`,260)+
+   g(`nwr["shop"~"^(bakery|books|second_hand|music|antiques|chocolate|confectionery|cheese)$"]["name"]${a(16000)};nwr["amenity"="ice_cream"]["name"]${a(16000)};`,200)+
+   g(`nwr["leisure"~"^(bowling_alley|miniature_golf|escape_game|amusement_arcade|ice_rink)$"]["name"]${mid};nwr["sport"="climbing"]["name"]${mid};`,80)}
+async function loadPlaces(force){
+  const loc=S.prefs.loc;if(!loc){S.places=null;return}
+  const key=loc.lat.toFixed(2)+","+loc.lon.toFixed(2);
+  if(!force&&S.places&&S.places.key===key&&Date.now()-S.places.at<7*864e5)return;
+  if(UI.placesLoading)return;UI.placesLoading=true;UI.placesErr=false;if(UI.tab==="quests")renderQuests();
+  const body="data="+encodeURIComponent(overpassQuery(loc));
+  let j=null;
+  for(const host of["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"]){
+    try{const r=await fetch(host,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});if(r.ok){j=await r.json();break}}catch(e){}
+  }
+  if(j&&j.elements){const seen=new Set(),items=[];
+    j.elements.forEach(e=>{const t=e.tags||{},name=(t.name||"").trim(),k=classify(t);if(!k||!name||name.length>60)return;
+      const lat=e.lat!=null?e.lat:e.center&&e.center.lat,lon=e.lon!=null?e.lon:e.center&&e.center.lon;if(lat==null)return;
+      const dk=k+"|"+name.toLowerCase();if(seen.has(dk))return;seen.add(dk);
+      const it={id:e.type[0]+e.id,k,n:name,lat:+lat.toFixed(5),lon:+lon.toFixed(5)};
+      if(k==="restaurant"){const c=String(t.cuisine).split(";")[0].trim().toLowerCase();if(!c||SKIP_CUISINE.has(c))return;it.c=c}
+      items.push(it)});
+    S.places={key,at:Date.now(),items};save();
+  }else UI.placesErr=true;
+  UI.placesLoading=false;if(UI.tab==="quests")renderQuests();
+}
+function placeCounts(){const c={};(S.places&&S.places.items||[]).forEach(p=>c[p.k]=(c[p.k]||0)+1);return c}
+const MAX_KM=[0,16,40,85]; // by time budget
+function placeQuests(opts){
+  opts=opts||{};const loc=S.prefs.loc,P=S.prefs;if(!loc||!S.places||!S.places.items)return[];
+  const day=questDay(),season=seasonOf(day),rain=badDay(wxFor(day))&&P.set!=="out";
+  const recentPlaces=new Set(S.quests.log.filter(l=>l.placeId&&diffDays(l.date,today())<120).map(l=>l.placeId));
+  const banned=new Set(S.quests.bannedPlaces||[]),triedCuisine=new Set(S.quests.log.map(l=>l.cuisine).filter(Boolean));
+  const activeId=S.quests.active&&S.quests.active.placeId,out=[];
+  S.places.items.forEach(p=>{if(banned.has(p.id)||recentPlaces.has(p.id)||p.id===activeId)return;const K=KINDS[p.k];if(!K)return;
+    const d=distKm(loc,p);
+    K.t.forEach((t,i)=>{
+      const time=Math.max(t.time,d>45?3:d>20?2:1);
+      if(d>MAX_KM[P.time]||t.cost>P.cost||time>P.time)return;
+      if(!(P.who==="any"||t.who==="any"||t.who===P.who))return;
+      if(!(P.set==="any"||t.set==="any"||t.set===P.set))return;
+      if(rain&&t.set==="out")return;if(t.season&&t.season!==season)return;
+      if(opts.mystery&&t.who==="group"&&t.cat==="Social")return;
+      const c=p.c?prettyCuisine(p.c):"";
+      out.push({id:"p-"+p.id+"-"+i,placeId:p.id,kind:p.k,kindLabel:K.label,lat:p.lat,lon:p.lon,place:p.n,dist:d,cuisine:p.c||null,newCuisine:!!(p.c&&!triedCuisine.has(p.c)),
+        title:t.title.replace("{n}",p.n).replace("{c}",c),detail:t.detail.replace("{n}",p.n).replace("{c}",c),cat:t.cat,cost:t.cost,time,who:t.who,set:t.set,season:t.season,local:true})})});
+  if(!opts.mystery)out.push(...crawlQuests());
+  return out}
+function crawlQuests(){const loc=S.prefs.loc,P=S.prefs,items=S.places.items,out=[];if(P.cost<1)return out;
+  const recentPlaces=new Set(S.quests.log.filter(l=>l.placeId&&diffDays(l.date,today())<120).map(l=>l.placeId));
+  Object.keys(CRAWLS).forEach(k=>{const list=items.filter(p=>p.k===k&&distKm(loc,p)<=Math.max(16,MAX_KM[P.time]));if(list.length<3)return;
+    list.forEach(seed=>{const near=list.filter(p=>p!==seed).map(p=>({p,d:distKm(seed,p)})).filter(x=>x.d<=8).sort((a,b)=>a.d-b.d).slice(0,2);
+      if(near.length<2||recentPlaces.has(seed.id))return;const stops=[seed,near[0].p,near[1].p],time=P.time>=2?2:1;if(time>P.time)return;
+      if(P.set==="out")return;
+      out.push({id:"c-"+stops.map(s=>s.id).join("-"),placeId:seed.id,kind:k,kindLabel:"Three stops",lat:seed.lat,lon:seed.lon,place:seed.n,dist:distKm(loc,seed),stops:stops.map(s=>({n:s.n,lat:s.lat,lon:s.lon})),
+        title:CRAWLS[k]+": "+stops.length+" stops",detail:`Hit ${stops[0].n}, ${stops[1].n}, and ${stops[2].n} in one go. Score each one and crown a winner.`,cat:k==="books"||k==="records"?"Culture":k==="thrift"?"Skill":"Food",cost:1,time,who:"any",set:"in",local:true,crawl:true})})});
+  return out}
+function mapsLink(q){const ios=/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent||"");
+  if(q.stops&&!ios)return "https://www.google.com/maps/dir/"+q.stops.map(s=>s.lat+","+s.lon).join("/");
+  return ios?`https://maps.apple.com/?daddr=${q.lat},${q.lon}`+(q.mystery?"":`&q=${encodeURIComponent(q.place)}`):`https://www.google.com/maps/dir/?api=1&destination=${q.lat},${q.lon}`}
+function mysteryText(q){return `Somewhere ${miles(q.dist)} ${compass(S.prefs.loc,q)} of you. Follow the directions, and don't look up the name until you're there.`}
 async function findTown(q){
   const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`);
   if(!r.ok)throw new Error("bad");const j=await r.json();const g=j.results&&j.results[0];if(!g)return null;
@@ -536,8 +714,9 @@ function questBlock(compact){
   const a=S.quests.active;
   if(a){const w=a.day?wxFor(a.day):null,wi=w?wxIcon(w.code):null;
     return `<section class="qcard" aria-label="Active quest"><div class="row between"><span class="eyebrow">Active quest · ${esc(a.cat)}${a.day?" · "+esc(a.day===today()?"today":fmt(a.day,{weekday:"long"})):""}</span><span class="dice" aria-hidden="true">⚂</span></div>
-    <h3>${esc(a.title)}</h3><div class="small">${esc(a.detail)}</div>${a.twist?`<div class="twist"><b>Twist:</b> ${esc(a.twist)}</div>`:""}
+    ${a.mystery&&!a.revealed?`<h3>Mystery destination</h3><div class="small">${esc(mysteryText(a))}</div>`:`<h3>${esc(a.title)}</h3><div class="small">${esc(a.detail)}</div>`}${a.twist?`<div class="twist"><b>Twist:</b> ${esc(a.twist)}</div>`:""}
     ${w?`<div class="wxnote">${wi[0]} ${w.hi}° · ${w.pp}% chance of rain</div>`:""}
+    ${a.local?`<div class="row"><a class="link" href="${esc(mapsLink(a.revealed?Object.assign({},a,{mystery:false}):a))}" target="_blank" rel="noopener">${a.crawl?"Route all three stops":"Directions"}</a>${a.mystery&&!a.revealed?`<button class="link" data-act="reveal">I'm here, reveal it</button>`:""}</div>`:""}
     <div class="row"><button class="btn quest" data-act="completeQuest">Mark complete</button><button class="btn ghost" data-act="invite" data-src="active">Invite friends</button><button class="link" data-act="dropQuest">Drop it</button></div></section>`}
   if(compact)return `<section class="card quest"><div class="row between"><h2>Side quest</h2><span class="dice" aria-hidden="true">⚄</span></div><div class="small muted">Nothing on deck. Roll one for this week.</div><button class="btn quest" data-act="goto" data-tab="quests">Roll a quest</button></section>`;
   return "";
@@ -629,7 +808,7 @@ function renderExp(e){
 }
 
 /* ---------- QUESTS ---------- */
-function pool(){return DECK.concat(S.quests.custom).filter(q=>!S.quests.banned.includes(q.id))}
+function pool(){const li=inLI(S.prefs.loc);return DECK.concat(S.quests.custom).filter(q=>!S.quests.banned.includes(q.id)&&(li||!LOCAL_LI.has(q.id)))}
 function dayOpts(){const t=today(),arr=[[t,"Today"],[addDays(t,1),"Tomorrow"]],dow=parse(t).getDay();
   [addDays(t,(6-dow+7)%7),addDays(t,(7-dow)%7)].forEach(d=>{if(!arr.some(a=>a[0]===d))arr.push([d,fmt(d,{weekday:"short"})])});
   let k=2;while(arr.length<4){const d=addDays(t,k++);if(!arr.some(a=>a[0]===d))arr.push([d,fmt(d,{weekday:"short"})])}
@@ -639,6 +818,22 @@ function eligible(){const P=S.prefs,day=questDay(),season=seasonOf(day),w=wxFor(
   const recent=new Set(S.quests.log.filter(l=>diffDays(l.date,today())<60).map(l=>l.qid));
   return pool().filter(q=>q.cost<=P.cost&&q.time<=P.time&&(P.who==="any"||q.who==="any"||q.who===P.who)&&(P.set==="any"||q.set==="any"||q.set===P.set)
     &&(!q.season||q.season===season)&&!(rain&&q.set==="out")&&!recent.has(q.id)&&!(S.quests.active&&S.quests.active.id===q.id))}
+function rollQuest(){
+  const src=S.prefs.src||"mix",myst=!!S.prefs.mystery,last=UI.rolledQ&&UI.rolledQ.id;
+  let local=src==="classic"?[]:placeQuests({mystery:myst}),classic=(src==="near"||myst)?[]:eligible();
+  local=local.filter(q=>q.id!==last&&q.placeId!==(UI.rolledQ&&UI.rolledQ.placeId));classic=classic.filter(q=>q.id!==last);
+  if(!local.length&&!classic.length)return null;
+  const useLocal=local.length&&(!classic.length||Math.random()<0.65);
+  if(!useLocal)return Object.assign({},weightedPick(classic));
+  // pick a kind first so one category (parks, restaurants) can't drown the rest
+  const byKind={};local.forEach(q=>(byKind[q.kind+(q.crawl?"*":"")]=byKind[q.kind+(q.crawl?"*":"")]||[]).push(q));
+  const kinds=Object.keys(byKind),recentKinds=S.quests.log.slice(-3).map(l=>l.kind).filter(Boolean),taste=tasteWeights();
+  const kw=kinds.map(k=>{const s=byKind[k][0];let w=1;const a=taste[s.cat];if(a!=null)w*=Math.max(0.3,1+(a-3)*0.5);if(recentKinds.includes(s.kind))w*=0.35;if(s.crawl)w*=0.8;if(s.newCuisine)w*=1.4;return w});
+  let r=Math.random()*kw.reduce((a,b)=>a+b,0),pick=kinds[kinds.length-1];for(let i=0;i<kinds.length;i++){r-=kw[i];if(r<=0){pick=kinds[i];break}}
+  const list=byKind[pick],q=Object.assign({},list[Math.floor(Math.random()*list.length)]);
+  if(myst)q.mystery=true;return q}
+function matchCount(){const src=S.prefs.src||"mix",myst=!!S.prefs.mystery;
+  return (src==="classic"?0:placeQuests({mystery:myst}).length)+((src==="near"||myst)?0:eligible().length)}
 function tasteWeights(){const by={};S.quests.log.forEach(l=>{(by[l.cat]=by[l.cat]||[]).push(l.rating)});const out={};for(const c in by)out[c]=mean(by[c]);return out}
 function weightedPick(list){const taste=tasteWeights();
   const ws=list.map(q=>{let w=1;const a=taste[q.cat];if(a!=null)w*=Math.max(0.3,1+(a-3)*0.5);if(q.season)w*=1.6;if(q.custom)w*=1.3;return w});
@@ -665,23 +860,32 @@ function renderQuests(){
   let h=sampleBanner();
   h+=`<div><div class="eyebrow">Side Quests</div><h1>Roll something you've never done</h1></div>`;
   h+=questBlock(false);
-  const n=eligible().length;
+  const n=matchCount(),loc=S.prefs.loc,pc=placeCounts(),np=S.places&&S.places.items?S.places.items.length:0,kindsFound=Object.keys(pc).length;
+  let status="";
+  if(!loc)status=`<div class="small muted">Set your town below and the dice will start pulling real places near you: parks, beaches, museums, bookstores, restaurants by cuisine, and more.</div>`;
+  else if(UI.placesLoading)status=`<div class="small muted">Scouting places near ${esc(loc.name)}…</div>`;
+  else if(np)status=`<div class="small muted mono">${np} real places near ${esc(loc.name)} across ${kindsFound} kinds.</div>`;
+  else if(UI.placesErr)status=`<div class="small muted">Couldn't load nearby places right now. The classic deck still works. <button class="link" data-act="retryPlaces">Try again</button></div>`;
   h+=`<section class="card quest"><h2>Set the dice</h2>
+    <div class="fgroup"><span class="eyebrow">Deck</span><div class="chips" role="group" aria-label="Deck">${[["mix","Mix"],["near","Real places near me"],["classic","Classic ideas"]].map(([v,t])=>`<button class="chip" data-act="pref" data-k="src" data-v="${v}" aria-pressed="${(S.prefs.src||"mix")===v}" ${v==="near"&&!np?"disabled":""}>${t}</button>`).join("")}</div>${status}</div>
     ${dayPicker()}
     ${chipGroup("Budget","cost",[[0,"Free"],[1,"Cheap"],[2,"Splurge OK"]])}
     ${chipGroup("Time","time",[[1,"Under 2 hrs"],[2,"Half day"],[3,"Full day"]])}
     ${chipGroup("Company","who",[["solo","Solo"],["group","Friends"],["any","Either"]])}
     ${chipGroup("Setting","set",[["in","Indoors"],["out","Outdoors"],["any","Either"]])}
+    <div class="switchrow"><div><b>Mystery destination</b><div class="small muted">${np?"You get directions and a distance, not the name. Find out what it is when you arrive.":"Needs your town set, so it can pick a real place."}</div></div><button class="switch" role="switch" aria-checked="${!!S.prefs.mystery&&!!np}" aria-label="Mystery destination" data-act="toggleMystery" ${np?"":"disabled"}></button></div>
     <div class="switchrow"><div><b>Add a twist</b><div class="small muted">A random rule that changes how you do it</div></div><button class="switch" role="switch" aria-checked="${!!S.prefs.twist}" aria-label="Add a twist" data-act="toggleTwist"></button></div>
     <button class="btn quest wide" data-act="roll" ${n?"":"disabled"}>Roll a quest <span aria-hidden="true">⚅</span></button>
     <div class="small muted mono" style="text-align:center">${n?`${n} quests match`:"Nothing matches. Loosen a filter."}</div></section>`;
-  if(UI.rolled){const q=pool().find(x=>x.id===UI.rolled);if(q){
-    h+=`<section class="qcard roll" aria-live="polite"><div class="row between"><span class="eyebrow">${esc(q.cat)}${q.season?" · "+q.season+" only":""}</span><span class="dice" aria-hidden="true">⚃</span></div><h3>${esc(q.title)}</h3><div class="small">${esc(q.detail)}</div>
+  const q=UI.rolledQ;if(q){
+    h+=`<section class="qcard roll" aria-live="polite"><div class="row between"><span class="eyebrow">${q.mystery?"Mystery destination":esc(q.cat)+(q.local?" · "+esc(q.kindLabel):"")}${q.season?" · "+q.season+" only":""}</span><span class="dice" aria-hidden="true">⚃</span></div>
+      ${q.mystery?`<h3>Somewhere ${esc(miles(q.dist))} ${esc(compass(S.prefs.loc,q))}</h3><div class="small">${esc(mysteryText(q))}</div>`:`<h3>${esc(q.title)}</h3><div class="small">${esc(q.detail)}</div>`}
       ${UI.rolledTwist?`<div class="twist"><b>Twist:</b> ${esc(UI.rolledTwist)}</div>`:""}
-      <div class="row"><span class="pill quest">${COST[q.cost]}</span><span class="pill quest">${TIME[q.time]}</span><span class="pill quest">${q.who==="any"?"Solo or friends":q.who==="solo"?"Solo":"Friends"}</span></div>
-      <div class="row"><button class="btn quest" data-act="acceptQuest" ${S.quests.active?"disabled":""}>${S.quests.active?"Finish your active quest first":"Accept quest"}</button><button class="btn ghost" data-act="roll">Reroll</button><button class="btn ghost" data-act="invite" data-src="rolled">Invite friends</button><button class="link" data-act="banQuest">Never show this</button></div></section>`}}
-  const L=S.quests.log,avg=L.length?(L.reduce((s,q)=>s+q.rating,0)/L.length).toFixed(1):"–",cats=new Set(L.map(q=>q.cat)).size;
-  h+=`<div class="stats"><div class="stat"><b>${L.length}</b><span>Quests done</span></div><div class="stat"><b>${avg}</b><span>Avg rating</span></div><div class="stat"><b>${cats}/6</b><span>Types tried</span></div></div>`;
+      <div class="row">${q.local&&!q.mystery?`<span class="pill quest">${esc(miles(q.dist))} away</span>`:""}${q.newCuisine&&!q.mystery?`<span class="pill quest">New cuisine</span>`:""}<span class="pill quest">${COST[q.cost]}</span><span class="pill quest">${TIME[q.time]}</span><span class="pill quest">${q.who==="any"?"Solo or friends":q.who==="solo"?"Solo":"Friends"}</span></div>
+      ${q.local?`<div><a class="link" href="${esc(mapsLink(q))}" target="_blank" rel="noopener">${q.crawl?"Route all three stops":"Directions"}</a></div>`:""}
+      <div class="row"><button class="btn quest" data-act="acceptQuest" ${S.quests.active?"disabled":""}>${S.quests.active?"Finish your active quest first":"Accept quest"}</button><button class="btn ghost" data-act="roll">Reroll</button><button class="btn ghost" data-act="invite" data-src="rolled">Invite friends</button><button class="link" data-act="banQuest">${q.local?"Never show this place":"Never show this"}</button></div></section>`}
+  const L=S.quests.log,avg=L.length?(L.reduce((s,q)=>s+q.rating,0)/L.length).toFixed(1):"–",placesHit=new Set(L.map(q=>q.placeId).filter(Boolean)).size;
+  h+=`<div class="stats"><div class="stat"><b>${L.length}</b><span>Quests done</span></div><div class="stat"><b>${avg}</b><span>Avg rating</span></div><div class="stat"><b>${placesHit}</b><span>New places</span></div></div>`;
   const taste=tasteWeights(),tk=Object.keys(taste);
   if(tk.length){const top=tk.sort((a,b)=>taste[b]-taste[a]);h+=`<div class="small muted">Your dice lean toward <b>${esc(top[0])}</b>${top.length>1&&taste[top[top.length-1]]<3?` and away from <b>${esc(top[top.length-1])}</b>`:""} based on your ratings.</div>`}
   h+=questEffect();
@@ -792,7 +996,7 @@ function remIcs(){const p=remParts(),now=new Date().toISOString().replace(/[-:]/
 /* ---------- actions ---------- */
 function render(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===UI.tab?"page":"false"));
-  if(UI.tab==="today")renderToday();else if(UI.tab==="lab")renderLab();else{renderQuests();loadWx()}
+  if(UI.tab==="today")renderToday();else if(UI.tab==="lab")renderLab();else{renderQuests();loadWx();loadPlaces()}
 }
 function go(tab){UI.tab=tab;UI.labDetail=null;render();window.scrollTo(0,0)}
 function rerender(ctx){if(ctx==="sheet")daySheet();else renderToday()}
@@ -843,33 +1047,36 @@ document.addEventListener("click",ev=>{
     save();renderToday();const st=streakOf(S.experiments.find(x=>x.id===id));toast(st>1?`${st} days straight. Keep it rolling.`:"Logged. Nice work.");break}
   case "missionUndo":{const id=el.dataset.id,t=today(),c=S.checkins[t];if(c&&c.adh){delete c.adh[id];if(!hasData(c)&&!Object.keys(c.adh).length&&!c.note)delete S.checkins[t]}if(UI.draft&&UI.draft.date===t)delete UI.draft.adh[id];save();renderToday();break}
   case "testPattern":{const p=(UI.patterns||[])[+el.dataset.i];if(!p)break;newExpSheet({title:`Does improving my ${p.A.name.toLowerCase()} change my ${p.B.name.toLowerCase()}?`,change:"",metrics:[p.A.id,p.B.id],baseDays:7,testDays:7});break}
-  case "invite":{let q,tw,day;if(el.dataset.src==="active"){q=S.quests.active;tw=q.twist;day=q.day}else{q=pool().find(x=>x.id===UI.rolled);tw=UI.rolledTwist;day=questDay()}if(q)invite(inviteText(q,tw,day));break}
+  case "invite":{let q,tw,day;if(el.dataset.src==="active"){q=S.quests.active;tw=q.twist;day=q.day}else{q=UI.rolledQ;tw=UI.rolledTwist;day=questDay()}
+    if(q){const t=q.mystery&&!q.revealed?Object.assign({},q,{title:"Mystery destination "+miles(q.dist)+" away",detail:"I know where. You find out when we get there."}):q;invite(inviteText(t,tw,day))}break}
   case "reopenExp":{const e=S.experiments.find(x=>x.id===el.dataset.id);e.status="active";delete e.decision;save();renderLab();break}
   case "deleteExp":{const id=el.dataset.id;if(UI.delArm!==id){UI.delArm=id;renderLab();break}
     S.experiments=S.experiments.filter(x=>x.id!==id);Object.values(S.checkins).forEach(c=>{if(c.adh)delete c.adh[id]});UI.labDetail=null;UI.delArm=null;save();renderLab();toast("Experiment deleted");break}
   case "pref":{const k=el.dataset.k,v=el.dataset.v;S.prefs[k]=(k==="cost"||k==="time")?+v:v;save();renderQuests();break}
   case "pickDay":S.prefs.day=el.dataset.d;save();renderQuests();break;
   case "toggleTwist":S.prefs.twist=!S.prefs.twist;save();renderQuests();break;
+  case "toggleMystery":S.prefs.mystery=!S.prefs.mystery;save();renderQuests();break;
+  case "retryPlaces":loadPlaces(true);break;
+  case "reveal":{const a=S.quests.active;a.revealed=true;save();render();toast("It's "+a.place+"!");break}
   case "useLoc":{
     if(!("geolocation" in navigator)){toast("Location isn't available here");break}
     toast("Finding your location…");
-    try{navigator.geolocation.getCurrentPosition(p=>{S.prefs.loc={lat:+p.coords.latitude.toFixed(2),lon:+p.coords.longitude.toFixed(2),name:"your current area"};UI.locEdit=false;save();loadWx(true);toast("Forecast updated")},()=>toast("Location not allowed. Type your town instead."),{timeout:10000,maximumAge:3600e3})}catch(e){toast("Location not allowed. Type your town instead.")}
+    try{navigator.geolocation.getCurrentPosition(p=>{S.prefs.loc={lat:+p.coords.latitude.toFixed(2),lon:+p.coords.longitude.toFixed(2),name:"your current area"};S.places=null;UI.locEdit=false;save();loadWx(true);loadPlaces(true);toast("Location updated")},()=>toast("Location not allowed. Type your town instead."),{timeout:10000,maximumAge:3600e3})}catch(e){toast("Location not allowed. Type your town instead.")}
     break}
   case "locEdit":UI.locEdit=true;renderQuests();break;
-  case "clearLoc":S.prefs.loc=null;S.wx=null;UI.locEdit=false;save();renderQuests();toast("Weather off");break;
+  case "clearLoc":S.prefs.loc=null;S.wx=null;S.places=null;S.prefs.mystery=false;if(S.prefs.src==="near")S.prefs.src="mix";UI.locEdit=false;save();renderQuests();toast("Location removed");break;
   case "setTown":{const q=(document.getElementById("townIn")||{}).value;if(!q||!q.trim()){toast("Type a town or ZIP");break}
-    toast("Looking it up…");findTown(q.trim()).then(loc=>{if(!loc){toast("Couldn't find that. Try adding the state.");return}S.prefs.loc=loc;S.wx=null;UI.locEdit=false;save();loadWx(true);renderQuests();toast("Weather set for "+loc.name)}).catch(()=>toast("Couldn't reach the lookup. Try again in a bit."));break}
-  case "roll":{const E=eligible();if(!E.length){UI.rolled=null;renderQuests();toast("Nothing fits. Loosen a filter.");break}
-    const P=E.length>1?E.filter(q=>q.id!==UI.rolled):E;const q=weightedPick(P);
-    UI.rolled=q.id;UI.rolledTwist=S.prefs.twist?TWISTS[Math.floor(Math.random()*TWISTS.length)]:null;
+    toast("Looking it up…");findTown(q.trim()).then(loc=>{if(!loc){toast("Couldn't find that. Try adding the state.");return}S.prefs.loc=loc;S.wx=null;S.places=null;UI.locEdit=false;save();loadWx(true);loadPlaces(true);renderQuests();toast("Set to "+loc.name)}).catch(()=>toast("Couldn't reach the lookup. Try again in a bit."));break}
+  case "roll":{const q=rollQuest();if(!q){UI.rolledQ=null;renderQuests();toast("Nothing fits. Loosen a filter.");break}
+    UI.rolledQ=q;UI.rolledTwist=S.prefs.twist?TWISTS[Math.floor(Math.random()*TWISTS.length)]:null;
     renderQuests();const c=document.querySelector(".qcard.roll");if(c)c.scrollIntoView({behavior:"smooth",block:"center"});break}
-  case "acceptQuest":{const q=pool().find(x=>x.id===UI.rolled);if(!q||S.quests.active)break;S.quests.active=Object.assign({accepted:today(),day:questDay(),twist:UI.rolledTwist},q);UI.rolled=null;UI.rolledTwist=null;save();renderQuests();toast("Quest accepted");window.scrollTo(0,0);break}
-  case "banQuest":S.quests.banned.push(UI.rolled);UI.rolled=null;save();renderQuests();toast("Removed from the deck");break;
+  case "acceptQuest":{const q=UI.rolledQ;if(!q||S.quests.active)break;S.quests.active=Object.assign({accepted:today(),day:questDay(),twist:UI.rolledTwist},q);UI.rolledQ=null;UI.rolledTwist=null;save();renderQuests();toast("Quest accepted");window.scrollTo(0,0);break}
+  case "banQuest":{const q=UI.rolledQ;if(!q)break;if(q.local){S.quests.bannedPlaces=S.quests.bannedPlaces||[];S.quests.bannedPlaces.push(q.placeId)}else S.quests.banned.push(q.id);UI.rolledQ=null;save();renderQuests();toast(q.local?"That place won't come up again":"Removed from the deck");break}
   case "dropQuest":S.quests.active=null;save();render();toast("Quest dropped");break;
   case "completeQuest":completeSheet();break;
   case "qrate":document.querySelectorAll("#qRate button").forEach(b=>b.setAttribute("aria-pressed",b===el?"true":"false"));break;
   case "logQuest":{const a=S.quests.active,r=+(document.querySelector("#qRate button[aria-pressed=true]")||{dataset:{v:4}}).dataset.v;
-    S.quests.log.push({id:uid(),qid:a.id,title:a.title,cat:a.cat,twist:a.twist||null,date:document.getElementById("qDate").value||today(),rating:r,note:document.getElementById("qNote").value.trim()});
+    S.quests.log.push({id:uid(),qid:a.id,title:a.title,cat:a.cat,twist:a.twist||null,placeId:a.placeId||null,kind:a.kind||null,cuisine:a.cuisine||null,date:document.getElementById("qDate").value||today(),rating:r,note:document.getElementById("qNote").value.trim()});
     S.quests.active=null;save();closeSheet();render();toast("Quest logged");break}
   case "addQuest":addQuestSheet();break;
   case "saveCustom":{const t=document.getElementById("cqT").value.trim();if(!t){toast("Name the quest");break}
