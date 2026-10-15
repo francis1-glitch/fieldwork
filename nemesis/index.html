@@ -676,7 +676,10 @@ setInterval(()=>{
   tickCountdown();
 }, 30000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ const a=document.activeElement; if(!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))&&!$('#layer').children.length) render(); } });
-try{ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){}
+try{ if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{ try{ r.update(); }catch(e){} }).catch(()=>{});
+  let reloaded=false; navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(reloaded) return; reloaded=true; const a=document.activeElement; if(!(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName))) location.reload(); });
+} }catch(e){}
 })();
 </script>
 </body></html>
