@@ -44,7 +44,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
 .capture{background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .capture textarea{border:0;background:transparent;resize:none;min-height:46px;font:16px/1.5 var(--serif);color:var(--ink);padding:2px;outline:none;width:100%}
-.capture .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.capture .row{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.capture .row .hint{flex:1 1 180px;min-width:0}
+.capture .row .actions{flex-wrap:nowrap;margin-left:auto}
 
 input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .search{width:100%;background:var(--page);border:1px solid var(--rule);border-radius:999px;padding:10px 14px}
