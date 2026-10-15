@@ -296,8 +296,21 @@ function nemesisPlan(wk, edge){
   const pace = {}; for (const t of TRACKS) pace[t.id] = 0.85 + r()*0.3;
   return {plan, pace, slump};
 }
+function startOf(wk){ const o=openTime(wk), c=S.meta.created?new Date(S.meta.created):o; return c>o && c<closeTime(wk) ? c : o; }
+function shareOf(wk){ const o=openTime(wk), cl=closeTime(wk); return clamp((cl-startOf(wk))/(cl-o),0,1); }
+function scaledPlan(wk, plan){
+  const sh = shareOf(wk); if (sh>=0.999) return plan;
+  const out = {};
+  for (const t of TRACKS){
+    if (t.kind==='score') out[t.id] = plan[t.id];
+    else if (t.kind==='chess') out[t.id] = Math.round(plan[t.id]*sh);
+    else { const step = t.kind==='count'?1:.5; out[t.id] = roundTo(plan[t.id]*sh, step); }
+  }
+  return out;
+}
 function liveNemesis(wk, plan, pace){
-  const f = clamp((now()-openTime(wk))/(closeTime(wk)-openTime(wk)),0,1), out = {};
+  plan = scaledPlan(wk, plan);
+  const st = startOf(wk), f = clamp((now()-st)/(closeTime(wk)-st),0,1), out = {};
   for (const t of TRACKS){
     const p = clamp(f*pace[t.id],0,1);
     if (t.kind==='score') out[t.id] = f>=1 ? plan[t.id] : null;
@@ -318,7 +331,8 @@ function settleClosedWeeks(){
   while (wk < cur){
     if (!S.shows[wk]){
       const pre = wk === S.meta.preseason;
-      const {plan, slump} = nemesisPlan(wk, edge);
+      const {plan:fullPlan, slump} = nemesisPlan(wk, edge);
+      const plan = scaledPlan(wk, fullPlan);
       const you = youValues(wk), c = compare(you, plan), before = edge;
       if (!pre) edge = clamp(edge + (c.outcome==='W'?.05 : c.outcome==='L'?-.07 : -.01), -.15, .35);
       S.shows[wk] = {week:wk, preseason:pre, you, nem:plan, results:c.res, w:c.w, l:c.l, outcome:c.outcome, edgeBefore:before, edgeAfter:edge, slump, report:'', revealed:false, settledAt:new Date().toISOString(), teachTopic:(S.weeks[wk]&&S.weeks[wk].teach&&S.weeks[wk].teach.topic)||null};
