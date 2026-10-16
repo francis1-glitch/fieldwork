@@ -1,6 +1,6 @@
 // Palate service worker: when online, always load the newest app; offline, use the saved copy.
-const CACHE="palate-v1-1-0";
-const FILES=["./","./index.html","./manifest.json","./icon-192.png","./icon-512.png","./apple-touch-icon.png"];
+const CACHE="palate-v1-1-1";
+const FILES=["./","./index.html","./manifest.json","./icon-192-v2.png","./icon-512-v2.png","./apple-touch-icon-v2.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)));self.skipWaiting()});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith("palate-")&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener("fetch",e=>{
