@@ -19,5 +19,6 @@ Settings (gear) → Copy backup, then Restore from backup on the other device.
 ## Other apps in this repo
 - **Nemesis** (AI rival): `https://<your-username>.github.io/fieldwork/nemesis/`
 - **Second Brain** (notes): `https://<your-username>.github.io/fieldwork/brain/`
+- **Dry Run** (rehearse real conversations): `https://<your-username>.github.io/fieldwork/dryrun/`
 
 Each installs separately (open its link, then Add to Home Screen) and keeps its own data on the phone.

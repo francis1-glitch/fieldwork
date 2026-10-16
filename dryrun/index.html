@@ -1,0 +1,629 @@
+<!doctype html><html lang="en" data-pwa="1"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#15130F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dry Run">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Dry Run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a rehearsal read like a stage script. Warm paper, ink, one curtain-red accent; your lines lit in brass. Serif for the scene, sans for the controls. */
+:root{
+  --bg:#f2ede3; --surface:#fbf8f1; --raise:#fffdf8; --line:#ddd4c3; --ink:#211c15; --ink2:#5b5244; --ink3:#8c7f6c;
+  --curtain:#7f352f; --curtain-ink:#fff; --brass:#9a6b1f; --you:#f2e3c2; --you-line:#e7cf9f;
+  --good:#2f7a4f; --bad:#b23026; --scrim:rgba(33,28,21,.5);
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --toph:52px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#15130f; --surface:#1d1a14; --raise:#241f18; --line:#352f25; --ink:#ece3d4; --ink2:#b3a897; --ink3:#857a68;
+  --curtain:#c05a4f; --curtain-ink:#1a0f0d; --brass:#d8a24c; --you:#2c2416; --you-line:#473a22;
+  --good:#63c48c; --bad:#ff7d72; --scrim:rgba(0,0,0,.62); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-tap-highlight-color:transparent}
+#app{min-height:100%;display:flex;flex-direction:column}
+body[data-view="rehearse"]{height:100%;overflow:hidden}
+body[data-view="rehearse"] #app{height:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;margin:0;text-wrap:balance}
+.serif{font-family:var(--serif)}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink3);font-weight:700}
+.muted{color:var(--ink3)} .small{font-size:13.5px}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:8;background:var(--surface);border-bottom:1px solid var(--line);
+  padding-top:env(safe-area-inset-top,0px)}
+.top .in{height:var(--toph);display:flex;align-items:center;gap:8px;
+  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+.top .ttl{flex:1;min-width:0;font-family:var(--serif);font-size:19px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.iconbtn{border:0;background:none;color:var(--ink2);padding:8px 10px;border-radius:7px;font-weight:600;font-size:14.5px;display:inline-flex;align-items:center;gap:5px}
+.iconbtn:active{background:var(--bg)}
+.iconbtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.9}
+
+/* scrolling body */
+.wrap{flex:1;width:100%;max-width:680px;margin:0 auto;display:flex;flex-direction:column;gap:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:16px calc(28px + env(safe-area-inset-bottom,0px))}
+
+.btn{border:1px solid var(--line);background:var(--raise);color:var(--ink);border-radius:8px;padding:11px 15px;font-weight:600;font-size:15px}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--curtain);border-color:var(--curtain);color:var(--curtain-ink)}
+.btn.ghost{background:transparent}
+.btn.wide{width:100%}
+.btn.sm{padding:8px 12px;font-size:14px}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.5}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* home */
+.hero{font-family:var(--serif);font-size:15px;color:var(--ink2);line-height:1.55}
+.scene{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;width:100%;text-align:left;display:flex;flex-direction:column;gap:6px}
+.scene:active{border-color:var(--ink3)}
+.scene .nm{font-family:var(--serif);font-size:19px;font-weight:600;line-height:1.25}
+.scene .meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink3)}
+.pill{border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:11.5px;color:var(--ink2)}
+.pill.ongoing{background:var(--you);border-color:transparent;color:var(--brass);font-weight:600}
+.empty{border:1px dashed var(--line);border-radius:10px;padding:20px;color:var(--ink3);font-size:14.5px;text-align:center;line-height:1.5}
+
+/* forms */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field>label{font-size:12.5px;font-weight:600;color:var(--ink2)}
+input,textarea,select{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:11px}
+textarea{resize:vertical;line-height:1.5}
+.person{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:12px;display:flex;flex-direction:column;gap:9px}
+.person .ph{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;background:var(--bg);padding:10px;font-weight:600;font-size:14px;color:var(--ink2)}
+.seg button[aria-pressed="true"]{background:var(--curtain);color:var(--curtain-ink)}
+
+/* scene detail */
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.summary .sit{font-family:var(--serif);font-size:16.5px;line-height:1.5}
+.cast{display:flex;flex-direction:column;gap:8px}
+.castmem{display:flex;gap:10px;align-items:baseline}
+.castmem .nm{font-family:var(--sans);font-size:11.5px;text-transform:uppercase;letter-spacing:.1em;font-weight:700;color:var(--curtain);flex:none;min-width:84px}
+.castmem .ds{font-size:13.5px;color:var(--ink2)}
+.take{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:12px 14px;width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.take .tl{min-width:0}
+.take .st{font-size:12px;font-weight:700;letter-spacing:.04em;flex:none}
+.take .st.done{color:var(--good)} .take .st.open{color:var(--brass)}
+
+/* rehearsal — the script */
+.stage{flex:1;overflow-y:auto;background:var(--bg);
+  padding:16px max(16px,env(safe-area-inset-left,0px)) 18px max(16px,env(safe-area-inset-right,0px))}
+.stageInner{max-width:680px;margin:0 auto;display:flex;flex-direction:column;gap:2px}
+.slug{text-align:center;font-family:var(--sans);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin:2px 0 14px;font-weight:700}
+.turn{padding:9px 0;display:flex;flex-direction:column;gap:3px}
+.turn .who{font-family:var(--sans);font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;font-weight:700;color:var(--curtain)}
+.turn .ln{font-family:var(--serif);font-size:18px;line-height:1.5;overflow-wrap:anywhere}
+.turn.you{background:var(--you);border-left:3px solid var(--you-line);border-radius:0 8px 8px 0;padding:9px 12px;margin:3px 0}
+.turn.you .who{color:var(--brass)}
+.turn .dir{font-family:var(--serif);font-style:italic;color:var(--ink3);font-size:16px}
+.turn .redo{align-self:flex-start;border:0;background:none;color:var(--ink3);font-size:12px;font-weight:600;padding:3px 0;margin-top:1px}
+.turn .redo:active{color:var(--curtain)}
+.thinking{font-family:var(--serif);font-style:italic;color:var(--ink3);font-size:17px;padding:9px 0}
+.thinking::after{content:"…";animation:dots 1.2s steps(4,end) infinite;display:inline-block;width:0;overflow:hidden;vertical-align:bottom}
+@keyframes dots{to{width:1.1em}}
+
+/* composer */
+.composer{border-top:1px solid var(--line);background:var(--surface);
+  padding:10px max(12px,env(safe-area-inset-left,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-right,0px))}
+.composer .in{max-width:680px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+.composer textarea{flex:1;min-height:44px;max-height:140px;border-radius:12px;padding:11px 14px;font-size:16px;background:var(--bg)}
+.send{flex:none;border:0;background:var(--curtain);color:var(--curtain-ink);width:46px;height:46px;border-radius:50%;display:grid;place-items:center}
+.send svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2.2}
+.send:disabled{opacity:.45}
+.stopbtn{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:0 14px;height:46px;font-weight:600}
+
+/* debrief — director's notes */
+.notes{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--curtain);border-radius:0 10px 10px 0;padding:16px;display:flex;flex-direction:column;gap:9px}
+.notes h3{font-family:var(--sans);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--curtain);font-weight:700}
+.notes .seclbl{font-family:var(--sans);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);font-weight:700;margin-top:6px}
+.notes p{margin:0;font-family:var(--serif);font-size:16.5px;line-height:1.55}
+.notes ul{margin:0;padding-left:20px;font-family:var(--serif);font-size:16.5px;line-height:1.5}
+.notes li{margin:.2em 0}
+.notes em{color:var(--ink2)}
+
+.banner{background:var(--you);border:1px solid var(--you-line);border-radius:9px;padding:11px 13px;font-size:14px;color:var(--ink2);line-height:1.45}
+.err{background:color-mix(in srgb,var(--bad) 12%,transparent);border:1px solid var(--bad);color:var(--bad);border-radius:9px;padding:10px 12px;font-size:13.5px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 15px;border-radius:8px;font-size:14px;z-index:40;max-width:calc(100% - 32px)}
+.overlay{position:fixed;inset:0;background:var(--scrim);z-index:30;display:flex;align-items:center;justify-content:center;padding:20px}
+.dialog{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;max-width:420px;width:100%;display:flex;flex-direction:column;gap:12px}
+.dialog p{margin:0;font-size:15px;line-height:1.5}
+@media (prefers-reduced-motion:reduce){.thinking::after{animation:none;content:"…";width:auto}}
+</style>
+</head><body>
+<div id="app"></div>
+<div id="layer"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const STORE='dryrun.v1', KKEY='dryrun.key', KMODEL='dryrun.model';
+const DEFAULT_MODEL='claude-sonnet-5-5';
+const API='https://api.anthropic.com/v1/messages';
+
+/* ---------- storage ---------- */
+let S=load();
+function load(){ try{ const r=localStorage.getItem(STORE); if(r){ const d=JSON.parse(r); if(Array.isArray(d.scenes)) return d; } }catch(e){} return {scenes:[]}; }
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); return true; }catch(e){ toast('Couldn’t save — storage may be full.'); return false; } }
+const getKey=()=>{ try{ return localStorage.getItem(KKEY)||''; }catch(e){ return ''; } };
+const setK=k=>{ try{ k?localStorage.setItem(KKEY,k):localStorage.removeItem(KKEY); }catch(e){} };
+const getModel=()=>{ try{ return localStorage.getItem(KMODEL)||DEFAULT_MODEL; }catch(e){ return DEFAULT_MODEL; } };
+const setModel=m=>{ try{ localStorage.setItem(KMODEL, m||DEFAULT_MODEL); }catch(e){} };
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const nowIso=()=>new Date().toISOString();
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+function el(t,a,...k){ const n=document.createElement(t);
+  for(const [key,v] of Object.entries(a||{})){
+    if(key==='class')n.className=v; else if(key==='text')n.textContent=v;
+    else if(key.startsWith('on'))n.addEventListener(key.slice(2),v);
+    else if(v===true)n.setAttribute(key,''); else if(v!==false&&v!=null)n.setAttribute(key,v);
+  }
+  for(const c of k.flat()) if(c!=null&&c!==false) n.append(c.nodeType?c:document.createTextNode(String(c)));
+  return n;
+}
+let toastT; function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2800); }
+function when(iso){ const d=new Date(iso),n=new Date(),s=(n-d)/1000;
+  if(s<3600) return Math.max(1,Math.floor(s/60))+'m ago';
+  if(d.toDateString()===n.toDateString()) return d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+const esc=t=>t;
+function confirmDialog(msg, okLabel, onOk, danger){
+  const ov=el('div',{class:'overlay',onclick:e=>{ if(e.target===ov) $('#layer').replaceChildren(); }},
+    el('div',{class:'dialog',role:'dialog','aria-modal':'true'}, el('p',{text:msg}),
+      el('div',{class:'row',style:'justify-content:flex-end'},
+        el('button',{class:'btn ghost',text:'Cancel',onclick:()=>$('#layer').replaceChildren()}),
+        el('button',{class:'btn '+(danger?'danger':'primary'),text:okLabel,onclick:()=>{ $('#layer').replaceChildren(); onOk(); }}))));
+  $('#layer').replaceChildren(ov);
+}
+
+/* ---------- scene model ---------- */
+const getScene=id=>S.scenes.find(x=>x.id===id);
+const getTake=(sc,id)=>sc&&sc.takes.find(t=>t.id===id);
+function castLine(p){ return [p.role&&('— '+p.role), p.wants&&('wants: '+p.wants), p.temperament].filter(Boolean).join(' · '); }
+
+/* ---------- the Anthropic call (user's own key) ---------- */
+function headers(key){ return {'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}; }
+function apiError(status,msg){ return status===401?'Your API key was rejected. Check it in Settings.'
+  : status===404?'That model name wasn’t found for your account. Change it in Settings.'
+  : status===429?'Claude is rate-limiting your key. Wait a moment and try again.'
+  : status===400?('The request was rejected'+(msg?': '+msg:'. Check your model name in Settings.'))
+  : 'Claude didn’t respond'+(msg?': '+msg:'.')+' Try again.'; }
+async function* stream(messages, system, signal){
+  const key=getKey(); if(!key) throw {m:'Add your API key in Settings first.'};
+  let res;
+  try{ res=await fetch(API,{method:'POST',headers:headers(key),signal,
+    body:JSON.stringify({model:getModel(),max_tokens:1024,stream:true,system,messages:messages.map(m=>({role:m.role,content:m.text}))})}); }
+  catch(e){ if(e&&e.name==='AbortError') throw e; throw {m:'No connection. Try again when you’re online.'}; }
+  if(!res.ok){ let msg=''; try{ msg=(await res.json()).error.message; }catch(e){} throw {m:apiError(res.status,msg)}; }
+  const reader=res.body.getReader(), dec=new TextDecoder(); let buf='';
+  while(true){ const {done,value}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+    let i; while((i=buf.indexOf('\n'))>=0){ const line=buf.slice(0,i).trim(); buf=buf.slice(i+1);
+      if(line.startsWith('data:')){ const d=line.slice(5).trim(); if(!d) continue;
+        try{ const ev=JSON.parse(d); if(ev.type==='content_block_delta'&&ev.delta&&ev.delta.type==='text_delta') yield ev.delta.text;
+          else if(ev.type==='error') throw {m:apiError(500,ev.error&&ev.error.message)}; }catch(e){ if(e&&e.m) throw e; } } } }
+}
+async function complete(messages, system){
+  const key=getKey(); if(!key) throw {m:'Add your API key in Settings first.'};
+  let res; try{ res=await fetch(API,{method:'POST',headers:headers(key),
+    body:JSON.stringify({model:getModel(),max_tokens:1024,system,messages:messages.map(m=>({role:m.role,content:m.text}))})}); }
+  catch(e){ throw {m:'No connection. Try again when you’re online.'}; }
+  if(!res.ok){ let msg=''; try{ msg=(await res.json()).error.message; }catch(e){} throw {m:apiError(res.status,msg)}; }
+  const j=await res.json(); return (j.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('').trim();
+}
+
+/* ---------- prompts ---------- */
+function castSystem(sc){
+  const you=sc.youName||'You';
+  const cast=sc.people.map(p=>'- '+(p.name||'Them')+(p.role?' ('+p.role+')':'')+'. '
+    +(p.wants?'Wants: '+p.wants+'. ':'')+(p.temperament?'Temperament: '+p.temperament+'. ':'')+(p.notes?p.notes:'')).join('\n');
+  return 'You are running a LIVE social rehearsal for someone preparing for a real situation. You play the OTHER people in the scene — never '+you+' (the person rehearsing).\n\n'
+    +'SITUATION: '+sc.situation+'\n'
+    +(sc.updates?'WHAT HAS HAPPENED SINCE: '+sc.updates+'\n':'')
+    +(sc.goal?you+' is trying to: '+sc.goal+'\n':'')
+    +'\nYOU PLAY:\n'+cast+'\n\n'
+    +'Rules:\n'
+    +'- Stay fully in character. Speak only as the character(s), in natural spoken dialogue — the way real people actually talk, not polished or over-explained. Usually 1–4 sentences.\n'
+    +'- Do NOT go easy. React how this person genuinely would — push back, deflect, get defensive, go quiet, whatever is true to them. Make '+you+' earn it. Only soften if '+you+' actually says something that would move them.\n'
+    +(sc.people.length>1?'- More than one person is present. Prefix each spoken line with the name in the form "NAME: ...". Not everyone must speak every turn.\n':'- Only one person is present, so no name prefix is needed.\n')
+    +'- You may add a brief physical or tonal stage direction in *asterisks* when it adds realism (e.g. *checks phone*). Use sparingly.\n'
+    +'- Never break character, never coach, never narrate '+you+'’s words or actions. Only the other side.\n'
+    +'- This is a rehearsal; nothing here is real.';
+}
+function debriefSystem(sc){
+  const you=sc.youName||'You';
+  return 'You are a sharp, honest communication coach reviewing a rehearsal transcript. You are candid and specific, never flattering. The person rehearsing is labelled "'+you+'".\n'
+    +'SITUATION: '+sc.situation+'\n'+(sc.goal?'Their goal: '+sc.goal+'\n':'')
+    +'The other character(s): '+sc.people.map(p=>p.name+(p.wants?' (wants '+p.wants+')':'')).join('; ')+'\n\n'
+    +'Write director’s notes with exactly these four headed sections, each heading on its own line in ALL CAPS followed by a colon:\n'
+    +'THE READ: 1–2 sentences on how it went overall.\n'
+    +'WHAT THEY WANTED: for each other person, what they were really after and whether '+you+' picked up on it.\n'
+    +'WHERE IT TURNED: the 1–2 specific moments that decided it — quote a few of '+you+'’s actual words.\n'
+    +'DO DIFFERENTLY: 2–3 concrete adjustments, as "-" bullets. Give actual phrasings or moves, not generic advice.\n'
+    +'Be direct. Brief praise where earned; name exactly where they lost the room.';
+}
+
+/* ---------- navigation ---------- */
+let view='home', curScene=null, curTake=null, editId=null;
+let streaming=false, abort=null;
+function go(v,opts){ view=v; Object.assign({},opts); if(opts){ if('scene'in opts)curScene=opts.scene; if('take'in opts)curTake=opts.take; if('edit'in opts)editId=opts.edit; } render(); window.scrollTo(0,0); }
+
+function render(){
+  document.body.dataset.view=view;
+  const app=$('#app'); app.replaceChildren();
+  if(view==='home') return renderHome(app);
+  if(view==='setup') return renderSetup(app);
+  if(view==='scene') return renderSceneView(app);
+  if(view==='rehearse') return renderRehearse(app);
+  if(view==='settings') return renderSettings(app);
+}
+function topbar(title, opts){
+  opts=opts||{};
+  return el('div',{class:'top'}, el('div',{class:'in'},
+    opts.back!==false ? el('button',{class:'iconbtn','aria-label':'Back',onclick:opts.onBack||(()=>go('home')),title:'Back'},
+      el('svg',{viewBox:'0 0 24 24'},rawPath('M15 5l-7 7 7 7'))) : el('span',{style:'width:6px'}),
+    el('div',{class:'ttl',text:title}),
+    opts.right||null));
+}
+function rawPath(d){ const p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('d',d); return p; }
+function svg(d){ const s=document.createElementNS('http://www.w3.org/2000/svg','svg'); s.setAttribute('viewBox','0 0 24 24'); for(const dd of (Array.isArray(d)?d:[d])) s.append(rawPath(dd)); return s; }
+
+/* ---------- home ---------- */
+function renderHome(app){
+  app.append(el('div',{class:'top'}, el('div',{class:'in'},
+    el('div',{class:'ttl',text:'Dry Run'}),
+    el('button',{class:'iconbtn','aria-label':'Settings',onclick:()=>go('settings')},
+      svg(['M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z','M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2 19 19M5 19l1.8-1.8M17.2 6.8 19 5'])))));
+  const w=el('div',{class:'wrap'});
+  w.append(el('p',{class:'hero',text:'Rehearse a real conversation before you have it. Set the scene, play it out against the people who’ll actually be there, then get the read on how it went.'}));
+  w.append(el('button',{class:'btn primary wide',text:'+ New scene',onclick:()=>go('setup',{edit:null})}));
+  if(!getKey()) w.append(el('div',{class:'banner'}, 'Rehearsals run on your own Anthropic API key. Add it in Settings (top right) — it stays on this phone. ',
+    el('button',{class:'btn sm',style:'margin-top:8px',text:'Open Settings',onclick:()=>go('settings')})));
+  const list=S.scenes.slice().sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
+  if(!list.length) w.append(el('div',{class:'empty'}, 'No scenes yet. Make one from something real that’s coming up — a hard talk with your manager, a conversation you’re dreading, a first meeting that matters.',
+    el('div',{style:'margin-top:12px'}, el('button',{class:'btn sm',text:'Start from an example',onclick:exampleMenu}))));
+  else { const box=el('div',{style:'display:flex;flex-direction:column;gap:10px'});
+    for(const sc of list){ const takes=sc.takes.length, done=sc.takes.filter(t=>t.debrief).length;
+      box.append(el('button',{class:'scene',onclick:()=>go('scene',{scene:sc.id})},
+        el('span',{class:'nm',text:sc.title}),
+        el('span',{class:'meta'}, sc.ongoing?el('span',{class:'pill ongoing',text:'Ongoing'}):null,
+          el('span',{text:takes?takes+(takes===1?' take':' takes'):'no takes yet'}),
+          done?el('span',{text:done+' reviewed'}):null,
+          el('span',{text:when(sc.updatedAt)})))); }
+    w.append(box); }
+  app.append(w);
+}
+function exampleMenu(){
+  const examples=[
+    {title:'Ask your manager for better work', situation:'You’re stuck on low-value accounts and want to be staffed on more interesting, higher-visibility work. You’ve asked for a one-on-one with your manager.', goal:'get moved onto better work without sounding ungrateful or like you’re threatening to leave', youName:'You',
+      people:[{id:uid(),name:'Your manager',role:'senior, oversees staffing',wants:'keep you productive on current accounts with minimal disruption',temperament:'pragmatic, a little conflict-avoidant, responds to business reasons not feelings',notes:''}]},
+    {title:'Tell a friend something bothered you', situation:'A close friend made a joke at your expense in front of others and it stung. You want to tell them without blowing it up.', goal:'be heard and get them to take it seriously, without a fight or making it weird', youName:'You',
+      people:[{id:uid(),name:'Your friend',role:'close friend',wants:'to not feel attacked; to keep things light',temperament:'defensive when criticized, deflects with humor, but genuinely cares about the friendship',notes:''}]},
+    {title:'First talk with a partner at a networking event', situation:'You’re at a recruiting mixer and get a few minutes with a partner at a firm you want to join.', goal:'make a real impression and open a door, without being generic or kissing up', youName:'You',
+      people:[{id:uid(),name:'The partner',role:'partner at a Big 4 firm',wants:'to spend time on people worth remembering; not be bored',temperament:'busy, sizes people up fast, warms up to genuine curiosity and sharp questions',notes:''}]},
+  ];
+  const ov=el('div',{class:'overlay',onclick:e=>{ if(e.target===ov) $('#layer').replaceChildren(); }},
+    el('div',{class:'dialog'}, el('h3',{style:'font-size:20px',text:'Start from an example'}),
+      ...examples.map(ex=>el('button',{class:'btn ghost',style:'text-align:left',text:ex.title,onclick:()=>{
+        $('#layer').replaceChildren(); const sc=Object.assign({id:uid(),ongoing:false,updates:'',takes:[],createdAt:nowIso(),updatedAt:nowIso()},ex);
+        S.scenes.unshift(sc); save(); go('scene',{scene:sc.id}); }})),
+      el('button',{class:'btn ghost',text:'Cancel',onclick:()=>$('#layer').replaceChildren()})));
+  $('#layer').replaceChildren(ov);
+}
+
+/* ---------- setup ---------- */
+function renderSetup(app){
+  const existing=editId?getScene(editId):null;
+  const d=existing?JSON.parse(JSON.stringify(existing)):{id:uid(),title:'',situation:'',goal:'',youName:'You',ongoing:false,updates:'',people:[{id:uid(),name:'',role:'',wants:'',temperament:'',notes:''}],takes:[],createdAt:nowIso(),updatedAt:nowIso()};
+  app.append(topbar(existing?'Edit scene':'New scene',{onBack:()=>existing?go('scene',{scene:existing.id}):go('home')}));
+  const w=el('div',{class:'wrap'});
+  const f=el('div',{class:'card'});
+  const title=el('input',{id:'f-title',type:'text',value:d.title,placeholder:'Name this scene'});
+  const sit=el('textarea',{id:'f-sit',rows:'3',placeholder:'What’s the situation? Where are you, why is this conversation happening?'}); sit.value=d.situation;
+  const goal=el('input',{id:'f-goal',type:'text',value:d.goal,placeholder:'What do you want out of it?'});
+  const you=el('input',{id:'f-you',type:'text',value:d.youName||'You',placeholder:'You'});
+  f.append(el('div',{class:'field'},el('label',{for:'f-title',text:'Scene'}),title),
+    el('div',{class:'field'},el('label',{for:'f-sit',text:'The situation'}),sit),
+    el('div',{class:'field'},el('label',{for:'f-goal',text:'Your goal (optional)'}),goal));
+  // people
+  const peopleBox=el('div',{style:'display:flex;flex-direction:column;gap:10px'});
+  function drawPeople(){ peopleBox.replaceChildren();
+    d.people.forEach((p,i)=>{
+      const nm=el('input',{type:'text',value:p.name,placeholder:'Name',oninput:e=>p.name=e.target.value});
+      const ph=el('div',{class:'person'},
+        el('div',{class:'ph'}, el('span',{class:'label',text:'Person '+(i+1)}),
+          d.people.length>1?el('button',{class:'iconbtn',style:'color:var(--bad);padding:2px 6px',text:'Remove',onclick:()=>{ d.people.splice(i,1); drawPeople(); }}):null),
+        el('div',{class:'field'},nm),
+        el('div',{class:'grid2'},
+          el('input',{type:'text',value:p.role,placeholder:'Their role',oninput:e=>p.role=e.target.value}),
+          el('input',{type:'text',value:p.wants,placeholder:'What they want',oninput:e=>p.wants=e.target.value})),
+        el('input',{type:'text',value:p.temperament,placeholder:'Temperament — how they act, what sets them off',oninput:e=>p.temperament=e.target.value}),
+        el('input',{type:'text',value:p.notes,placeholder:'Anything else you know (optional)',oninput:e=>p.notes=e.target.value}));
+      peopleBox.append(ph);
+    });
+  }
+  drawPeople();
+  const youField=el('div',{class:'field'},el('label',{for:'f-you',text:'You’re called'}),you);
+  const ongoing=el('button',{class:'btn ghost sm','aria-pressed':String(!!d.ongoing),text:d.ongoing?'✓ Ongoing situation':'Mark as ongoing',onclick:()=>{ d.ongoing=!d.ongoing; ongoing.textContent=d.ongoing?'✓ Ongoing situation':'Mark as ongoing'; ongoing.setAttribute('aria-pressed',String(d.ongoing)); }});
+  w.append(f,
+    el('div',{class:'card'}, el('span',{class:'label',text:'Who’s in the scene'}), peopleBox,
+      el('button',{class:'btn ghost sm',text:'+ Add another person',onclick:()=>{ d.people.push({id:uid(),name:'',role:'',wants:'',temperament:'',notes:''}); drawPeople(); }})),
+    el('div',{class:'card'}, youField, ongoing),
+    el('div',{class:'row'},
+      el('button',{class:'btn primary',style:'flex:1',text:existing?'Save changes':'Create scene',onclick:()=>{
+        d.title=title.value.trim(); d.situation=sit.value.trim(); d.goal=goal.value.trim(); d.youName=you.value.trim()||'You';
+        d.people.forEach(p=>p.name=(p.name||'').trim());
+        if(!d.title){ toast('Give the scene a name.'); return; }
+        if(!d.situation){ toast('Describe the situation.'); return; }
+        if(!d.people.some(p=>p.name)){ toast('Add at least one person, with a name.'); return; }
+        d.people=d.people.filter(p=>p.name);
+        d.updatedAt=nowIso();
+        if(existing){ const i=S.scenes.findIndex(x=>x.id===existing.id); S.scenes[i]=d; } else S.scenes.unshift(d);
+        save(); go('scene',{scene:d.id});
+      }}),
+      existing?el('button',{class:'btn ghost danger',text:'Delete',onclick:()=>confirmDialog('Delete this scene and all its takes?','Delete',()=>{ S.scenes=S.scenes.filter(x=>x.id!==existing.id); save(); go('home'); },true)}):null));
+  app.append(w);
+}
+
+/* ---------- scene detail ---------- */
+function renderSceneView(app){
+  const sc=getScene(curScene); if(!sc) return go('home');
+  app.append(topbar(sc.title,{right:el('button',{class:'iconbtn',text:'Edit',onclick:()=>go('setup',{edit:sc.id})})}));
+  const w=el('div',{class:'wrap'});
+  const sum=el('div',{class:'summary'},
+    el('div',{class:'sit',text:sc.situation}),
+    sc.goal?el('div',{class:'small',style:'color:var(--brass);font-weight:600'},'Your goal: '+sc.goal):null,
+    el('div',{class:'cast'}, el('span',{class:'label',text:'In the scene'}),
+      ...sc.people.map(p=>el('div',{class:'castmem'}, el('span',{class:'nm',text:p.name}), el('span',{class:'ds',text:castLine(p)||'—'})))));
+  w.append(sum);
+  if(sc.ongoing){
+    const upd=el('textarea',{rows:'2',placeholder:'What’s happened since last time? (keeps the other side current)'}); upd.value=sc.updates||'';
+    upd.addEventListener('change',()=>{ sc.updates=upd.value.trim(); sc.updatedAt=nowIso(); save(); });
+    w.append(el('div',{class:'card'}, el('span',{class:'label',text:'Since last time'}), upd));
+  }
+  w.append(el('button',{class:'btn primary wide',text:sc.takes.length?'New take':'Start rehearsing',onclick:()=>openerChoice(sc)}));
+  if(sc.takes.length){
+    const box=el('div',{style:'display:flex;flex-direction:column;gap:9px'});
+    box.append(el('span',{class:'label',style:'margin-top:4px',text:'Takes'}));
+    sc.takes.slice().reverse().forEach((t,ri)=>{
+      const n=sc.takes.length-ri; const lines=t.messages.filter(m=>!m.cue).length;
+      box.append(el('button',{class:'take',onclick:()=>go('rehearse',{scene:sc.id,take:t.id})},
+        el('div',{class:'tl'}, el('div',{class:'serif',style:'font-size:16px',text:'Take '+n}),
+          el('div',{class:'small muted',text:lines+(lines===1?' line':' lines')+' · '+when(t.createdAt)})),
+        el('span',{class:'st '+(t.debrief?'done':'open'),text:t.debrief?'Reviewed':'Open'})));
+    });
+    w.append(box);
+  }
+  app.append(w);
+}
+function openerChoice(sc){
+  if(!getKey()){ toast('Add your API key in Settings first.'); go('settings'); return; }
+  const ov=el('div',{class:'overlay',onclick:e=>{ if(e.target===ov) $('#layer').replaceChildren(); }},
+    el('div',{class:'dialog'}, el('h3',{style:'font-size:20px',text:'Who speaks first?'}),
+      el('p',{class:'muted',text:'Start it however the real moment would start.'}),
+      el('button',{class:'btn primary',text:'I open',onclick:()=>startTake(sc,'you')}),
+      el('button',{class:'btn',text:'They open',onclick:()=>startTake(sc,'them')}),
+      el('button',{class:'btn ghost',text:'Cancel',onclick:()=>$('#layer').replaceChildren()})));
+  $('#layer').replaceChildren(ov);
+}
+function startTake(sc,first){
+  $('#layer').replaceChildren();
+  const t={id:uid(),firstSpeaker:first,messages:[],debrief:'',createdAt:nowIso()};
+  if(first==='them') t.messages.push({role:'user',text:'(The scene begins. Open it, in character.)',cue:true});
+  sc.takes.push(t); sc.updatedAt=nowIso(); save();
+  go('rehearse',{scene:sc.id,take:t.id});
+  if(first==='them') runReply(sc,t);
+}
+
+/* ---------- rehearsal ---------- */
+function parseLine(text){
+  // returns array of {name?, parts:[{dir?,text}]}
+  const out=[];
+  for(let raw of text.split('\n')){ const line=raw.trim(); if(!line) continue;
+    let name=null, body=line; const m=/^([A-Z][\w .'-]{0,28}):\s*(.*)$/.exec(line);
+    if(m && /[A-Za-z]/.test(m[1])){ name=m[1].trim(); body=m[2]; }
+    out.push({name, parts:inlineDirs(body)});
+  }
+  return out.length?out:[{name:null,parts:inlineDirs(text.trim())}];
+}
+function inlineDirs(s){ const parts=[]; const re=/\*([^*]+)\*/g; let last=0,m;
+  while((m=re.exec(s))){ if(m.index>last) parts.push({text:s.slice(last,m.index)}); parts.push({dir:m[1]}); last=m.index+m[0].length; }
+  if(last<s.length) parts.push({text:s.slice(last)}); return parts.length?parts:[{text:s}]; }
+
+function renderRehearse(app){
+  const sc=getScene(curScene), t=getTake(sc,curTake); if(!sc||!t) return go('home');
+  app.append(topbar(sc.title,{onBack:()=>{ if(streaming&&abort)abort.abort(); streaming=false; go('scene',{scene:sc.id}); },
+    right:el('button',{class:'iconbtn',text:'End scene',onclick:()=>endScene(sc,t)})}));
+
+  const stageInner=el('div',{class:'stageInner',id:'stageInner'});
+  stageInner.append(el('div',{class:'slug',text:'Scene — '+sc.people.map(p=>p.name).join(', ')}));
+  drawTurns(sc,t,stageInner);
+  const stage=el('div',{class:'stage',id:'stage'}, stageInner);
+
+  const ta=el('textarea',{id:'line',rows:'1',placeholder:t.messages.filter(m=>!m.cue).length?'Your line…':'Say your first line…','aria-label':'Your line'});
+  ta.addEventListener('input',()=>{ ta.style.height='auto'; ta.style.height=Math.min(140,ta.scrollHeight)+'px'; });
+  ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendLine(sc,t,ta); } });
+  const sendBtn=el('button',{class:'send','aria-label':'Send',onclick:()=>sendLine(sc,t,ta)}, svg('M5 12h14M13 6l6 6-6 6'));
+  const composer=el('div',{class:'composer',id:'composer'}, el('div',{class:'in'}, ta, el('span',{id:'sendSlot',style:'display:flex;flex:none'}, sendBtn)));
+
+  const col=el('div',{style:'flex:1;display:flex;flex-direction:column;min-height:0'}, stage, composer);
+  app.append(col);
+  // make stage fill height
+  requestAnimationFrame(()=>{ scrollStage(); ta.focus(); });
+  if(t._debriefOpen){ t._debriefOpen=false; }
+}
+function drawTurns(sc,t,host){
+  host.querySelectorAll('.turn,.thinking,.notes,.err').forEach(n=>n.remove());
+  t.messages.forEach((m,i)=>{ if(m.cue) return;
+    if(m.role==='user'){
+      host.append(el('div',{class:'turn you'}, el('div',{class:'who',text:(sc.youName||'You')}),
+        el('div',{class:'ln',text:m.text}),
+        (i===lastUserIndex(t)&&!streaming)?el('button',{class:'redo',text:'↺ redo from here',onclick:()=>redoFrom(sc,t,i)}):null));
+    } else {
+      host.append(turnEl(parseLine(m.text)));
+    }
+  });
+  if(t.debrief) host.append(debriefEl(t.debrief));
+}
+function lastUserIndex(t){ for(let i=t.messages.length-1;i>=0;i--) if(t.messages[i].role==='user'&&!t.messages[i].cue) return i; return -1; }
+function turnEl(blocks){
+  const wrap=el('div',{class:'turn'});
+  blocks.forEach(b=>{ if(b.name) wrap.append(el('div',{class:'who',text:b.name}));
+    const ln=el('div',{class:'ln'});
+    b.parts.forEach(p=>{ if(p.dir) ln.append(el('span',{class:'dir',text:'('+p.dir+') '})); else ln.append(document.createTextNode(p.text)); });
+    wrap.append(ln);
+  });
+  return wrap;
+}
+function scrollStage(){ const s=$('#stage'); if(s) s.scrollTop=s.scrollHeight; }
+
+function sendLine(sc,t,ta){
+  if(streaming) return;
+  const text=ta.value.trim(); if(!text) return;
+  t.messages.push({role:'user',text}); ta.value=''; ta.style.height='auto';
+  sc.updatedAt=nowIso(); t.createdAt=t.createdAt||nowIso(); save();
+  const host=$('#stageInner'); drawTurns(sc,t,host); scrollStage();
+  runReply(sc,t);
+}
+async function runReply(sc,t){
+  const host=$('#stageInner'); if(!host) return;
+  streaming=true; abort=new AbortController();
+  setComposer(true);
+  const think=el('div',{class:'thinking',text:'They’re thinking'}); host.append(think); scrollStage();
+  let acc=''; let bubble=null;
+  try{
+    for await (const chunk of stream(t.messages, castSystem(sc), abort.signal)){
+      acc+=chunk;
+      if(!bubble){ think.remove(); bubble=el('div'); host.append(bubble); }
+      bubble.replaceWith(bubble=turnEl(parseLine(acc))); // re-render block
+      scrollStage();
+    }
+    if(!acc.trim()) throw {m:'They didn’t say anything. Try again.'};
+    t.messages.push({role:'assistant',text:acc.trim()}); save();
+    drawTurns(sc,t,host); scrollStage();
+  }catch(e){
+    think.remove(); if(bubble)bubble.remove();
+    if(e&&e.name==='AbortError'){ /* user stopped */ }
+    else host.append(el('div',{class:'err',text:(e&&e.m)||'Something went wrong. Try again.'}));
+    // roll back the dangling user turn? keep it so they can retry via redo
+  }finally{ streaming=false; abort=null; setComposer(false); const ta=$('#line'); if(ta)ta.focus(); }
+}
+function setComposer(busy){
+  const ta=$('#line'), slot=$('#sendSlot'); if(!ta||!slot) return;
+  ta.disabled=busy;
+  slot.replaceChildren(busy
+    ? el('button',{class:'stopbtn',text:'Stop',onclick:()=>{ if(abort)abort.abort(); }})
+    : el('button',{class:'send','aria-label':'Send',onclick:()=>sendLine(getScene(curScene),getTake(getScene(curScene),curTake),$('#line'))}, svg('M5 12h14M13 6l6 6-6 6')));
+}
+function redoFrom(sc,t,idx){
+  confirmDialog('Redo from this line? Everything after it is cleared so you can try a different approach.','Redo',()=>{
+    t.messages=t.messages.slice(0,idx); t.debrief=''; sc.updatedAt=nowIso(); save();
+    const host=$('#stageInner'); drawTurns(sc,t,host);
+    const ta=$('#line'); if(ta){ ta.focus(); } scrollStage(); toast('Cleared. Say it differently.');
+  });
+}
+
+/* ---------- debrief ---------- */
+function endScene(sc,t){
+  if(streaming){ toast('Let them finish first.'); return; }
+  const real=t.messages.filter(m=>!m.cue);
+  if(real.length<2){ toast('Play out a little more of the scene first.'); return; }
+  confirmDialog('End the scene and get the director’s notes on how it went?','Get notes',()=>runDebrief(sc,t));
+}
+async function runDebrief(sc,t){
+  const host=$('#stageInner');
+  const think=el('div',{class:'thinking',text:'Reading the room'}); host.append(think); scrollStage();
+  setComposer(true);
+  const transcript=t.messages.filter(m=>!m.cue).map(m=> m.role==='user'?((sc.youName||'You')+': '+m.text):m.text ).join('\n');
+  try{
+    const notes=await complete([{role:'user',text:'Transcript:\n\n'+transcript}], debriefSystem(sc));
+    t.debrief=notes; sc.updatedAt=nowIso(); save();
+    think.remove(); drawTurns(sc,t,host); scrollStage();
+  }catch(e){ think.remove(); host.append(el('div',{class:'err',text:(e&&e.m)||'Couldn’t write the notes. Try again.'})); }
+  finally{ setComposer(false); }
+}
+function debriefEl(text){
+  const box=el('div',{class:'notes'}, el('h3',{text:'Director’s notes'}));
+  const sections=['THE READ','WHAT THEY WANTED','WHERE IT TURNED','DO DIFFERENTLY'];
+  // split by headings
+  let rest=text, map={};
+  const idxs=sections.map(s=>({s,i:text.toUpperCase().indexOf(s)})).filter(x=>x.i>=0).sort((a,b)=>a.i-b.i);
+  if(idxs.length){
+    idxs.forEach((cur,k)=>{ const end=k+1<idxs.length?idxs[k+1].i:text.length;
+      let body=text.slice(cur.i+cur.s.length, end).replace(/^[:\s]+/,'').trim(); map[cur.s]=body; });
+    for(const s of sections){ if(map[s]==null) continue;
+      box.append(el('div',{class:'seclbl',text:s}));
+      const body=map[s];
+      const bullets=body.split('\n').map(l=>l.trim()).filter(l=>/^[-•*]/.test(l));
+      if(bullets.length>=2){ box.append(el('ul',{}, bullets.map(b=>el('li',{text:b.replace(/^[-•*]\s*/,'')})))); }
+      else box.append(el('p',{text:body}));
+    }
+  } else box.append(el('p',{text:text}));
+  return box;
+}
+
+/* ---------- settings ---------- */
+function renderSettings(app){
+  app.append(topbar('Settings'));
+  const w=el('div',{class:'wrap'});
+  const key=getKey();
+  const kc=el('div',{class:'card'}, el('h3',{style:'font-size:20px',text:'Your API key'}),
+    el('p',{class:'small muted',style:'margin:0;line-height:1.5',text:'Dry Run runs on your own Anthropic API key, billed to your account. It’s stored only on this phone and sent only to Anthropic. Get one at console.anthropic.com.'}));
+  const inp=el('input',{id:'apikey',type:'password',autocomplete:'off',placeholder:'sk-ant-…','aria-label':'Anthropic API key'});
+  if(key){ kc.append(el('div',{class:'small',style:'color:var(--good);font-weight:600',text:'✓ Key saved on this phone.'}),
+    el('div',{class:'row'}, el('button',{class:'btn sm',text:'Replace key',onclick:()=>{ setK(''); go('settings'); }}),
+      el('button',{class:'btn sm',text:'Test connection',onclick:testConn}))); }
+  else kc.append(el('div',{class:'field'},el('label',{for:'apikey',text:'Anthropic API key'}),inp),
+    el('button',{class:'btn primary',text:'Save key',onclick:()=>{ const k=inp.value.trim(); if(!k.startsWith('sk-')){ toast('That doesn’t look like an Anthropic key.'); return; } setK(k); toast('Saved on this phone.'); go('settings'); }}));
+  const model=el('input',{id:'model',type:'text',value:getModel(),'aria-label':'Model'});
+  kc.append(el('div',{class:'field'},el('label',{for:'model',text:'Model'}),model,
+    el('span',{class:'small muted',text:'Default is a balanced Claude model. Change it if your account uses a different name.'})),
+    el('button',{class:'btn sm',text:'Save model',onclick:()=>{ setModel(model.value.trim()); toast('Model saved.'); }}));
+  w.append(kc);
+
+  const data=JSON.stringify(S);
+  const ta=el('textarea',{id:'restore',rows:'3',placeholder:'Paste a backup to restore it.'});
+  w.append(el('div',{class:'card'}, el('h3',{style:'font-size:20px',text:'Backup'}),
+    el('p',{class:'small muted',style:'margin:0',text:'Your scenes live only on this phone. Copy a backup now and then.'}),
+    el('div',{class:'row'},
+      el('button',{class:'btn sm',text:'Copy backup',onclick:async()=>{ try{ await navigator.clipboard.writeText(data); toast('Copied.'); }catch(e){ ta.value=data; ta.select(); toast('Select and copy below.'); } }}),
+      el('button',{class:'btn sm',text:'Download',onclick:()=>{ const a=el('a',{href:URL.createObjectURL(new Blob([data],{type:'application/json'})),download:'dryrun-'+new Date().toISOString().slice(0,10)+'.json'}); document.body.append(a); a.click(); a.remove(); }})),
+    el('div',{class:'field'},el('label',{for:'restore',text:'Restore'}),ta),
+    el('button',{class:'btn sm',text:'Restore from backup',onclick:()=>{ if(!ta.value.trim()){ toast('Paste a backup first.'); return; } confirmDialog('Replace all scenes on this phone with this backup?','Restore',()=>{ try{ const d=JSON.parse(ta.value); if(!Array.isArray(d.scenes))throw 0; S={scenes:d.scenes}; save(); toast('Restored.'); go('home'); }catch(e){ toast('That backup couldn’t be read.'); } }); }})));
+
+  w.append(el('div',{class:'card'}, el('h3',{style:'font-size:20px',text:'Start over'}),
+    el('p',{class:'small muted',style:'margin:0',text:'Delete all scenes on this phone. Your key stays.'}),
+    el('button',{class:'btn sm danger',text:'Erase all scenes',onclick:()=>confirmDialog('Erase every scene on this phone? Can’t be undone without a backup.','Erase',()=>{ S={scenes:[]}; save(); toast('Erased.'); go('home'); },true)})));
+  app.append(w);
+}
+async function testConn(){
+  toast('Testing…');
+  try{ await complete([{role:'user',text:'Reply with the single word: ready'}], 'You are a connection test. Reply with one word.'); toast('Connected. Key and model work.'); }
+  catch(e){ toast((e&&e.m)||'Test failed.'); }
+}
+
+/* ---------- boot ---------- */
+render();
+try{ if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{ try{ r.update(); }catch(e){} }).catch(()=>{});
+  let reloaded=false; navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(reloaded)return; reloaded=true;
+    const a=document.activeElement; if(!(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName))&&!$('#layer').children.length&&!streaming) location.reload(); });
+} }catch(e){}
+})();
+</script>
+</body></html>
