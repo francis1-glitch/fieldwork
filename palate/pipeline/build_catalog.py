@@ -165,7 +165,7 @@ def movie_record(d):
         "va": round(d.get("vote_average") or 0, 1), "vc": d.get("vote_count") or 0,
         "pop": round(d.get("popularity") or 0, 1), "p": d.get("poster_path"),
         "ov": (d.get("overview") or "")[:240],
-        "prov": providers_of(d), "f": day_num(),
+        "prov": providers_of(d), "f": day_num(), "imdb": (d.get("external_ids") or {}).get("imdb_id") or "",
     }
 
 def tv_record(d):
@@ -184,7 +184,7 @@ def tv_record(d):
         "va": round(d.get("vote_average") or 0, 1), "vc": d.get("vote_count") or 0,
         "pop": round(d.get("popularity") or 0, 1), "p": d.get("poster_path"),
         "ov": (d.get("overview") or "")[:240],
-        "prov": providers_of(d), "f": day_num(),
+        "prov": providers_of(d), "f": day_num(), "imdb": (d.get("external_ids") or {}).get("imdb_id") or "",
     }
 
 def providers_of(d):
@@ -194,7 +194,7 @@ def providers_of(d):
 PROVIDER_NAMES = {}
 
 def fetch_detail(api, kind, tid):
-    d = api.get(f"/{kind}/{tid}", append_to_response="keywords,credits,watch/providers", language="en-US")
+    d = api.get(f"/{kind}/{tid}", append_to_response="keywords,credits,watch/providers,external_ids", language="en-US")
     if not d: return None
     wp = ((d.get("watch/providers") or {}).get("results") or {}).get(REGION) or {}
     for p in (wp.get("flatrate") or []) + (wp.get("free") or []) + (wp.get("ads") or []):
@@ -249,13 +249,13 @@ def compact(records, crowd, biases, scale, genre_names):
             [pp_i[p] for p in r["cast"] if p in pp_i],
             r["lang"], r["rt"], r["va"], r["vc"], r["p"],
             emb, biases.get(tid) if r["id"][0] == "m" else None,
-            r.get("ot"), r["f"],
+            r.get("ot"), r["f"], r.get("imdb"),
         ])
     return {
         "v": 1, "built": today.isoformat(), "region": REGION,
         "fields": ["id", "title", "year", "genres", "keywords", "makers", "cast", "lang",
                    "runtime", "voteAvg", "voteCount", "poster", "taste", "crowdBias",
-                   "originalTitle", "fetchedDay"],
+                   "originalTitle", "fetchedDay", "imdb"],
         "embScale": scale, "embDim": K,
         "genres": genre_names, "keywords": kw_list, "people": pp_list, "items": items,
         "attribution": "This product uses the TMDB API but is not endorsed or certified by TMDB. "
@@ -267,11 +267,12 @@ def expand(cat):
     kw, pp = cat["keywords"], cat["people"]
     recs = {}
     for it in cat["items"]:
-        (iid, t, y, g, k, mk, cs, lang, rt, va, vc, p, emb, mb, ot, f) = it
+        (iid, t, y, g, k, mk, cs, lang, rt, va, vc, p, emb, mb, ot, f) = it[:16]
+        imdb = it[16] if len(it) > 16 else None
         recs[iid] = {"id": iid, "t": t, "y": y, "g": g, "kw": [kw[i] for i in k],
                      "dir": [pp[i] for i in mk], "cast": [pp[i] for i in cs], "lang": lang,
                      "rt": rt, "va": va, "vc": vc, "p": p, "ot": ot, "ov": "", "f": f,
-                     "_emb": emb, "_mb": mb, "prov": []}
+                     "_emb": emb, "_mb": mb, "prov": [], "imdb": imdb}
     return recs
 
 
@@ -338,6 +339,14 @@ def main():
             if j in prv and prv[j] is not None: r["prov"] = prv[j]
         records.append(r)
         if r.get("prov"): prov_map[r["id"]] = r["prov"]
+
+    missing = [("movie" if r["id"][0] == "m" else "tv", int(r["id"][1:])) for r in records if r.get("imdb") is None]
+    if missing:
+        print("backfilling IMDb ids:", len(missing), flush=True)
+        ext = run_pool(lambda k, i: api.get(f"/{k}/{i}/external_ids"), missing, "imdb ids")
+        byid = {oid(*j): ((v or {}).get("imdb_id") or "") for j, v in ext.items() if v is not None}
+        for r in records:
+            if r.get("imdb") is None and r["id"] in byid: r["imdb"] = byid[r["id"]]
 
     gm = api.get("/genre/movie/list") or {"genres": []}
     gt = api.get("/genre/tv/list") or {"genres": []}

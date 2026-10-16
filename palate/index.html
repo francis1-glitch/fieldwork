@@ -63,6 +63,7 @@ nav.tabs button[aria-current="page"]{color:var(--plum)}
 .btn.sm{padding:7px 12px;font-size:13.5px;border-radius:8px}
 .btn.wide{width:100%}
 .btn.danger{color:var(--bad)}
+a.btn{text-decoration:none;display:inline-block}
 .btn:disabled{opacity:.45}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
@@ -194,12 +195,12 @@ const Core = (() => {
   function loadCatalog(json){
     const F=json.fields, ix=k=>F.indexOf(k);
     const I={id:ix('id'),t:ix('title'),y:ix('year'),g:ix('genres'),k:ix('keywords'),m:ix('makers'),a:ix('cast'),l:ix('lang'),
-      rt:ix('runtime'),va:ix('voteAvg'),vc:ix('voteCount'),p:ix('poster'),e:ix('taste'),mb:ix('crowdBias'),ot:ix('originalTitle')};
+      rt:ix('runtime'),va:ix('voteAvg'),vc:ix('voteCount'),p:ix('poster'),e:ix('taste'),mb:ix('crowdBias'),ot:ix('originalTitle'),im:ix('imdb')};
     const items=[], byId=new Map(), byTitle=new Map();
     const scale=json.embScale||0.02, dim=json.embDim||32;
     for(const r of json.items){
       const it={id:r[I.id], kind:r[I.id][0]==='m'?'movie':'tv', title:r[I.t], year:r[I.y], g:[...new Set(r[I.g]||[])], k:r[I.k]||[], m:r[I.m]||[], a:r[I.a]||[],
-        lang:r[I.l], rt:r[I.rt], va:r[I.va], vc:r[I.vc]||0, poster:r[I.p], e:r[I.e]||null, mb:r[I.mb], ot:r[I.ot]||null, nt:norm(r[I.t])};
+        lang:r[I.l], rt:r[I.rt], va:r[I.va], vc:r[I.vc]||0, poster:r[I.p], e:r[I.e]||null, mb:r[I.mb], ot:r[I.ot]||null, imdb:I.im>=0?(r[I.im]||null):null, nt:norm(r[I.t])};
       items.push(it); byId.set(it.id,it);
       for(const t of new Set([it.nt, it.ot?norm(it.ot):null])){ if(!t) continue; if(!byTitle.has(t)) byTitle.set(t,[]); byTitle.get(t).push(it); }
     }
@@ -498,7 +499,7 @@ function rate(id, r, src='app'){
   const it=getItem(id); if(!it) return;
   S.ratings[id]={r, at:Date.now(), src}; delete S.skip[id]; S.seen[id]=1; delete S.watchlist[id];
   const L=S.locks[id]; if(L&&L.r==null){ L.r=r; L.ratedAt=Date.now(); }
-  markDirty(); save();
+  markDirty(); save(); stremioSoon();
 }
 function unrate(id){ delete S.ratings[id]; markDirty(); save(); }
 function lockPrediction(it){
@@ -732,13 +733,13 @@ function openDetail(it){
 }
 
 // ---------- For you ----------
-function recommend(kind, n=40){
+function recommend(kind, n=40, opts={}){
   const c=Core.catalog(); if(!c) return {top:[],wild:[]};
   refit();
   const sc=[];
   for(const it of c.items){
     if(it.kind!==kind||S.ratings[it.id]||S.seen[it.id]||S.skip[it.id]||it.vc<60) continue;
-    if(S.settings.onlyMine&&S.settings.services.length&&!onMyServices(it.id)) continue;
+    if(!opts.anyService&&S.settings.onlyMine&&S.settings.services.length&&!onMyServices(it.id)) continue;
     const p=predict(it); sc.push([it,p,p.p-0.25*p.conf]);
   }
   sc.sort((a,b)=>b[2]-a[2]);
@@ -938,6 +939,82 @@ function scoreTable(rows,n){
     n?el('tr',{},el('td',{class:'small muted',text:`${n} graded`,colspan:'3'})):null);
 }
 
+// ---------- Stremio: publish your picks as a Stremio catalog add-on ----------
+// Stremio reads static JSON from GitHub Pages. Palate writes two files to your repo with a token that never leaves this device.
+const GHKEY='palate.gh';
+const REPO=(()=>{ const parts=location.pathname.split('/').filter(Boolean).filter(p=>!/\.html$/.test(p));
+  return {owner:location.hostname.split('.')[0], repo:parts[0]||'', dir:parts.slice(1).join('/')}; })();
+const ADDON_URL=location.origin+'/'+[REPO.repo,REPO.dir,'stremio','manifest.json'].filter(Boolean).join('/');
+const ghToken=()=>{ try{ return localStorage.getItem(GHKEY)||''; }catch(e){ return ''; } };
+const setGhToken=t=>{ try{ t?localStorage.setItem(GHKEY,t):localStorage.removeItem(GHKEY); }catch(e){} };
+const b64=str=>{ const b=new TextEncoder().encode(str); let s=''; for(let i=0;i<b.length;i+=0x8000) s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000)); return btoa(s); };
+const unb64=s=>{ const bin=atob(s.replace(/\s/g,'')); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new TextDecoder().decode(u); };
+async function ghPut(path, text, message){
+  const url=`https://api.github.com/repos/${REPO.owner}/${REPO.repo}/contents/${path}`;
+  const H={Authorization:'Bearer '+ghToken(), Accept:'application/vnd.github+json'};
+  let sha=null;
+  const g=await fetch(url+'?ref=main',{headers:H,cache:'no-store'});
+  if(g.status===401||g.status===403) throw new Error('GitHub refused the token. Check it can write to '+REPO.repo+'.');
+  if(g.ok){ const j=await g.json(); sha=j.sha; if(j.content&&unb64(j.content)===text) return false; }
+  const p=await fetch(url,{method:'PUT',headers:H,body:JSON.stringify({message,content:b64(text),sha:sha||undefined,branch:'main'})});
+  if(!p.ok){ const j=await p.json().catch(()=>({})); throw new Error(j.message||('GitHub error '+p.status)); }
+  return true;
+}
+function stremioMetas(kind){
+  const {top}=recommend(kind,40,{anyService:true});
+  return top.filter(([it])=>it.imdb).slice(0,30).map(([it,p])=>{
+    const why=p.why&&p.why.filter(x=>x.v>0).slice(0,2).map(x=>x.label).join(', ');
+    return {id:it.imdb, type:kind==='movie'?'movie':'series', name:it.title,
+      poster:it.poster?'https://image.tmdb.org/t/p/w342'+it.poster:undefined, releaseInfo:it.year?String(it.year):undefined,
+      description:`Palate predicts ${fmt(p.p)}★ for you.`+(why?` Because: ${why}.`:'')};
+  });
+}
+let stremioBusy=false;
+async function sendToStremio(quiet){
+  if(!ghToken()||!Core.catalog()||stremioBusy) return;
+  stremioBusy=true;
+  try{
+    const base=[REPO.dir,'stremio','catalog'].filter(Boolean).join('/');
+    const m=stremioMetas('movie'), t=stremioMetas('tv');
+    const a=await ghPut(base+'/movie/palate-movies.json', JSON.stringify({metas:m}), 'Palate picks for Stremio (movies)');
+    const b=await ghPut(base+'/series/palate-shows.json', JSON.stringify({metas:t}), 'Palate picks for Stremio (shows)');
+    S.stremio={at:Date.now(), movies:m.length, shows:t.length}; save();
+    if(!quiet) toast(a||b?`Sent ${m.length} movies and ${t.length} shows. Stremio shows them in a minute or two.`:'Stremio already has your latest picks.');
+  }catch(e){ if(!quiet) toast(e.message); else S.stremioErr=e.message; }
+  finally{ stremioBusy=false; if(view==='settings'&&!document.querySelector('.scrim')) render(); }
+}
+let stremioTimer=null;
+function stremioSoon(){ if(!ghToken()||S.settings.stremioAuto===false) return; clearTimeout(stremioTimer); stremioTimer=setTimeout(()=>sendToStremio(true),20000); }
+function stremioCard(){
+  const card=el('div',{class:'card'},el('h3',{text:'Palate picks in Stremio'}));
+  if(!ghToken()){
+    const inp=el('input',{type:'password',placeholder:'Paste your GitHub token',autocomplete:'off','aria-label':'GitHub token'});
+    card.append(
+      el('div',{class:'small muted',text:'Puts your top 30 movies and shows as a “Palate picks” row on Stremio’s home screen. One-time setup:'}),
+      el('ol',{class:'small',style:'margin:0;padding-left:20px;line-height:1.6'},
+        el('li',{},'On github.com: your avatar → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.'),
+        el('li',{},`Repository access: Only select repositories → ${REPO.repo}. Permissions: Contents → Read and write. Generate, then copy it.`),
+        el('li',{},'Paste it here. It stays on this device only.')),
+      inp,
+      el('button',{class:'btn primary',text:'Save token',onclick:()=>{ const v=inp.value.trim(); if(!/^(github_pat_|ghp_)/.test(v)){ toast('That doesn’t look like a GitHub token.'); return; } setGhToken(v); toast('Saved.'); render(); sendToStremio(false); }}));
+    return card;
+  }
+  const st=S.stremio;
+  card.append(...[
+    el('div',{class:'small muted',text: st?`Last sent ${new Date(st.at).toLocaleString()} · ${st.movies} movies, ${st.shows} shows. Titles and predicted scores only, never your ratings.`:'Not sent yet.'}),
+    S.stremioErr?el('div',{class:'small',style:'color:var(--bad)',text:S.stremioErr}):null,
+    el('div',{class:'label',text:'Add-on link (paste in Stremio → Add-ons → search box)'}),
+    el('div',{class:'small',style:'word-break:break-all;font-weight:600',text:ADDON_URL}),
+    el('div',{class:'row'},
+      el('a',{class:'btn sm primary',href:'stremio://'+ADDON_URL.replace(/^https?:\/\//,''),text:'Open in Stremio'}),
+      el('button',{class:'btn sm',text:'Copy link',onclick:async()=>{ try{ await navigator.clipboard.writeText(ADDON_URL); toast('Copied.'); }catch(e){ toast('Press and hold the link to copy it.'); } }}),
+      el('button',{class:'btn sm',text:stremioBusy?'Sending…':'Send picks now',onclick:()=>{ delete S.stremioErr; sendToStremio(false); }})),
+    el('div',{class:'row'},
+      el('button',{class:'chip','aria-pressed':S.settings.stremioAuto===false?'false':'true',text:'Update after every rating',onclick:()=>{ S.settings.stremioAuto=S.settings.stremioAuto===false; save(); render(); }}),
+      el('button',{class:'btn sm ghost danger',text:'Remove token',onclick:()=>{ if(confirm('Remove the GitHub token from this device? The Stremio row keeps its last picks.')){ setGhToken(''); render(); } }}))].filter(Boolean));
+  return card;
+}
+
 // ---------- moving data between devices ----------
 function mergeBackup(d){
   const n={ratings:0};
@@ -964,6 +1041,7 @@ function viewSettings(w){
       el('div',{class:'chips'},ids.map(id=>el('button',{class:'chip','aria-pressed':mine.has(id)?'true':'false',text:PROV.names[id],onclick:()=>{
         mine.has(id)?mine.delete(id):mine.add(id); S.settings.services=[...mine]; save(); render(); }})))));
   }
+  w.append(stremioCard());
   const ta=el('textarea',{rows:'3',placeholder:'Paste a backup to restore it.','aria-label':'Backup'});
   const readTa=()=>{ try{ const d=JSON.parse(ta.value); if(!d.ratings) throw 0; return d; }catch(e){ toast('Paste a backup in the box first.'); return null; } };
   w.append(el('div',{class:'card'},el('h3',{text:'Your data'}),
