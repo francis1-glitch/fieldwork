@@ -20,5 +20,6 @@ Settings (gear) → Copy backup, then Restore from backup on the other device.
 - **Nemesis** (AI rival): `https://<your-username>.github.io/fieldwork/nemesis/`
 - **Second Brain** (notes): `https://<your-username>.github.io/fieldwork/brain/`
 - **Dry Run** (rehearse real conversations): `https://<your-username>.github.io/fieldwork/dryrun/`
+- **Palate** (personal taste model): `https://<your-username>.github.io/fieldwork/palate/`. Its movie & TV catalog is built weekly by the `Palate catalog` GitHub Action, which needs a `TMDB_API_KEY` repo secret.
 
 Each installs separately (open its link, then Add to Home Screen) and keeps its own data on the phone.

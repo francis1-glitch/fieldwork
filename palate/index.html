@@ -1,0 +1,958 @@
+<!doctype html><html lang="en" data-pwa="1"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F3EFE8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141216" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Palate">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Palate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: a tasting card. Cream stock, near-black ink, one plum accent for the model's call; the score is always the biggest thing on screen. Bottom tab bar. */
+:root{
+  --bg:#F3EFE8; --surface:#FBF9F5; --raise:#FFFFFF; --line:#E1DAD0; --ink:#1C1A1F; --ink2:#55505C; --ink3:#8C8693;
+  --plum:#6C2A5B; --plum-ink:#FFFFFF; --plum-soft:#F1E3EC; --star:#C88A12; --star-off:#DDD5C9;
+  --good:#24774B; --bad:#B4382C; --scrim:rgba(28,26,31,.45);
+  --serif:"Fraunces",Georgia,serif; --sans:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --navh:62px; --toph:52px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141216; --surface:#1C1A1F; --raise:#24212A; --line:#34303A; --ink:#EEEAF1; --ink2:#B6AFBE; --ink3:#857E8D;
+  --plum:#D58AC0; --plum-ink:#1B0F18; --plum-soft:#3A2435; --star:#E8B34A; --star-off:#433E49;
+  --good:#5FC48B; --bad:#FF8073; --scrim:rgba(0,0,0,.6); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--plum);outline-offset:2px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;margin:0;line-height:1.2;text-wrap:balance}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink3);font-weight:800}
+.muted{color:var(--ink3)} .small{font-size:13.5px} .tiny{font-size:12px}
+.num{font-variant-numeric:tabular-nums}
+
+.top{position:sticky;top:0;z-index:8;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  padding-top:env(safe-area-inset-top,0px);border-bottom:1px solid var(--line)}
+.top .in{height:var(--toph);display:flex;align-items:center;gap:8px;max-width:720px;margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px))}
+.top .ttl{flex:1;font-family:var(--serif);font-size:22px;font-weight:700;letter-spacing:-.01em}
+.iconbtn{border:0;background:none;color:var(--ink2);padding:8px;border-radius:8px;display:inline-flex}
+.iconbtn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:14px calc(var(--navh) + 30px + env(safe-area-inset-bottom,0px))}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:9;background:var(--surface);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs .in{display:flex;max-width:720px;margin:0 auto;height:var(--navh)}
+nav.tabs button{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-size:11.5px;font-weight:700;color:var(--ink3)}
+nav.tabs button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8}
+nav.tabs button[aria-current="page"]{color:var(--plum)}
+
+.btn{border:1px solid var(--line);background:var(--raise);color:var(--ink);border-radius:10px;padding:11px 15px;font-weight:700;font-size:15px}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--plum);border-color:var(--plum);color:var(--plum-ink)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:7px 12px;font-size:13.5px;border-radius:8px}
+.btn.wide{width:100%}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.45}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.note{background:var(--plum-soft);border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5}
+.empty{border:1.5px dashed var(--line);border-radius:14px;padding:22px;color:var(--ink2);font-size:14.5px;text-align:center;line-height:1.55}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--raise);border-radius:999px;padding:6px 12px;font-size:13.5px;font-weight:600;color:var(--ink2)}
+.chip[aria-pressed="true"]{background:var(--plum);border-color:var(--plum);color:var(--plum-ink)}
+.seg{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-inline:-2px;padding:2px}
+.seg::-webkit-scrollbar{display:none}
+.seg .chip{white-space:nowrap}
+
+/* title rows */
+.list{display:flex;flex-direction:column;gap:8px}
+.title{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px 9px 9px;text-align:left;width:100%}
+.title:active{border-color:var(--ink3)}
+.poster{width:46px;height:69px;border-radius:6px;background:var(--line);flex:none;object-fit:cover;display:flex;align-items:center;justify-content:center;
+  font-family:var(--serif);font-weight:700;color:var(--ink3);font-size:18px;overflow:hidden}
+.title .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.title .nm{font-weight:700;font-size:15.5px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.title .sub{font-size:12.5px;color:var(--ink3)}
+.title .why{font-size:12.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.score{flex:none;text-align:right;display:flex;flex-direction:column;align-items:flex-end}
+.score b{font-family:var(--serif);font-size:24px;font-weight:700;line-height:1;color:var(--plum)}
+.score span{font-size:11.5px;color:var(--ink3);font-weight:600}
+.score.you b{color:var(--star)}
+.tagline{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--plum)}
+
+/* stars */
+.stars{display:inline-flex;gap:3px;touch-action:none;cursor:pointer;user-select:none;-webkit-user-select:none}
+.stars svg{width:34px;height:34px}
+.stars.sm svg{width:15px;height:15px}
+.stars.sm{gap:1px;cursor:default}
+.starval{font-family:var(--serif);font-weight:700;font-size:20px;min-width:2.4em}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;
+  padding:8px max(18px,env(safe-area-inset-left,0px)) calc(22px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 2px}
+.dhead{display:flex;gap:14px}
+.dhead .poster{width:92px;height:138px;border-radius:9px;font-size:30px}
+.dhead .meta{display:flex;flex-direction:column;gap:5px;min-width:0}
+.big{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.big .n{font-family:var(--serif);font-size:54px;font-weight:700;line-height:.9;color:var(--plum);letter-spacing:-.02em}
+.big .r{font-size:13.5px;color:var(--ink2);line-height:1.45;padding-bottom:3px}
+.reasons{display:flex;flex-direction:column;gap:5px}
+.reason{display:flex;justify-content:space-between;gap:10px;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:5px}
+.reason .v{font-weight:800;font-variant-numeric:tabular-nums;flex:none}
+.reason .v.up{color:var(--good)} .reason .v.down{color:var(--bad)}
+.ov{font-size:14.5px;color:var(--ink2);line-height:1.55}
+
+/* scoreboard */
+table.sb{width:100%;border-collapse:collapse;font-size:14px}
+table.sb th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3);text-align:right;font-weight:800;padding:4px 6px}
+table.sb th:first-child,table.sb td:first-child{text-align:left}
+table.sb td{padding:9px 6px;border-top:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+table.sb tr.me td{font-weight:800;color:var(--plum)}
+.verdict{font-family:var(--serif);font-size:21px;font-weight:600;line-height:1.3}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--plum)}
+
+/* rapid rate */
+.rapid{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.rapid img,.rapid .poster{width:180px;height:270px;border-radius:12px;font-size:56px}
+.toast{position:fixed;left:50%;bottom:calc(var(--navh) + 18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;
+  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;max-width:90vw}
+@media (min-width:700px){.title .nm{font-size:16px}}
+</style>
+</head><body>
+<div id="app"></div>
+
+<script id="core">
+/* ============================ CORE: data, matching, model. No DOM. ============================ */
+const Core = (() => {
+  // ---------- CSV ----------
+  function parseCSV(text){
+    if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+    const rows=[]; let row=[], f='', q=false;
+    for(let i=0;i<text.length;i++){
+      const c=text[i];
+      if(q){ if(c==='"'){ if(text[i+1]==='"'){ f+='"'; i++; } else q=false; } else f+=c; }
+      else if(c==='"') q=true;
+      else if(c===','){ row.push(f); f=''; }
+      else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(f); rows.push(row); row=[]; f=''; }
+      else f+=c;
+    }
+    if(f!==''||row.length){ row.push(f); rows.push(row); }
+    const head=(rows.shift()||[]).map(h=>h.trim());
+    return rows.filter(r=>r.length>1||r[0]!=='').map(r=>{ const o={}; head.forEach((h,i)=>o[h]=(r[i]??'').trim()); return o; });
+  }
+
+  // ---------- ZIP (store + deflate) ----------
+  async function readZip(buf){
+    const dv=new DataView(buf), u8=new Uint8Array(buf); let eocd=-1;
+    for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-66000);i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
+    if(eocd<0) throw new Error('Not a zip file');
+    const count=dv.getUint16(eocd+10,true); let p=dv.getUint32(eocd+16,true); const out={}; const dec=new TextDecoder();
+    for(let n=0;n<count;n++){
+      if(dv.getUint32(p,true)!==0x02014b50) break;
+      const method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true), nlen=dv.getUint16(p+28,true),
+            xlen=dv.getUint16(p+30,true), clen=dv.getUint16(p+32,true), off=dv.getUint32(p+42,true);
+      const name=dec.decode(u8.subarray(p+46,p+46+nlen)); p+=46+nlen+xlen+clen;
+      if(!/\.csv$/i.test(name)) continue;
+      const ln=dv.getUint16(off+26,true), lx=dv.getUint16(off+28,true), start=off+30+ln+lx;
+      const data=u8.slice(start,start+csize);
+      let bytes;
+      if(method===0) bytes=data;
+      else if(method===8){
+        const ds=new DecompressionStream('deflate-raw');
+        bytes=new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(ds)).arrayBuffer());
+      } else continue;
+      out[name]=dec.decode(bytes);
+    }
+    return out;
+  }
+
+  // ---------- titles ----------
+  const norm=s=>(s||'').normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase()
+      .replace(/&/g,' and ').replace(/[’'`]/g,'').replace(/[^a-z0-9]+/g,' ').replace(/^(the|a|an) /,'').trim();
+
+  // ---------- catalog ----------
+  let CAT=null;
+  function loadCatalog(json){
+    const F=json.fields, ix=k=>F.indexOf(k);
+    const I={id:ix('id'),t:ix('title'),y:ix('year'),g:ix('genres'),k:ix('keywords'),m:ix('makers'),a:ix('cast'),l:ix('lang'),
+      rt:ix('runtime'),va:ix('voteAvg'),vc:ix('voteCount'),p:ix('poster'),e:ix('taste'),mb:ix('crowdBias'),ot:ix('originalTitle')};
+    const items=[], byId=new Map(), byTitle=new Map();
+    const scale=json.embScale||0.02, dim=json.embDim||32;
+    for(const r of json.items){
+      const it={id:r[I.id], kind:r[I.id][0]==='m'?'movie':'tv', title:r[I.t], year:r[I.y], g:[...new Set(r[I.g]||[])], k:r[I.k]||[], m:r[I.m]||[], a:r[I.a]||[],
+        lang:r[I.l], rt:r[I.rt], va:r[I.va], vc:r[I.vc]||0, poster:r[I.p], e:r[I.e]||null, mb:r[I.mb], ot:r[I.ot]||null, nt:norm(r[I.t])};
+      items.push(it); byId.set(it.id,it);
+      for(const t of new Set([it.nt, it.ot?norm(it.ot):null])){ if(!t) continue; if(!byTitle.has(t)) byTitle.set(t,[]); byTitle.get(t).push(it); }
+    }
+    CAT={built:json.built, items, byId, byTitle, genres:json.genres||{}, keywords:json.keywords||[], people:json.people||[], scale, dim};
+    return CAT;
+  }
+  const catalog=()=>CAT;
+
+  function match(name, year, kind){
+    if(!CAT) return null;
+    const cands=(CAT.byTitle.get(norm(name))||[]).filter(it=>!kind||it.kind===kind);
+    if(!cands.length) return null;
+    const y=parseInt(year,10);
+    let best=null, bs=-1e9;
+    for(const it of cands){
+      let s=Math.log10(1+it.vc);
+      if(y&&it.year){ const d=Math.abs(it.year-y); if(d>1) continue; s+= d===0?10:5; }
+      if(s>bs){ bs=s; best=it; }
+    }
+    return best;
+  }
+
+  function search(q, kind, limit=25){
+    if(!CAT) return [];
+    const n=norm(q); if(!n) return [];
+    const out=[];
+    for(const it of CAT.items){
+      if(kind&&it.kind!==kind) continue;
+      const i=it.nt.indexOf(n); if(i<0) continue;
+      out.push([it, (it.nt===n?3:i===0?2:1)*10+Math.log10(1+it.vc)]);
+    }
+    return out.sort((a,b)=>b[1]-a[1]).slice(0,limit).map(x=>x[0]);
+  }
+
+  // ---------- features ----------
+  const embCache=new Map();
+  function emb(it){
+    if(!it.e) return null;
+    if(embCache.has(it.id)) return embCache.get(it.id);
+    const bin=atob(it.e), v=new Float32Array(bin.length);
+    for(let i=0;i<bin.length;i++){ let b=bin.charCodeAt(i); if(b>127) b-=256; v[i]=b*CAT.scale; }
+    embCache.set(it.id,v); return v;
+  }
+  // every feature: [key, value]
+  function features(it, tags){
+    const f=[];
+    const kind=it.kind;
+    f.push(['c:'+kind,1]);
+    if(kind==='movie'||kind==='tv'){
+      for(const g of it.g) f.push(['g:'+g,1]);
+      for(const k of it.k) f.push(['k:'+k,0.55]);
+      for(const m of it.m) f.push(['m:'+m,1]);
+      for(const a of it.a) f.push(['a:'+a,0.6]);
+      if(it.year) f.push(['d:'+Math.floor(it.year/10)*10,0.7]);
+      if(it.lang&&it.lang!=='en') f.push(['l:'+it.lang,0.8]);
+      if(kind==='movie'&&it.rt){ if(it.rt<95) f.push(['r:short',0.5]); else if(it.rt>150) f.push(['r:long',0.5]); }
+      if(it.vc>=20&&it.va) f.push(['q',(it.va-6.8)]);
+      if(it.mb!=null) f.push(['mb',it.mb*2]);
+      const e=emb(it); if(e) for(let i=0;i<e.length;i++) f.push(['e'+i,e[i]]);
+    } else if(kind==='book'){
+      for(const a of it.authors||[]) f.push(['au:'+norm(a),1]);
+      for(const s of it.subjects||[]) f.push(['s:'+s,0.5]);
+      if(it.year) f.push(['d:'+Math.floor(it.year/10)*10,0.5]);
+      if(it.olc>=5&&it.ola) f.push(['qb',(it.ola-3.8)*2]);
+    }
+    for(const t of new Set([...(it.tags||[]),...(tags||[])])) f.push(['t:'+t,1]);
+    return f;
+  }
+  function label(key){
+    const [p,...rest]=key.split(':'); const v=rest.join(':');
+    switch(p){
+      case 'g': return (CAT&&CAT.genres[v])||'genre';
+      case 'k': return CAT?('“'+CAT.keywords[+v]+'”'):'keyword';
+      case 'm': return CAT?CAT.people[+v]:'maker';
+      case 'a': return CAT?CAT.people[+v]:'cast';
+      case 'd': return v+'s';
+      case 'l': return 'Language: '+v;
+      case 'r': return v==='short'?'Short runtime':'Long runtime';
+      case 't': return '#'+v;
+      case 'au': return v.replace(/\b\w/g,c=>c.toUpperCase());
+      case 's': return v;
+      case 'c': return ({movie:'Movies',tv:'Shows',book:'Books',dish:'Dishes',character:'Characters',other:'Other'})[v]||v;
+      case 'q': return 'Crowd rating';
+      case 'qb': return 'Reader rating';
+      case 'mb': return 'Crowd taste';
+      default: return key;
+    }
+  }
+  const groupOf=k=>(/^e\d+$/.test(k)?'taste':k);
+
+  // ---------- ridge regression, conjugate gradient ----------
+  function fit(rows, lambda){
+    // rows: [{f:[[k,v]], y, cat}]
+    const idx=new Map(), cnt=new Map(); const X=[];
+    for(const r of rows){
+      const xr=[]; for(const [k,v] of r.f){ if(!idx.has(k)){ idx.set(k,idx.size); } xr.push([idx.get(k),v]); cnt.set(k,(cnt.get(k)||0)+1); }
+      X.push(xr);
+    }
+    const n=rows.length, d=idx.size;
+    const mean=rows.reduce((s,r)=>s+r.y,0)/Math.max(1,n);
+    const y=rows.map(r=>r.y-mean);
+    const Xt_v=(v)=>{ const o=new Float64Array(d); for(let i=0;i<n;i++){ const vi=v[i]; if(!vi) continue; for(const [j,x] of X[i]) o[j]+=x*vi; } return o; };
+    const X_w=(w)=>{ const o=new Float64Array(n); for(let i=0;i<n;i++){ let s=0; for(const [j,x] of X[i]) s+=x*w[j]; o[i]=s; } return o; };
+    const A=(w)=>{ const o=Xt_v(X_w(w)); for(let j=0;j<d;j++) o[j]+=lambda*w[j]; return o; };
+    const b=Xt_v(y);
+    let w=new Float64Array(d), r=b.slice(), p=r.slice(), rr=r.reduce((s,v)=>s+v*v,0); const r0=rr;
+    for(let it=0; it<200 && rr>1e-10*r0 && rr>1e-14; it++){
+      const Ap=A(p); let pAp=0; for(let j=0;j<d;j++) pAp+=p[j]*Ap[j];
+      const a=rr/pAp; for(let j=0;j<d;j++){ w[j]+=a*p[j]; r[j]-=a*Ap[j]; }
+      let nr=0; for(let j=0;j<d;j++) nr+=r[j]*r[j];
+      const beta=nr/rr; rr=nr; for(let j=0;j<d;j++) p[j]=r[j]+beta*p[j];
+    }
+    const W=new Map(); for(const [k,j] of idx) W.set(k,w[j]);
+    return {W, cnt, mean, lambda, n};
+  }
+  function predictRaw(M, f){
+    let s=M.mean; for(const [k,v] of f){ const w=M.W.get(k); if(w) s+=w*v; } return s;
+  }
+  const clamp=x=>Math.max(0.5,Math.min(5,x));
+
+  // crowd and average baselines (the "market" the model has to beat)
+  function fitBaselines(rows){
+    const byCat={}, all=[];
+    for(const r of rows){ (byCat[r.cat]=byCat[r.cat]||[]).push(r.y); all.push(r.y); }
+    const avg=a=>a.reduce((s,v)=>s+v,0)/a.length;
+    const gmean=all.length?avg(all):3.5;
+    const catMean={}; for(const c in byCat) catMean[c]=(avg(byCat[c])*byCat[c].length+gmean*3)/(byCat[c].length+3);
+    const lin=(pts,def)=>{
+      if(pts.length<8) return def;
+      const mx=avg(pts.map(p=>p[0])), my=avg(pts.map(p=>p[1]));
+      let sxy=0,sxx=0; for(const [x,y] of pts){ sxy+=(x-mx)*(y-my); sxx+=(x-mx)**2; }
+      const b=sxx>0?sxy/sxx:0; return {a:my-b*mx,b};
+    };
+    const tm=lin(rows.filter(r=>r.crowd!=null&&r.src==='tmdb').map(r=>[r.crowd,r.y]),{a:0,b:0.5});
+    const bk=lin(rows.filter(r=>r.crowd!=null&&r.src==='ol').map(r=>[r.crowd,r.y]),{a:0,b:1});
+    return {gmean, catMean, tm, bk};
+  }
+  function crowdOf(it){
+    if((it.kind==='movie'||it.kind==='tv')&&it.vc>=20&&it.va) return {src:'tmdb',v:it.va};
+    if(it.kind==='book'&&it.olc>=5&&it.ola) return {src:'ol',v:it.ola};
+    return null;
+  }
+  function baselinePreds(B, it){
+    const mean=B.catMean[it.kind]??B.gmean;
+    const c=crowdOf(it);
+    const crowd=c?clamp((c.src==='tmdb'?B.tm:B.bk).a+(c.src==='tmdb'?B.tm:B.bk).b*c.v):null;
+    return {mean:clamp(mean), crowd};
+  }
+
+  // ---------- seeded rng ----------
+  function rng(seed){ let s=seed>>>0||1; return ()=>{ s^=s<<13; s>>>=0; s^=s>>17; s^=s<<5; s>>>=0; return s/4294967296; }; }
+
+  function crossValidate(rows, lambdas=[1,3,10,30], folds=5){
+    if(rows.length<20) return null;
+    const R=rng(42), order=rows.map((_,i)=>i).sort(()=>0); // deterministic shuffle below
+    for(let i=order.length-1;i>0;i--){ const j=Math.floor(R()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+    const fold=new Array(rows.length); order.forEach((ri,k)=>fold[ri]=k%folds);
+    const res={}; let bestL=lambdas[0], bestE=1e9;
+    const preds={};
+    for(const L of lambdas){
+      const p=new Array(rows.length);
+      for(let k=0;k<folds;k++){
+        const tr=rows.filter((_,i)=>fold[i]!==k); const M=fit(tr,L);
+        rows.forEach((r,i)=>{ if(fold[i]===k) p[i]=clamp(predictRaw(M,r.f)); });
+      }
+      const mae=rows.reduce((s,r,i)=>s+Math.abs(p[i]-r.y),0)/rows.length;
+      res[L]=mae; preds[L]=p; if(mae<bestE){ bestE=mae; bestL=L; }
+    }
+    // baselines out of fold too
+    const pm=new Array(rows.length), pc=new Array(rows.length);
+    for(let k=0;k<folds;k++){
+      const B=fitBaselines(rows.filter((_,i)=>fold[i]!==k));
+      rows.forEach((r,i)=>{ if(fold[i]!==k) return; const b=baselinePreds(B,r.item); pm[i]=b.mean; pc[i]=b.crowd??b.mean; });
+    }
+    const pModel=preds[bestL];
+    const metr=p=>{ let a=0,s=0,w=0; rows.forEach((r,i)=>{ const e=p[i]-r.y; a+=Math.abs(e); s+=e*e; if(Math.abs(e)<=0.5) w++; }); const n=rows.length; return {mae:a/n, rmse:Math.sqrt(s/n), within:w/n}; };
+    // bootstrap the gap between model and crowd (how sure are we it's better?)
+    const R2=rng(7), diffs=rows.map((r,i)=>Math.abs(pModel[i]-r.y)-Math.abs(pc[i]-r.y));
+    const boots=[]; for(let b=0;b<400;b++){ let s=0; for(let i=0;i<diffs.length;i++) s+=diffs[Math.floor(R2()*diffs.length)]; boots.push(s/diffs.length); }
+    boots.sort((a,b)=>a-b);
+    const byCat={};
+    rows.forEach((r,i)=>{ const c=byCat[r.cat]=byCat[r.cat]||{n:0,m:0,c:0}; c.n++; c.m+=Math.abs(pModel[i]-r.y); c.c+=Math.abs(pc[i]-r.y); });
+    return {n:rows.length, lambda:bestL, byLambda:res, model:metr(pModel), crowd:metr(pc), mean:metr(pm),
+      gap:{mid:boots[200], lo:boots[20], hi:boots[379]}, byCat, oof:pModel};
+  }
+
+  // explain a prediction: grouped feature contributions in stars
+  function explain(M, f){
+    const g=new Map();
+    for(const [k,v] of f){ const w=M.W.get(k); if(!w) continue; const key=groupOf(k); g.set(key,(g.get(key)||0)+w*v); }
+    return [...g.entries()].filter(([k,v])=>Math.abs(v)>=0.04&&!k.startsWith('c:'))
+      .map(([k,v])=>({key:k, label:k==='taste'?'People with your taste':label(k), v})).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
+  }
+  // how much of this item's evidence the model has actually seen in your ratings (0..1)
+  function coverage(M, f){
+    let tot=0, known=0;
+    for(const [k,v] of f){ if(k.startsWith('c:')||k==='q'||k==='qb'||k==='mb'||/^e\d+$/.test(k)) continue; tot+=Math.abs(v); if((M.cnt.get(k)||0)>=2) known+=Math.abs(v); }
+    const hasE=f.some(([k])=>k==='e0');
+    return tot? Math.min(1,(known/tot)*0.75+(hasE?0.25:0)) : (hasE?0.5:0.2);
+  }
+
+  return {parseCSV, readZip, norm, loadCatalog, catalog, match, search, features, label, fit, predictRaw, clamp, fitBaselines,
+          baselinePreds, crowdOf, crossValidate, explain, coverage, rng};
+})();
+</script>
+
+<script>
+/* ============================ APP ============================ */
+const STORE='palate.v1';
+const $=(s,r=document)=>r.querySelector(s);
+function el(tag, attrs={}, ...kids){
+  const n=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs||{})){
+    if(v==null||v===false) continue;
+    if(k==='text') n.textContent=v; else if(k==='html') n.innerHTML=v; else if(k.startsWith('on')) n.addEventListener(k.slice(2),v);
+    else if(k==='style') n.setAttribute('style',v); else n.setAttribute(k,v===true?'':v);
+  }
+  for(const c of kids.flat()){ if(c==null||c===false) continue; n.append(c.nodeType?c:document.createTextNode(c)); }
+  return n;
+}
+const svg=(d,extra='')=>{ const s=document.createElementNS('http://www.w3.org/2000/svg','svg'); s.setAttribute('viewBox','0 0 24 24'); s.innerHTML=d+extra; return s; };
+const ICON={
+  you:'<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>',
+  grade:'<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
+  lib:'<path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 5l3.6-.9 3 15.6-3.6.8z" transform="translate(-1 0)"/>',
+  score:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
+};
+
+// ---------- state ----------
+function blank(){ return {ratings:{}, items:{}, seen:{}, skip:{}, watchlist:{}, locks:{}, tags:{}, reviews:{}, pending:{lb:[]},
+  settings:{services:[], onlyMine:true}, imports:{}}; }
+function load(){ try{ const r=localStorage.getItem(STORE); if(r){ return Object.assign(blank(), JSON.parse(r)); } }catch(e){} return blank(); }
+let S=load();
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); return true; }catch(e){ toast('Couldn’t save — storage may be full.'); return false; } }
+
+let PROV=null, OVS=null, catStatus='loading';
+let MODEL=null, BASE=null, CV=null, dirty=true;
+
+function toast(msg){ const t=el('div',{class:'toast',role:'status',text:msg}); document.body.append(t); setTimeout(()=>t.remove(),2600); }
+
+// ---------- items ----------
+function getItem(id){ return S.items[id] || (Core.catalog()&&Core.catalog().byId.get(id)) || null; }
+function itemWithTags(it){ const t=S.tags[it.id]; return t&&t.length?Object.assign({},it,{tags:[...(it.tags||[]),...t]}):it; }
+function featuresOf(it){ return Core.features(itemWithTags(it)); }
+
+function trainingRows(){
+  const rows=[];
+  for(const [id,r] of Object.entries(S.ratings)){
+    const it=getItem(id); if(!it) continue;
+    const c=Core.crowdOf(it);
+    rows.push({id, item:it, f:featuresOf(it), y:r.r, cat:it.kind, crowd:c?c.v:null, src:c?c.src:null});
+  }
+  return rows;
+}
+function refit(force){
+  if(!dirty&&!force) return;
+  const rows=trainingRows();
+  BASE=Core.fitBaselines(rows);
+  MODEL=rows.length>=10?Core.fit(rows, (CV&&CV.lambda)||S.lambda||3):null;
+  dirty=false;
+}
+function markDirty(){ dirty=true; CV=null; }
+function predict(it){
+  refit();
+  const f=featuresOf(it); const b=Core.baselinePreds(BASE,it);
+  if(!MODEL){ return {p:b.crowd??b.mean, crowd:b.crowd, mean:b.mean, conf:1.0, why:[], learning:true, cov:0}; }
+  const p=Core.clamp(Core.predictRaw(MODEL,f)); const cov=Core.coverage(MODEL,f);
+  const rmse=(S.cvRmse||0.8);
+  return {p, crowd:b.crowd, mean:b.mean, conf:rmse*(1.35-0.6*cov), why:Core.explain(MODEL,f), cov};
+}
+const fmt=x=>x==null?'–':(Math.round(x*10)/10).toFixed(1);
+const half=x=>Math.round(x*2)/2;
+
+// ---------- data loading ----------
+async function loadData(){
+  try{
+    const r=await fetch('data/catalog.json'); if(!r.ok) throw new Error(r.status);
+    Core.loadCatalog(await r.json()); catStatus='ok';
+    rematchPending(); markDirty();
+  }catch(e){ catStatus='missing'; }
+  try{ const r=await fetch('data/providers.json'); if(r.ok) PROV=await r.json(); }catch(e){}
+  render();
+}
+async function overview(id){
+  if(!OVS){ try{ const r=await fetch('data/overviews.json'); OVS=r.ok?await r.json():{}; }catch(e){ OVS={}; } }
+  return OVS[id]||'';
+}
+function servicesOf(id){ return (PROV&&PROV.items[id])||[]; }
+function onMyServices(id){ const mine=S.settings.services; if(!mine.length) return true; return servicesOf(id).some(p=>mine.includes(String(p))); }
+
+// ---------- rating actions ----------
+function rate(id, r, src='app'){
+  const it=getItem(id); if(!it) return;
+  S.ratings[id]={r, at:Date.now(), src}; delete S.skip[id]; S.seen[id]=1; delete S.watchlist[id];
+  const L=S.locks[id]; if(L&&L.r==null){ L.r=r; L.ratedAt=Date.now(); }
+  markDirty(); save();
+}
+function unrate(id){ delete S.ratings[id]; markDirty(); save(); }
+function lockPrediction(it){
+  const p=predict(it);
+  S.locks[it.id]={p:p.p, crowd:p.crowd, mean:p.mean, at:Date.now(), r:null, title:it.title};
+  if(!S.items[it.id]&&(it.kind==='book'||it.kind==='dish'||it.kind==='character'||it.kind==='other')) S.items[it.id]=it;
+  save(); toast('Locked at '+fmt(p.p)+'★. Rate it after.');
+}
+
+// ---------- imports ----------
+async function importFile(file){
+  let files={};
+  if(/\.zip$/i.test(file.name)) files=await Core.readZip(await file.arrayBuffer());
+  else files[file.name]=await file.text();
+  // Letterboxd keeps live data at the top level; deleted/, orphaned/, likes/ and lists/ hold other things with the same file names
+  const live=Object.keys(files).filter(n=>!/(^|\/)(deleted|orphaned|likes|lists)\//i.test(n));
+  const pick=re=>{ const k=live.find(n=>re.test(n.split('/').pop())); return k?Core.parseCSV(files[k]):null; };
+  const ratings=pick(/^ratings\.csv$/i), watched=pick(/^watched\.csv$/i), watchlist=pick(/^watchlist\.csv$/i),
+        reviews=pick(/^reviews\.csv$/i), diary=pick(/^diary\.csv$/i);
+  let generic=null;
+  if(!ratings&&!watched&&!watchlist&&!diary){ const k=live[0]; generic=k?Core.parseCSV(files[k]):[]; }
+  const rows=[];
+  const rowOf=(o,kind)=>({name:o.Name||o.Title||o.name||o.title, year:o.Year||o.year, rating:o.Rating||o.rating, kind,
+    date:o['Watched Date']||o.Date||'', review:o.Review||''});
+  if(ratings) ratings.forEach(o=>rows.push(Object.assign(rowOf(o,'movie'),{type:'rating'})));
+  if(diary) diary.forEach(o=>{ if(!o.Rating) rows.push(Object.assign(rowOf(o,'movie'),{type:'seen'})); });
+  if(watched) watched.forEach(o=>rows.push(Object.assign(rowOf(o,'movie'),{type:'seen'})));
+  if(watchlist) watchlist.forEach(o=>rows.push(Object.assign(rowOf(o,'movie'),{type:'watchlist'})));
+  if(reviews) reviews.forEach(o=>rows.push(Object.assign(rowOf(o,'movie'),{type:'review'})));
+  if(generic) generic.forEach(o=>{
+    const t=(o.Type||o.type||'').toLowerCase(); const kind=/tv|show|series/.test(t)?'tv':/movie|film/.test(t)?'movie':null;
+    const r=rowOf(o,kind); r.type=r.rating?'rating':'seen'; rows.push(r);
+  });
+  const src=generic?'csv':'lb';
+  S.pending[src]=(S.pending[src]||[]).concat(rows.filter(r=>r.name));
+  const res=rematchPending();
+  S.imports[src]={at:Date.now(), rows:rows.length};
+  markDirty(); save();
+  return res;
+}
+function rematchPending(){
+  if(!Core.catalog()) return null;
+  const res={matched:0, unmatched:0, ratings:0, watchlist:0, unmatchedRatings:0};
+  for(const src of Object.keys(S.pending)){
+    const left=[];
+    for(const r of S.pending[src]||[]){
+      const it=Core.match(r.name, r.year, r.kind);
+      if(!it){ left.push(r); res.unmatched++; if(r.type==='rating') res.unmatchedRatings++; continue; }
+      res.matched++;
+      if(r.type==='rating'){ const v=parseFloat(r.rating); if(v>=0.5&&v<=5){ const ex=S.ratings[it.id]; if(!ex||ex.src!=='app'){ S.ratings[it.id]={r:v, at:Date.parse(r.date)||Date.now(), src}; res.ratings++; } S.seen[it.id]=1; } }
+      else if(r.type==='seen') S.seen[it.id]=1;
+      else if(r.type==='watchlist'){ if(!S.ratings[it.id]){ S.watchlist[it.id]=Date.parse(r.date)||Date.now(); res.watchlist++; } }
+      else if(r.type==='review'&&r.review) S.reviews[it.id]=r.review.slice(0,2000);
+    }
+    S.pending[src]=left;
+  }
+  save(); return res;
+}
+
+// ---------- books (Open Library, live) ----------
+async function olSearch(q, limit=20){
+  const u='https://openlibrary.org/search.json?'+new URLSearchParams({q, limit:String(limit),
+    fields:'key,title,author_name,first_publish_year,subject,cover_i,ratings_average,ratings_count'});
+  const r=await fetch(u); if(!r.ok) throw new Error('Open Library didn’t answer'); const j=await r.json();
+  return (j.docs||[]).map(bookFromOL);
+}
+function bookFromOL(d){
+  const subj=[...new Set((d.subject||[]).map(s=>s.toLowerCase().trim()).filter(s=>s.length>2&&s.length<40&&!/accessible|protected|lending|large type|in library|nyt:|award|fiction in english/.test(s)))].slice(0,15);
+  return {id:'b:'+d.key.replace('/works/',''), kind:'book', title:d.title, year:d.first_publish_year||null, authors:(d.author_name||[]).slice(0,2),
+    subjects:subj, cover:d.cover_i||null, ola:d.ratings_average||null, olc:d.ratings_count||0};
+}
+
+// ---------- routing ----------
+let view='you', youCat='movie', libFilter='all';
+function go(v){ view=v; window.scrollTo(0,0); render(); }
+
+function render(){
+  const app=$('#app'); app.innerHTML='';
+  const titles={you:'For you',grade:'Grade',lib:'Library',score:'Scoreboard',settings:'Settings',rapid:'Quick rate'};
+  app.append(el('header',{class:'top'},el('div',{class:'in'},
+    (view==='settings'||view==='rapid')?el('button',{class:'iconbtn','aria-label':'Back',onclick:()=>go(view==='rapid'?'lib':'you')},svg('<path d="M15 5l-7 7 7 7"/>')):null,
+    el('div',{class:'ttl',text:titles[view]||'Palate'}),
+    view!=='settings'?el('button',{class:'iconbtn','aria-label':'Settings',onclick:()=>go('settings')},svg(ICON.gear)):null)));
+  const w=el('main',{class:'wrap'}); app.append(w);
+  ({you:viewYou,grade:viewGrade,lib:viewLib,score:viewScore,settings:viewSettings,rapid:viewRapid})[view](w);
+  const tabs=[['you','For you',ICON.you],['grade','Grade',ICON.grade],['lib','Library',ICON.lib],['score','Score',ICON.score]];
+  app.append(el('nav',{class:'tabs','aria-label':'Sections'},el('div',{class:'in'},
+    tabs.map(([k,l,i])=>el('button',{'aria-current':view===k?'page':null,onclick:()=>go(k)},svg(i),l)))));
+}
+
+// ---------- shared UI ----------
+function posterEl(it, big){
+  let src=null;
+  if(it.poster) src='https://image.tmdb.org/t/p/'+(big?'w342':'w154')+it.poster;
+  else if(it.cover) src='https://covers.openlibrary.org/b/id/'+it.cover+'-'+(big?'L':'M')+'.jpg';
+  if(src){ const i=el('img',{class:'poster',src,alt:'',loading:'lazy'}); i.onerror=()=>i.replaceWith(el('div',{class:'poster',text:(it.title||'?')[0]})); return i; }
+  const glyph={dish:'🍽',character:'☺',other:'✦'}[it.kind];
+  return el('div',{class:'poster',text:glyph||(it.title||'?')[0]});
+}
+function subline(it){
+  const kind={movie:'Film',tv:'Series',book:'Book',dish:'Dish',character:'Character',other:'Other'}[it.kind];
+  const bits=[kind, it.year];
+  if(it.kind==='movie'||it.kind==='tv'){ const c=Core.catalog(); if(c&&it.m[0]!=null) bits.push(c.people[it.m[0]]); }
+  if(it.kind==='book'&&it.authors&&it.authors[0]) bits.push(it.authors[0]);
+  if(it.where) bits.push(it.where);
+  return bits.filter(Boolean).join(' · ');
+}
+function starsEl(value, onChange, small){
+  const wrap=el('span',{class:'stars'+(small?' sm':''),role:onChange?'slider':'img','aria-label':value?value+' stars':'Not rated',
+    'aria-valuemin':onChange?'0.5':null,'aria-valuemax':onChange?'5':null,'aria-valuenow':onChange&&value?String(value):null,tabindex:onChange?'0':null});
+  const draw=v=>{ wrap.innerHTML=''; for(let i=1;i<=5;i++){
+    const fill=v>=i?1:v>=i-0.5?0.5:0, id='h'+Math.random().toString(36).slice(2,8);
+    wrap.append(svg(`<defs><linearGradient id="${id}"><stop offset="${fill*100}%" stop-color="var(--star)"/><stop offset="${fill*100}%" stop-color="var(--star-off)"/></linearGradient></defs><path fill="url(#${id})" d="M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.2l-5.8 3.2 1.2-6.5L2.6 9.4l6.5-.8z"/>`)); } };
+  draw(value||0);
+  if(onChange){
+    const valAt=e=>{ const r=wrap.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width; return Math.max(0.5,Math.min(5,Math.ceil(x*10)/2)); };
+    let cur=value||0;
+    wrap.addEventListener('pointerdown',e=>{ wrap.setPointerCapture(e.pointerId); cur=valAt(e); draw(cur); onChange(cur,false); });
+    wrap.addEventListener('pointermove',e=>{ if(!wrap.hasPointerCapture(e.pointerId)) return; cur=valAt(e); draw(cur); onChange(cur,false); });
+    wrap.addEventListener('pointerup',e=>{ if(wrap.hasPointerCapture(e.pointerId)){ wrap.releasePointerCapture(e.pointerId); onChange(cur,true); } });
+    wrap.addEventListener('keydown',e=>{ if(e.key==='ArrowRight'||e.key==='ArrowUp'){ cur=Math.min(5,(cur||0)+0.5); } else if(e.key==='ArrowLeft'||e.key==='ArrowDown'){ cur=Math.max(0.5,(cur||1)-0.5); } else if(e.key==='Enter'){ onChange(cur,true); return; } else return; e.preventDefault(); draw(cur); onChange(cur,false); });
+  }
+  return wrap;
+}
+function titleRow(it, opts={}){
+  const mine=S.ratings[it.id];
+  const p=opts.pred||(!mine?predict(it):null);
+  const why=opts.why!==false&&p&&p.why&&p.why.filter(x=>x.v>0).slice(0,2).map(x=>x.label).join(', ');
+  return el('button',{class:'title',onclick:()=>openDetail(it)},
+    posterEl(it),
+    el('div',{class:'mid'},
+      opts.tag?el('span',{class:'tagline',text:opts.tag}):null,
+      el('span',{class:'nm',text:it.title}),
+      el('span',{class:'sub',text:subline(it)}),
+      why?el('span',{class:'why',text:'Because: '+why}):null),
+    mine?el('div',{class:'score you'},el('b',{text:fmt(mine.r)}),el('span',{text:'yours'}))
+        :el('div',{class:'score'},el('b',{text:fmt(p.p)}),el('span',{text:'±'+fmt(p.conf)})));
+}
+function sheet(build){
+  const sc=el('div',{class:'scrim',onclick:e=>{ if(e.target===sc) close(); }});
+  const sh=el('div',{class:'sheet',role:'dialog','aria-modal':'true'});
+  const close=()=>{ sc.remove(); document.removeEventListener('keydown',esc); render(); };
+  const esc=e=>{ if(e.key==='Escape') close(); };
+  document.addEventListener('keydown',esc);
+  sh.append(el('div',{class:'grab'})); build(sh,close); sc.append(sh); document.body.append(sc);
+  return close;
+}
+
+// ---------- detail ----------
+const VIBES=['dark','funny','slow-burn','intense','feel-good','cerebral','stylish','epic','cozy','gritty','weird','emotional','twisty','action-packed','romantic','nostalgic'];
+const DISH_TAGS=['italian','mexican','japanese','chinese','indian','thai','korean','american','mediterranean','french','middle eastern','caribbean',
+  'spicy','rich','creamy','fried','grilled','smoky','sweet','tangy','umami','fresh','cheesy','beef','chicken','pork','seafood','vegetarian',
+  'noodles','rice','sandwich','pizza','tacos','soup','salad','dessert','breakfast'];
+const CHAR_TAGS=['anti-hero','villain','mentor','underdog','genius','comic relief','morally gray','redemption arc','tragic','ruthless','loyal',
+  'chaotic','stoic','charismatic leader','outsider','competent professional','sarcastic','rival'];
+
+function openDetail(it){
+  sheet((sh,close)=>{
+    const draw=()=>{
+      sh.innerHTML=''; sh.append(el('div',{class:'grab'}));
+      const mine=S.ratings[it.id], lock=S.locks[it.id];
+      const p=predict(it);
+      const c=Core.catalog();
+      const meta=el('div',{class:'meta'},
+        el('h2',{text:it.title}), el('div',{class:'small muted',text:subline(it)}));
+      if((it.kind==='movie'||it.kind==='tv')&&c){
+        meta.append(el('div',{class:'small muted',text:it.g.map(g=>c.genres[g]).filter(Boolean).join(', ')}));
+        if(it.a.length) meta.append(el('div',{class:'small muted',text:it.a.slice(0,3).map(i=>c.people[i]).join(', ')}));
+        const sv=servicesOf(it.id).map(s=>PROV&&PROV.names[s]).filter(Boolean);
+        if(sv.length) meta.append(el('div',{class:'small',text:'Streaming: '+sv.slice(0,4).join(', ')}));
+      }
+      if(it.kind==='book'&&it.subjects&&it.subjects.length) meta.append(el('div',{class:'small muted',text:it.subjects.slice(0,4).join(', ')}));
+      sh.append(el('div',{class:'dhead'},posterEl(it,true),meta));
+
+      // the call
+      const big=el('div',{class:'big'});
+      if(mine){
+        big.append(el('div',{class:'n',style:'color:var(--star)',text:fmt(mine.r)}),
+          el('div',{class:'r'},'Your rating', el('br'), lock&&lock.r!=null?`Locked call was ${fmt(lock.p)}★ (${lock.p>mine.r?'+':''}${fmt(lock.p-mine.r)})`:(MODEL?`Model now says ${fmt(p.p)}★ (it has seen this one)`:'')));
+      } else {
+        big.append(el('div',{class:'n',text:fmt(p.p)}),
+          el('div',{class:'r'}, p.learning?'Crowd guess — rate 10+ titles to personalize':`Predicted for you, ±${fmt(p.conf)}`, el('br'),
+            p.crowd!=null?`Crowd says ${fmt(p.crowd)}★`:'No crowd score', lock?el('span',{text:' · Locked '+fmt(lock.p)+'★'}):null));
+      }
+      sh.append(big);
+      if(p.why&&p.why.length){
+        const rs=el('div',{class:'reasons'},el('div',{class:'label',text:'What drives it'}));
+        p.why.slice(0,6).forEach(x=>rs.append(el('div',{class:'reason'},el('span',{text:x.label}),el('span',{class:'v '+(x.v>0?'up':'down'),text:(x.v>0?'+':'−')+Math.abs(x.v).toFixed(2)}))));
+        sh.append(rs);
+      }
+      const ovEl=el('div',{class:'ov'}); sh.append(ovEl);
+      if(it.kind==='movie'||it.kind==='tv') overview(it.id).then(t=>{ ovEl.textContent=t; });
+      if(S.reviews[it.id]) sh.append(el('div',{class:'ov',style:'font-style:italic'},'Your review: '+S.reviews[it.id].slice(0,280)+(S.reviews[it.id].length>280?'…':'')));
+
+      // rate
+      const val=el('span',{class:'starval num',text:mine?fmt(mine.r):''});
+      sh.append(el('div',{class:'card'},el('div',{class:'label',text:mine?'Change your rating':'Rate it'}),
+        el('div',{class:'row'},starsEl(mine?mine.r:0,(v,done)=>{ val.textContent=fmt(v); if(done){ rate(it.id,v); if(!S.items[it.id]&&it.kind!=='movie'&&it.kind!=='tv'){ S.items[it.id]=it; save(); } draw(); toast('Saved '+fmt(v)+'★'); } }),val)));
+
+      // vibe tags (shared across every category: this is how taste crosses over)
+      const vocab=it.kind==='dish'?DISH_TAGS:it.kind==='character'?CHAR_TAGS:VIBES;
+      const myTags=new Set([...(S.tags[it.id]||[]),...(it.tags||[])]);
+      sh.append(el('div',{class:'card'},el('div',{class:'label',text:'Tags'}),
+        el('div',{class:'small muted',text:'Optional. Tags carry across movies, shows, books, dishes and characters.'}),
+        el('div',{class:'chips'},[...new Set([...vocab,...myTags])].map(t=>el('button',{class:'chip','aria-pressed':myTags.has(t)?'true':'false',text:t,onclick:()=>{
+          const cur=new Set(S.tags[it.id]||[]); cur.has(t)?cur.delete(t):cur.add(t); S.tags[it.id]=[...cur];
+          if(!S.items[it.id]&&it.kind!=='movie'&&it.kind!=='tv') S.items[it.id]=it;
+          markDirty(); save(); draw(); }})))));
+
+      const acts=el('div',{class:'row'});
+      if(!mine&&!lock) acts.append(el('button',{class:'btn primary',text:'Lock prediction',onclick:()=>{ lockPrediction(it); draw(); }}));
+      if(!mine) acts.append(el('button',{class:'btn',text:S.watchlist[it.id]?'On watchlist ✓':'Watchlist',onclick:()=>{ S.watchlist[it.id]?delete S.watchlist[it.id]:S.watchlist[it.id]=Date.now(); if(!S.items[it.id]&&it.kind==='book') S.items[it.id]=it; save(); draw(); }}));
+      if(!mine) acts.append(el('button',{class:'btn ghost',text:'Not for me',onclick:()=>{ S.skip[it.id]=1; save(); close(); toast('Hidden from picks.'); }}));
+      if(mine) acts.append(el('button',{class:'btn ghost danger',text:'Remove rating',onclick:()=>{ unrate(it.id); draw(); }}));
+      if(lock&&lock.r==null) acts.append(el('button',{class:'btn ghost',text:'Cancel lock',onclick:()=>{ delete S.locks[it.id]; save(); draw(); }}));
+      sh.append(acts);
+    };
+    draw();
+  });
+}
+
+// ---------- For you ----------
+function recommend(kind, n=40){
+  const c=Core.catalog(); if(!c) return {top:[],wild:[]};
+  refit();
+  const sc=[];
+  for(const it of c.items){
+    if(it.kind!==kind||S.ratings[it.id]||S.seen[it.id]||S.skip[it.id]||it.vc<60) continue;
+    if(S.settings.onlyMine&&S.settings.services.length&&!onMyServices(it.id)) continue;
+    const p=predict(it); sc.push([it,p,p.p-0.25*p.conf]);
+  }
+  sc.sort((a,b)=>b[2]-a[2]);
+  const top=sc.slice(0,n);
+  const ids=new Set(top.map(x=>x[0].id));
+  const wild=sc.slice(0,400).filter(x=>!ids.has(x[0].id)).sort((a,b)=>(a[1].cov-b[1].cov)||(b[1].p-a[1].p)).slice(0,3);
+  return {top, wild};
+}
+function viewYou(w){
+  const nR=Object.keys(S.ratings).length;
+  w.append(el('div',{class:'seg',role:'tablist'},[['movie','Movies'],['tv','Shows'],['book','Books'],['watch','Watchlist']].map(([k,l])=>
+    el('button',{class:'chip','aria-pressed':youCat===k?'true':'false',text:l,onclick:()=>{ youCat=k; render(); }}))));
+  if(catStatus==='loading'){ w.append(el('div',{class:'empty',text:'Loading the catalog…'})); return; }
+  if(youCat==='watch'){ return viewWatchlist(w); }
+  if(youCat==='book'){ return viewBookRecs(w); }
+  if(catStatus==='missing'){
+    w.append(el('div',{class:'empty'},el('b',{text:'The movie & TV catalog isn’t built yet.'}),el('br'),
+      'It builds itself on GitHub once the TMDB key is added. Meanwhile you can import Letterboxd (it waits and matches later), and rate books, dishes and characters.'));
+    return;
+  }
+  if(nR<10){ w.append(el('div',{class:'note'},el('b',{text:`${nR} rated so far.`}),' Picks are crowd favorites until you’ve rated 10+. Import Letterboxd or use Quick rate in Library.')); }
+  const mine=S.settings.services;
+  if(mine.length) w.append(el('div',{class:'row small muted'},
+    el('button',{class:'chip','aria-pressed':S.settings.onlyMine?'true':'false',text:'Only my services',onclick:()=>{ S.settings.onlyMine=!S.settings.onlyMine; save(); render(); }})));
+  const {top,wild}=recommend(youCat);
+  if(!top.length){ w.append(el('div',{class:'empty',text:'Nothing left to suggest with these filters.'})); return; }
+  w.append(el('div',{class:'label',text:'Top picks'}), el('div',{class:'list'},top.slice(0,10).map(([it,p])=>titleRow(it,{pred:p}))));
+  if(wild.length&&MODEL){ w.append(el('div',{class:'label',text:'Wildcards — outside what you usually rate'}), el('div',{class:'list'},wild.map(([it,p])=>titleRow(it,{pred:p,tag:'wildcard'})))); }
+  if(top.length>10) w.append(el('div',{class:'label',text:'More picks'}), el('div',{class:'list'},top.slice(10).map(([it,p])=>titleRow(it,{pred:p}))));
+}
+function viewWatchlist(w){
+  const ids=Object.keys(S.watchlist).filter(id=>getItem(id));
+  if(!ids.length){ w.append(el('div',{class:'empty',text:'Your watchlist is empty. Letterboxd’s watchlist comes in with the import.'})); return; }
+  const rows=ids.map(id=>[getItem(id),predict(getItem(id))]).sort((a,b)=>b[1].p-a[1].p);
+  w.append(el('div',{class:'small muted',text:'Ranked by how much the model thinks you’ll like each one.'}), el('div',{class:'list'},rows.map(([it,p])=>titleRow(it,{pred:p}))));
+}
+let bookRecCache=null;
+function viewBookRecs(w){
+  const rated=Object.keys(S.ratings).map(getItem).filter(it=>it&&it.kind==='book');
+  if(rated.length<3){ w.append(el('div',{class:'empty'},'Rate at least 3 books to get book picks. Find them in ',el('b',{text:'Grade'}),' → search books.')); return; }
+  const box=el('div',{class:'list'},el('div',{class:'empty',text:'Searching Open Library for your kind of books…'})); w.append(box);
+  if(bookRecCache&&bookRecCache.n===rated.length){ fill(bookRecCache.list); return; }
+  refit();
+  // seeds: your best-weighted authors and subjects
+  const seeds=MODEL?[...MODEL.W.entries()].filter(([k,v])=>(k.startsWith('au:')||k.startsWith('s:'))&&v>0&&(MODEL.cnt.get(k)||0)>=1).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>k):[];
+  const qs=seeds.length?seeds.map(k=>k.startsWith('au:')?'author:"'+k.slice(3)+'"':'subject:"'+k.slice(2)+'"'):rated.slice(0,3).map(b=>'subject:"'+(b.subjects[0]||'fiction')+'"');
+  Promise.all(qs.map(q=>olSearch(q,25).catch(()=>[]))).then(rs=>{
+    const seen=new Set(); const all=[];
+    for(const b of rs.flat()){ if(seen.has(b.id)||S.ratings[b.id]||S.skip[b.id]) continue; seen.add(b.id); all.push([b,predict(b)]); }
+    all.sort((a,b)=>(b[1].p-0.25*b[1].conf)-(a[1].p-0.25*a[1].conf));
+    bookRecCache={n:rated.length,list:all.slice(0,25)}; fill(bookRecCache.list);
+  });
+  function fill(list){ box.innerHTML=''; if(!list.length){ box.append(el('div',{class:'empty',text:'Couldn’t reach Open Library. Try again online.'})); return; }
+    list.forEach(([b,p])=>box.append(titleRow(b,{pred:p}))); }
+}
+
+// ---------- Grade ----------
+let gradeQ='', gradeKind='', gradeRes=null;
+function viewGrade(w){
+  const input=el('input',{type:'search',placeholder:'Search a movie, show or book',value:gradeQ,enterkeyhint:'search','aria-label':'Search'});
+  const res=el('div',{class:'list'});
+  const run=()=>{ gradeQ=input.value; res.innerHTML='';
+    const hits=Core.search(gradeQ, gradeKind==='book'?'__none':gradeKind||null, 20);
+    hits.forEach(it=>res.append(titleRow(it)));
+    if(gradeQ.trim().length>1) res.append(el('button',{class:'btn wide',text:'Search books for “'+gradeQ.trim()+'”',onclick:async(e)=>{
+      e.target.disabled=true; e.target.textContent='Searching Open Library…';
+      try{ const bs=await olSearch(gradeQ.trim()); e.target.remove(); if(!bs.length) res.append(el('div',{class:'empty',text:'No books found.'})); bs.forEach(b=>res.append(titleRow(b))); }
+      catch(err){ e.target.disabled=false; e.target.textContent='Couldn’t reach Open Library — retry'; } }}));
+    else if(!hits.length&&catStatus==='missing') res.append(el('div',{class:'small muted',text:'Movie & TV search turns on once the catalog is built. Books work now.'}));
+  };
+  let t; input.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(run,180); });
+  w.append(input, el('div',{class:'seg'},[['','All'],['movie','Movies'],['tv','Shows']].map(([k,l])=>el('button',{class:'chip','aria-pressed':gradeKind===k?'true':'false',text:l,onclick:()=>{ gradeKind=k; render(); }}))), res);
+  if(gradeQ) run();
+
+  // dishes, characters, anything else
+  const card=el('div',{class:'card'});
+  let kind='dish', tags=new Set(); const name=el('input',{placeholder:'Name (e.g. Spicy vodka rigatoni)','aria-label':'Name'}), where=el('input',{placeholder:'Where / from what (optional)','aria-label':'Where'});
+  const out=el('div');
+  const drawCard=()=>{
+    card.innerHTML='';
+    card.append(el('h3',{text:'Grade something else'}), el('div',{class:'small muted',text:'A dish off a menu, a character, anything. Pick what it’s like and Palate scores it against your taste.'}),
+      el('div',{class:'seg'},[['dish','Dish'],['character','Character'],['other','Other']].map(([k,l])=>el('button',{class:'chip','aria-pressed':kind===k?'true':'false',text:l,onclick:()=>{ kind=k; tags=new Set(); drawCard(); }}))),
+      name, where,
+      el('div',{class:'chips'},[...(kind==='dish'?DISH_TAGS:kind==='character'?CHAR_TAGS:VIBES),...(kind!=='other'?VIBES.slice(0,8):[])].filter((v,i,a)=>a.indexOf(v)===i)
+        .map(tg=>el('button',{class:'chip','aria-pressed':tags.has(tg)?'true':'false',text:tg,onclick:e=>{ tags.has(tg)?tags.delete(tg):tags.add(tg); e.target.setAttribute('aria-pressed',tags.has(tg)); }}))),
+      el('button',{class:'btn primary',text:'Grade it',onclick:()=>{
+        if(!name.value.trim()){ toast('Give it a name.'); return; }
+        const it={id:'x:'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), kind, title:name.value.trim(), where:where.value.trim()||null, tags:[...tags]};
+        const p=predict(it);
+        out.innerHTML='';
+        out.append(el('div',{class:'big'},el('div',{class:'n',text:fmt(p.p)}),el('div',{class:'r'},
+          p.learning||!p.why.length?'Not much to go on yet — rate a few '+(kind==='dish'?'dishes':kind==='character'?'characters':'things')+' with tags first.':'Predicted for you, ±'+fmt(p.conf))));
+        if(p.why.length) out.append(el('div',{class:'reasons'},p.why.slice(0,5).map(x=>el('div',{class:'reason'},el('span',{text:x.label}),el('span',{class:'v '+(x.v>0?'up':'down'),text:(x.v>0?'+':'−')+Math.abs(x.v).toFixed(2)})))));
+        out.append(el('div',{class:'row',style:'margin-top:10px'},
+          el('button',{class:'btn',text:'Save & rate',onclick:()=>{ S.items[it.id]=it; save(); openDetail(it); }}),
+          el('button',{class:'btn',text:'Lock it',onclick:()=>{ S.items[it.id]=it; lockPrediction(it); }})));
+      }}), out);
+  };
+  drawCard(); w.append(card);
+}
+
+// ---------- Library ----------
+function viewLib(w){
+  const rated=Object.entries(S.ratings).map(([id,r])=>[getItem(id),r]).filter(x=>x[0]);
+  const counts={}; rated.forEach(([it])=>counts[it.kind]=(counts[it.kind]||0)+1);
+  const pend=Object.values(S.pending).reduce((s,a)=>s+a.length,0);
+  const fileIn=el('input',{type:'file',accept:'.zip,.csv',hidden:true,onchange:async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{ const r=await importFile(f); render();
+      toast(r?`Imported ${r.ratings} ratings and ${r.watchlist} watchlist titles.${r.unmatchedRatings?` ${r.unmatchedRatings} ratings didn’t match a title yet.`:''}`:'Saved. It’ll match once the catalog is built.'); }
+    catch(err){ toast('Couldn’t read that file: '+err.message); } }});
+  w.append(el('div',{class:'card'},
+    el('h3',{text:'Bring in your history'}),
+    el('div',{class:'small muted'},'Letterboxd: Settings → Data → Export your data, then pick the ZIP here. Any CSV with Title, Year, Rating (and Type: movie/show) works too — use that for Serializd or anything else.'),
+    el('div',{class:'row'},el('button',{class:'btn primary',text:'Import ZIP or CSV',onclick:()=>fileIn.click()}),
+      el('button',{class:'btn',text:'Quick rate',onclick:()=>go('rapid'),disabled:catStatus!=='ok'})),
+    pend?el('div',{class:'small muted',text:`${pend} imported rows ${catStatus==='ok'?'didn’t match a title in the catalog':'waiting for the catalog'}.`}):null,
+    fileIn));
+  w.append(el('div',{class:'row small'},['movie','tv','book','dish','character','other'].filter(k=>counts[k]).map(k=>el('span',{class:'chip',text:`${Core.label('c:'+k)} ${counts[k]}`}))));
+  if(!rated.length){ w.append(el('div',{class:'empty',text:'Nothing rated yet.'})); return; }
+  w.append(el('div',{class:'seg'},[['all','Recent'],['hi','Highest'],['lo','Lowest'],['movie','Movies'],['tv','Shows'],['book','Books'],['x','Other']].map(([k,l])=>
+    el('button',{class:'chip','aria-pressed':libFilter===k?'true':'false',text:l,onclick:()=>{ libFilter=k; render(); }}))));
+  let list=rated;
+  if(['movie','tv','book'].includes(libFilter)) list=list.filter(([it])=>it.kind===libFilter);
+  if(libFilter==='x') list=list.filter(([it])=>!['movie','tv','book'].includes(it.kind));
+  list.sort(libFilter==='hi'?(a,b)=>b[1].r-a[1].r:libFilter==='lo'?(a,b)=>a[1].r-b[1].r:(a,b)=>b[1].at-a[1].at);
+  const box=el('div',{class:'list'}); w.append(box);
+  let shown=0; const more=()=>{ list.slice(shown,shown+40).forEach(([it])=>box.append(titleRow(it,{why:false}))); shown+=40;
+    if(shown<list.length) box.append(el('button',{class:'btn wide ghost',text:`Show more (${list.length-shown})`,onclick:e=>{ e.target.remove(); more(); }})); };
+  more();
+}
+
+// ---------- Quick rate ----------
+let rapidKind='movie', rapidCount=0;
+function viewRapid(w){
+  const c=Core.catalog(); if(!c){ w.append(el('div',{class:'empty',text:'Needs the catalog.'})); return; }
+  w.append(el('div',{class:'seg'},[['movie','Movies'],['tv','Shows']].map(([k,l])=>el('button',{class:'chip','aria-pressed':rapidKind===k?'true':'false',text:l,onclick:()=>{ rapidKind=k; render(); }}))));
+  const it=c.items.find(x=>x.kind===rapidKind&&!S.ratings[x.id]&&!S.seen[x.id]&&!S.skip[x.id]&&!(S.rapidPass||{})[x.id]);
+  if(!it){ w.append(el('div',{class:'empty',text:'You’ve been through everything here.'})); return; }
+  const val=el('span',{class:'starval num'});
+  const next=()=>{ rapidCount++; render(); };
+  w.append(el('div',{class:'rapid'},
+    el('div',{class:'small muted',text:`${rapidCount} this session · ${Object.keys(S.ratings).length} rated total`}),
+    posterEl(it,true), el('h2',{text:it.title}), el('div',{class:'small muted',text:subline(it)}),
+    el('div',{class:'row',style:'justify-content:center'},starsEl(0,(v,done)=>{ val.textContent=fmt(v); if(done){ rate(it.id,v); setTimeout(next,220); } }),val),
+    el('div',{class:'row',style:'justify-content:center'},
+      el('button',{class:'btn',text:'Haven’t seen',onclick:()=>{ S.rapidPass=S.rapidPass||{}; S.rapidPass[it.id]=1; save(); next(); }}),
+      el('button',{class:'btn ghost',text:'Seen, can’t rate',onclick:()=>{ S.seen[it.id]=1; save(); next(); }}))));
+}
+
+// ---------- Scoreboard ----------
+function liveStats(){
+  const g=Object.values(S.locks).filter(l=>l.r!=null);
+  const pend=Object.entries(S.locks).filter(([,l])=>l.r==null);
+  if(!g.length) return {n:0,pend};
+  const m=k=>{ let a=0,w=0,n=0; for(const l of g){ const p=l[k]??l.mean; const e=Math.abs(p-l.r); a+=e; if(e<=0.5) w++; n++; } return {mae:a/n, within:w/n}; };
+  return {n:g.length, model:m('p'), crowd:m('crowd'), mean:m('mean'), pend};
+}
+function viewScore(w){
+  const rows=trainingRows();
+  if(rows.length<20){ w.append(el('div',{class:'empty'},el('b',{text:'Rate at least 20 things to see if Palate knows you.'}),el('br'),`${rows.length} so far.`)); }
+  else {
+    if(!CV){ CV=Core.crossValidate(rows); if(CV){ S.lambda=CV.lambda; S.cvRmse=CV.model.rmse; save(); dirty=true; } }
+    const gap=CV.crowd.mae-CV.model.mae;
+    const sure=CV.gap.hi<0, worse=CV.gap.lo>0;
+    w.append(el('div',{class:'card'},
+      el('div',{class:'label',text:'Backtest on your ratings'}),
+      el('div',{class:'verdict',text: sure?`Beats the crowd by ${gap.toFixed(2)}★ per title.`: worse?'Not beating the crowd yet.':'Too close to call against the crowd yet.'}),
+      el('div',{class:'small muted',text:`Each rating predicted by a model that never saw it (5-fold, ${CV.n} titles). Palate’s edge over the crowd: ${gap.toFixed(2)}★, 90% range ${(-CV.gap.hi).toFixed(2)} to ${(-CV.gap.lo).toFixed(2)}.`}),
+      scoreTable([['Palate',CV.model,true],['Crowd score',CV.crowd],['Your average',CV.mean]])));
+    const cats=Object.entries(CV.byCat).filter(([,c])=>c.n>=5);
+    if(cats.length>1) w.append(el('div',{class:'card'},el('div',{class:'label',text:'By category (avg miss, ★)'}),
+      el('table',{class:'sb'},el('tr',{},el('th',{text:''}),el('th',{text:'n'}),el('th',{text:'Palate'}),el('th',{text:'Crowd'})),
+        cats.map(([k,c])=>el('tr',{},el('td',{text:Core.label('c:'+k)}),el('td',{text:c.n}),el('td',{text:(c.m/c.n).toFixed(2)}),el('td',{text:(c.c/c.n).toFixed(2)}))))));
+  }
+  const L=liveStats();
+  w.append(el('div',{class:'card'},el('div',{class:'label',text:'Live: locked before you watched'}),
+    L.n?scoreTable([['Palate',L.model,true],['Crowd score',L.crowd],['Your average',L.mean]],L.n)
+       :el('div',{class:'small muted',text:'Lock a prediction on anything you haven’t seen yet. When you rate it, it gets graded here. This is the real test — no hindsight.'}),
+    L.pend.length?el('div',{class:'small muted',text:`${L.pend.length} locked, waiting for your rating: `+L.pend.slice(0,5).map(([,l])=>l.title).join(', ')+(L.pend.length>5?'…':'')}):null));
+  refit();
+  if(MODEL){
+    const eff=[...MODEL.W.entries()].filter(([k,v])=>!/^e\d+$/.test(k)&&!k.startsWith('c:')&&k!=='q'&&k!=='qb'&&k!=='mb'&&(MODEL.cnt.get(k)||0)>=3)
+      .map(([k,v])=>[k,v*(k.startsWith('k:')?0.55:k.startsWith('a:')?0.6:k.startsWith('s:')?0.5:k.startsWith('d:')?0.7:1)]);
+    const up=eff.filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,8), dn=eff.filter(x=>x[1]<0).sort((a,b)=>a[1]-b[1]).slice(0,8);
+    const list=(arr)=>el('div',{class:'reasons'},arr.map(([k,v])=>el('div',{class:'reason'},el('span',{text:Core.label(k)}),
+      el('span',{class:'v '+(v>0?'up':'down'),text:(v>0?'+':'−')+Math.abs(v).toFixed(2)+'★'}))));
+    w.append(el('div',{class:'card'},el('div',{class:'label',text:'Your taste, as the model sees it'}),
+      el('div',{class:'small muted',text:'Effect on your rating, holding everything else equal. Only things that show up in 3+ of your ratings.'}),
+      up.length?el('div',{},el('div',{class:'small',style:'font-weight:800;margin-bottom:4px',text:'Pulls you in'}),list(up)):null,
+      dn.length?el('div',{},el('div',{class:'small',style:'font-weight:800;margin-bottom:4px',text:'Turns you off'}),list(dn)):null));
+  }
+}
+function scoreTable(rows,n){
+  return el('table',{class:'sb'},el('tr',{},el('th',{text:''}),el('th',{text:'Avg miss'}),el('th',{text:'Within ½★'})),
+    rows.map(([name,m,me])=>el('tr',{class:me?'me':''},el('td',{text:name}),el('td',{text:m.mae.toFixed(2)+'★'}),el('td',{text:Math.round(m.within*100)+'%'}))),
+    n?el('tr',{},el('td',{class:'small muted',text:`${n} graded`,colspan:'3'})):null);
+}
+
+// ---------- Settings ----------
+function viewSettings(w){
+  const c=Core.catalog();
+  w.append(el('div',{class:'card'},el('h3',{text:'Catalog'}),
+    el('div',{class:'small muted',text: c?`${c.items.length.toLocaleString()} movies & shows · updated ${c.built}. Refreshes weekly on its own.`:'Not built yet. Add the TMDB_API_KEY secret to the repo and run the “Palate catalog” workflow.'})));
+  if(PROV){
+    const counts={}; for(const v of Object.values(PROV.items)) for(const p of v) counts[p]=(counts[p]||0)+1;
+    const ids=Object.keys(PROV.names).sort((a,b)=>(counts[b]||0)-(counts[a]||0)).slice(0,30);
+    const mine=new Set(S.settings.services);
+    w.append(el('div',{class:'card'},el('h3',{text:'Your streaming services'}),el('div',{class:'small muted',text:'Picks can stick to what you can watch tonight (US).'}),
+      el('div',{class:'chips'},ids.map(id=>el('button',{class:'chip','aria-pressed':mine.has(id)?'true':'false',text:PROV.names[id],onclick:()=>{
+        mine.has(id)?mine.delete(id):mine.add(id); S.settings.services=[...mine]; save(); render(); }})))));
+  }
+  const ta=el('textarea',{rows:'3',placeholder:'Paste a backup to restore it.','aria-label':'Backup'});
+  w.append(el('div',{class:'card'},el('h3',{text:'Your data'}),
+    el('div',{class:'small muted',text:'Ratings, tags and locks live only on this phone. Copy a backup now and then.'}),
+    el('div',{class:'row'},
+      el('button',{class:'btn sm',text:'Copy backup',onclick:async()=>{ const d=JSON.stringify(S); try{ await navigator.clipboard.writeText(d); toast('Copied.'); }catch(e){ ta.value=d; ta.select(); toast('Select and copy below.'); } }}),
+      el('button',{class:'btn sm',text:'Restore',onclick:()=>{ try{ const d=JSON.parse(ta.value); if(!d.ratings) throw 0; if(!confirm('Replace everything on this phone with this backup?')) return; S=Object.assign(blank(),d); save(); markDirty(); toast('Restored.'); go('lib'); }catch(e){ toast('That backup couldn’t be read.'); } }}),
+      el('button',{class:'btn sm danger',text:'Erase all',onclick:()=>{ if(confirm('Erase every rating, tag and lock on this phone?')){ S=blank(); save(); markDirty(); toast('Erased.'); go('you'); } }})),
+    ta));
+  w.append(el('div',{class:'small muted',style:'line-height:1.5'},
+    'Movie & TV data and images from ',el('a',{href:'https://www.themoviedb.org',target:'_blank',rel:'noopener',text:'TMDB'}),
+    '. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming info via JustWatch. Taste vectors derived from MovieLens (GroupLens Research). Books from ',
+    el('a',{href:'https://openlibrary.org',target:'_blank',rel:'noopener',text:'Open Library'}),'.'));
+}
+
+render();
+loadData();
+try{ if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{ try{ r.update(); }catch(e){} }).catch(()=>{});
+  let reloaded=false; navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(reloaded) return; reloaded=true; if(!document.querySelector('.scrim')) location.reload(); });
+}}catch(e){}
+</script>
+</body></html>

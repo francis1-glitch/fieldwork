@@ -1,0 +1,45 @@
+name: Palate catalog
+
+# Builds palate/data/*.json (movies + TV, taste vectors, streaming services).
+# Nothing personal: your ratings stay on your phone.
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild_crowd:
+        description: "Recompute MovieLens taste vectors"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 9 * * 1"   # Mondays 09:17 UTC
+
+permissions:
+  contents: write
+
+concurrency:
+  group: palate-catalog
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas numpy scipy requests
+      - name: Build catalog
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          python palate/pipeline/build_catalog.py ${{ inputs.rebuild_crowd && '--rebuild-crowd' || '' }}
+      - name: Commit data
+        run: |
+          git config user.name "palate-bot"
+          git config user.email "palate-bot@users.noreply.github.com"
+          git add palate/data
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -m "Palate catalog update $(date -u +%F)"
+          git pull --rebase origin main
+          git push origin HEAD:main
