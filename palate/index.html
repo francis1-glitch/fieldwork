@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Palate">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="apple-touch-icon-v2.png">
+<link rel="apple-touch-icon" href="apple-touch-icon-v3.png">
 <title>Palate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -852,7 +852,7 @@ function viewLib(w){
     catch(err){ toast('Couldn’t read that file: '+err.message); } }});
   w.append(el('div',{class:'card'},
     el('h3',{text:'Bring in your history'}),
-    el('div',{class:'small muted'},'Letterboxd: Settings → Data → Export your data, then pick the ZIP here. Any CSV with Title, Year, Rating (and Type: movie/show) works too — use that for Serializd or anything else.'),
+    el('div',{class:'small muted'},'Letterboxd: Settings → Data → Export your data, then pick the ZIP here. On iPhone, AirDrop or save the ZIP to Files first, then pick it from Browse. Any CSV with Title, Year, Rating (and Type: movie/show) works too — use that for Serializd or anything else.'),
     el('div',{class:'row'},el('button',{class:'btn primary',text:'Import ZIP or CSV',onclick:()=>fileIn.click()}),
       el('button',{class:'btn',text:'Quick rate',onclick:()=>go('rapid'),disabled:catStatus!=='ok'})),
     pend?el('div',{class:'small muted',text:`${pend} imported rows ${catStatus==='ok'?'didn’t match a title in the catalog':'waiting for the catalog'}.`}):null,
@@ -938,6 +938,19 @@ function scoreTable(rows,n){
     n?el('tr',{},el('td',{class:'small muted',text:`${n} graded`,colspan:'3'})):null);
 }
 
+// ---------- moving data between devices ----------
+function mergeBackup(d){
+  const n={ratings:0};
+  for(const [id,r] of Object.entries(d.ratings||{})){ const cur=S.ratings[id]; if(!cur||(r.at||0)>(cur.at||0)){ if(!cur) n.ratings++; S.ratings[id]=r; } }
+  for(const k of ['items','reviews']) Object.assign(S[k], Object.fromEntries(Object.entries(d[k]||{}).filter(([id])=>!S[k][id])));
+  for(const k of ['seen','skip','watchlist']) for(const [id,v] of Object.entries(d[k]||{})) if(!(id in S[k])&&!(k==='watchlist'&&S.ratings[id])) S[k][id]=v;
+  for(const [id,l] of Object.entries(d.locks||{})){ const cur=S.locks[id]; if(!cur||(cur.r==null&&l.r!=null)) S.locks[id]=l; }
+  for(const [id,t] of Object.entries(d.tags||{})) S.tags[id]=[...new Set([...(S.tags[id]||[]),...t])];
+  for(const [src,rows] of Object.entries(d.pending||{})){ const have=new Set((S.pending[src]||[]).map(r=>r.type+'|'+r.name+'|'+r.year)); S.pending[src]=(S.pending[src]||[]).concat(rows.filter(r=>!have.has(r.type+'|'+r.name+'|'+r.year))); }
+  if(!S.settings.services.length&&d.settings&&d.settings.services) S.settings.services=d.settings.services;
+  rematchPending(); markDirty(); save(); return n;
+}
+
 // ---------- Settings ----------
 function viewSettings(w){
   const c=Core.catalog();
@@ -952,13 +965,15 @@ function viewSettings(w){
         mine.has(id)?mine.delete(id):mine.add(id); S.settings.services=[...mine]; save(); render(); }})))));
   }
   const ta=el('textarea',{rows:'3',placeholder:'Paste a backup to restore it.','aria-label':'Backup'});
+  const readTa=()=>{ try{ const d=JSON.parse(ta.value); if(!d.ratings) throw 0; return d; }catch(e){ toast('Paste a backup in the box first.'); return null; } };
   w.append(el('div',{class:'card'},el('h3',{text:'Your data'}),
-    el('div',{class:'small muted',text:'Ratings, tags and locks live only on this phone. Copy a backup now and then.'}),
+    el('div',{class:'small muted',text:'Ratings, tags and locks live only on this device — your laptop and phone each keep their own. To move them: tap Copy backup on one device, paste it in the box on the other, then tap Add to this device. It merges, nothing gets wiped.'}),
+    ta,
     el('div',{class:'row'},
-      el('button',{class:'btn sm',text:'Copy backup',onclick:async()=>{ const d=JSON.stringify(S); try{ await navigator.clipboard.writeText(d); toast('Copied.'); }catch(e){ ta.value=d; ta.select(); toast('Select and copy below.'); } }}),
-      el('button',{class:'btn sm',text:'Restore',onclick:()=>{ try{ const d=JSON.parse(ta.value); if(!d.ratings) throw 0; if(!confirm('Replace everything on this phone with this backup?')) return; S=Object.assign(blank(),d); save(); markDirty(); toast('Restored.'); go('lib'); }catch(e){ toast('That backup couldn’t be read.'); } }}),
-      el('button',{class:'btn sm danger',text:'Erase all',onclick:()=>{ if(confirm('Erase every rating, tag and lock on this phone?')){ S=blank(); save(); markDirty(); toast('Erased.'); go('you'); } }})),
-    ta));
+      el('button',{class:'btn sm primary',text:'Add to this device',onclick:()=>{ const d=readTa(); if(!d) return; const n=mergeBackup(d); ta.value=''; toast(`Merged. ${n.ratings} new ratings.`); go('lib'); }}),
+      el('button',{class:'btn sm',text:'Copy backup',onclick:async()=>{ const d=JSON.stringify(S); try{ await navigator.clipboard.writeText(d); toast('Copied. Paste it on your other device.'); }catch(e){ ta.value=d; ta.select(); toast('Select and copy the box.'); } }}),
+      el('button',{class:'btn sm ghost',text:'Replace instead',onclick:()=>{ const d=readTa(); if(!d) return; if(!confirm('Replace everything on this device with this backup?')) return; S=Object.assign(blank(),d); save(); markDirty(); toast('Replaced.'); go('lib'); }}),
+      el('button',{class:'btn sm danger',text:'Erase all',onclick:()=>{ if(confirm('Erase every rating, tag and lock on this device?')){ S=blank(); save(); markDirty(); toast('Erased.'); go('you'); } }}))));
   w.append(el('div',{class:'small muted',style:'line-height:1.5'},
     'Movie & TV data and images from ',el('a',{href:'https://www.themoviedb.org',target:'_blank',rel:'noopener',text:'TMDB'}),
     '. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming info via JustWatch. Taste vectors derived from MovieLens (GroupLens Research). Books from ',
