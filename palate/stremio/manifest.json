@@ -1,15 +1,43 @@
 {
   "id": "io.github.francis1-glitch.palate",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": "Palate",
-  "description": "Your personal Palate picks: movies and shows ranked by how much Palate predicts you'll like them.",
+  "description": "Your Palate picks (what Palate predicts you'll love) and your Palate favorites (what you rated highest).",
   "logo": "https://francis1-glitch.github.io/fieldwork/palate/icon-512-v3.png",
-  "resources": ["catalog"],
-  "types": ["movie", "series"],
-  "idPrefixes": ["tt"],
-  "catalogs": [
-    {"type": "movie", "id": "palate-movies", "name": "Palate picks"},
-    {"type": "series", "id": "palate-shows", "name": "Palate picks"}
+  "resources": [
+    "catalog"
   ],
-  "behaviorHints": {"configurable": false, "configurationRequired": false}
+  "types": [
+    "movie",
+    "series"
+  ],
+  "idPrefixes": [
+    "tt"
+  ],
+  "catalogs": [
+    {
+      "type": "movie",
+      "id": "palate-movies",
+      "name": "Palate picks"
+    },
+    {
+      "type": "series",
+      "id": "palate-shows",
+      "name": "Palate picks"
+    },
+    {
+      "type": "movie",
+      "id": "palate-favorites-movies",
+      "name": "Palate favorites"
+    },
+    {
+      "type": "series",
+      "id": "palate-favorites-shows",
+      "name": "Palate favorites"
+    }
+  ],
+  "behaviorHints": {
+    "configurable": false,
+    "configurationRequired": false
+  }
 }

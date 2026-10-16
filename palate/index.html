@@ -969,6 +969,13 @@ function stremioMetas(kind){
       description:`Palate predicts ${fmt(p.p)}★ for you.`+(why?` Because: ${why}.`:'')};
   });
 }
+// your own highest-rated titles, best first (4★ and up)
+function stremioFavorites(kind){
+  return Object.entries(S.ratings).map(([id,r])=>[getItem(id),r]).filter(([it,r])=>it&&it.kind===kind&&it.imdb&&r.r>=4)
+    .sort((a,b)=>(b[1].r-a[1].r)||((b[1].at||0)-(a[1].at||0))).slice(0,100)
+    .map(([it])=>({id:it.imdb, type:kind==='movie'?'movie':'series', name:it.title,
+      poster:it.poster?'https://image.tmdb.org/t/p/w342'+it.poster:undefined, releaseInfo:it.year?String(it.year):undefined}));
+}
 let stremioBusy=false;
 async function sendToStremio(quiet){
   if(!ghToken()||!Core.catalog()||stremioBusy) return;
@@ -979,8 +986,11 @@ async function sendToStremio(quiet){
     const m=stremioMetas('movie'), t=stremioMetas('tv');
     const a=await ghPut(base+'/movie/palate-movies.json', JSON.stringify({metas:m}), 'Palate picks for Stremio (movies)');
     const b=await ghPut(base+'/series/palate-shows.json', JSON.stringify({metas:t}), 'Palate picks for Stremio (shows)');
-    S.stremio={at:Date.now(), movies:m.length, shows:t.length}; save();
-    if(!quiet) toast(a||b?`Sent ${m.length} movies and ${t.length} shows. Stremio shows them in a minute or two.`:'Stremio already has your latest picks.');
+    const fm=stremioFavorites('movie'), ft=stremioFavorites('tv');
+    const c=await ghPut(base+'/movie/palate-favorites-movies.json', JSON.stringify({metas:fm}), 'Palate favorites for Stremio (movies)');
+    const d=await ghPut(base+'/series/palate-favorites-shows.json', JSON.stringify({metas:ft}), 'Palate favorites for Stremio (shows)');
+    S.stremio={at:Date.now(), movies:m.length, shows:t.length, favs:fm.length+ft.length}; save();
+    if(!quiet) toast(a||b||c||d?`Sent ${m.length+t.length} picks and ${fm.length+ft.length} favorites. Stremio shows them in a minute or two.`:'Stremio already has your latest picks.');
   }catch(e){ if(!quiet) toast(e.message); else S.stremioErr=e.message; }
   finally{ stremioBusy=false; if(view==='settings'&&!document.querySelector('.scrim')) render(); }
 }
@@ -991,7 +1001,7 @@ function stremioCard(){
   if(!ghToken()){
     const inp=el('input',{type:'password',placeholder:'Paste your GitHub token',autocomplete:'off','aria-label':'GitHub token'});
     card.append(
-      el('div',{class:'small muted',text:'Puts your top 30 movies and shows as a “Palate picks” row on Stremio’s home screen. One-time setup:'}),
+      el('div',{class:'small muted',text:'Adds “Palate picks” and “Palate favorites” rows to Stremio’s home screen. One-time setup:'}),
       el('ol',{class:'small',style:'margin:0;padding-left:20px;line-height:1.6'},
         el('li',{},'On github.com: your avatar → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.'),
         el('li',{},`Repository access: Only select repositories → ${REPO.repo}. Permissions: Contents → Read and write. Generate, then copy it.`),
@@ -1002,7 +1012,7 @@ function stremioCard(){
   }
   const st=S.stremio;
   card.append(...[
-    el('div',{class:'small muted',text: st?`Last sent ${new Date(st.at).toLocaleString()} · ${st.movies} movies, ${st.shows} shows. Titles and predicted scores only, never your ratings.`:'Not sent yet.'}),
+    el('div',{class:'small muted',text: st?`Last sent ${new Date(st.at).toLocaleString()} · ${st.movies} movie and ${st.shows} show picks, ${st.favs??0} favorites (your 4★+ titles, best first). Stremio gets titles only, not your star ratings.`:'Not sent yet.'}),
     S.stremioErr?el('div',{class:'small',style:'color:var(--bad)',text:S.stremioErr}):null,
     el('div',{class:'label',text:'Add-on link (paste in Stremio → Add-ons → search box)'}),
     el('div',{class:'small',style:'word-break:break-all;font-weight:600',text:ADDON_URL}),
