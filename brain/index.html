@@ -106,11 +106,27 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 
 .nav{position:fixed;left:0;right:0;bottom:0;background:var(--page);border-top:1px solid var(--rule);z-index:10;
   padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
-.nav .in{max-width:620px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);height:var(--navh)}
+.nav .in{max-width:620px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);height:var(--navh)}
 .nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--ink-3);font-size:12px;font-weight:600;letter-spacing:.04em}
 .nav button[aria-current="page"]{color:var(--ink)}
 .nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
 .nav button[aria-current="page"] svg{stroke:var(--copper)}
+/* links between notes */
+.wl{border:0;background:none;padding:0;font:inherit;color:var(--copper-dk);text-decoration:underline;text-decoration-color:var(--copper);text-underline-offset:3px;cursor:pointer}
+.wl.missing{color:var(--ink-3);text-decoration-style:dashed}
+.backlinks{border-top:1px solid var(--rule);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+.backlinks .note{padding:9px 12px}
+.backlinks .note .t{font-size:15px}
+.suggest{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+.suggest::-webkit-scrollbar{display:none}
+.suggest .chip{background:var(--copper-lt);border-color:transparent;color:var(--copper-dk)}
+.viewbody{flex:1;overflow:auto;display:flex;flex-direction:column;gap:14px;min-height:0}
+.viewbody .render{flex:none;overflow:visible}
+/* graph */
+.graphwrap{background:var(--page);border:1px solid var(--rule);border-radius:8px;overflow:hidden;position:relative}
+canvas.graph{display:block;width:100%;touch-action:manipulation;cursor:pointer}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--navh) + 16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:6px;font-size:13.5px;z-index:40;max-width:calc(100% - 32px)}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .2s ease-out}@keyframes up{from{transform:translateY(20px);opacity:.7}}}
 </style>
@@ -118,6 +134,7 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 <div class="wrap" id="app"></div>
 <nav class="nav" aria-label="Sections"><div class="in">
   <button id="nav-notes" aria-current="page"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h4"/></svg>Notes</button>
+  <button id="nav-graph"><svg viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.3"/><circle cx="18" cy="6" r="2.3"/><circle cx="12" cy="17" r="2.3"/><circle cx="19" cy="16" r="1.6"/><path d="M8 8l2.6 7M16 7.5l-2.8 7.6M8.2 6.8l7.5-.6M14.2 17.2l3.3-.8"/></svg>Graph</button>
   <button id="nav-tags"><svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/></svg>Tags</button>
   <button id="nav-set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
 </div></nav>
@@ -166,17 +183,43 @@ function when(iso){
   if (diff < 6*86400) return d.toLocaleDateString(undefined,{weekday:'short'});
   return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year: d.getFullYear()===n.getFullYear()?undefined:'numeric'});
 }
-function plain(body){ return body.replace(/[#*>`=\-\[\]()]/g,'').replace(/\s+/g,' ').trim(); }
+function plain(body){ return body.replace(LINK_RE,(a,t,al)=>al||t).replace(/[#*>`=\-\[\]()]/g,'').replace(/\s+/g,' ').trim(); }
 function allTags(){ const m = new Map(); for (const n of S.notes) for (const t of n.tags) m.set(t,(m.get(t)||0)+1); return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); }
 function cleanTag(t){ return t.trim().replace(/^#/,'').replace(/\s+/g,'-').toLowerCase().slice(0,30); }
 
+/* ---------- links between notes: [[Note title]] or [[Note title|shown text]] ---------- */
+const LINK_RE = /\[\[([^\]\n|#]+)(?:#[^\]\n|]*)?(?:\|([^\]\n]+))?\]\]/g;
+const norm = t => t.trim().toLowerCase();
+function findByTitle(t){ const k = norm(t); let best = null; for (const n of S.notes) if (norm(n.title)===k && (!best || n.updatedAt > best.updatedAt)) best = n; return best; }
+function linksOf(body){ const out = new Set(); let m; LINK_RE.lastIndex = 0; while ((m = LINK_RE.exec(body))) out.add(m[1].trim()); return [...out]; }
+function backlinksOf(note){ const k = norm(note.title); return S.notes.filter(x => x.id!==note.id && linksOf(x.body).some(t => norm(t)===k)); }
+function contextLine(body, title){ const k = norm(title); for (const line of body.split('\n')){ let m; LINK_RE.lastIndex=0; while ((m = LINK_RE.exec(line))) if (norm(m[1])===k) return line.replace(LINK_RE,(a,t,al)=>al||t).replace(/^[#>\-*\s]+/,'').trim(); } return ''; }
+function openLink(title){
+  const t = findByTitle(title);
+  if (t){ openNote(t.id); return; }
+  const n = {id:uid(), title:title.trim().slice(0,90), body:'', tags:[], section:'inbox', pinned:false, createdAt:nowIso(), updatedAt:nowIso()};
+  S.notes.unshift(n); save(); openEditor(n.id);
+}
+function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function renameLinks(oldT, newT, skipId){
+  const re = new RegExp('\\[\\[\\s*'+escRe(oldT.trim())+'\\s*(?=[\\]|#])','gi'); let changed = 0;
+  for (const n of S.notes){ if (n.id===skipId) continue; const b = n.body.replace(re, '[['+newT.trim()); if (b!==n.body){ n.body=b; n.updatedAt=nowIso(); changed++; } }
+  return changed;
+}
+
 /* light Markdown: # headings, - lists, > quotes, **bold**, *italic*, ==highlight==, `code`, links. Built with DOM nodes, never innerHTML. */
 function inline(text){
-  const out = []; const re = /(\*\*[^*]+\*\*|==[^=]+==|\*[^*]+\*|`[^`]+`|https?:\/\/[^\s)]+)/g; let last = 0, m;
+  const out = []; const re = /(\[\[[^\]\n]+\]\]|\*\*[^*]+\*\*|==[^=]+==|\*[^*]+\*|`[^`]+`|https?:\/\/[^\s)]+)/g; let last = 0, m;
   while ((m = re.exec(text))){
     if (m.index > last) out.push(document.createTextNode(text.slice(last, m.index)));
     const s = m[0];
-    if (s.startsWith('**')) out.push(el('strong',{text:s.slice(2,-2)}));
+    if (s.startsWith('[[')){
+      LINK_RE.lastIndex = 0; const lm = LINK_RE.exec(s);
+      if (lm){ const target = lm[1].trim(), label = (lm[2]||target).trim(), exists = !!findByTitle(target);
+        out.push(el('button',{class:'wl'+(exists?'':' missing'), title: exists ? 'Open '+target : 'Create '+target, onclick:()=>openLink(target)}, label)); }
+      else out.push(document.createTextNode(s));
+    }
+    else if (s.startsWith('**')) out.push(el('strong',{text:s.slice(2,-2)}));
     else if (s.startsWith('==')) out.push(el('mark',{text:s.slice(2,-2)}));
     else if (s.startsWith('`')) out.push(el('code',{text:s.slice(1,-1)}));
     else if (s.startsWith('*')) out.push(el('em',{text:s.slice(1,-1)}));
@@ -217,9 +260,10 @@ function filtered(){
 }
 
 function render(){
-  for (const id of ['notes','tags','set']) $('#nav-'+id).setAttribute('aria-current', tab===id?'page':'false');
+  for (const id of ['notes','graph','tags','set']) $('#nav-'+id).setAttribute('aria-current', tab===id?'page':'false');
   const app = $('#app'); app.replaceChildren();
   if (tab==='notes') renderNotes(app);
+  else if (tab==='graph') renderGraph(app);
   else if (tab==='tags') renderTags(app);
   else renderSettings(app);
 }
@@ -257,7 +301,7 @@ function renderNotes(app){
 function drawList(){
   const list = $('#list'); if (!list) return; list.replaceChildren();
   const items = filtered();
-  if (!S.notes.length){ list.append(el('div',{class:'empty'}, 'Your second brain is empty. Capture anything above: an idea, a quote, something you learned, a person’s name and how you met. Sort it later.')); return; }
+  if (!S.notes.length){ list.append(el('div',{class:'empty'}, 'Your second brain is empty. Capture anything above: an idea, a quote, something you learned, a person’s name and how you met. Link notes together by writing [[Note title]]. Sort it later.')); return; }
   if (!items.length){ list.append(el('div',{class:'empty',text: query ? 'No notes match “'+query+'”.' : 'Nothing in '+(SBYID[section]?SBYID[section].name:'this view')+' yet.'})); return; }
   for (const n of items){
     const ex = plain(n.body);
@@ -286,17 +330,27 @@ function openNote(id){
   sh.append(el('h2',{style:'font-size:24px',text:n.title}));
   sh.append(el('div',{class:'meta small muted',style:'display:flex;gap:8px;flex-wrap:wrap;align-items:center'},
     el('span',{class:'sec',text:SBYID[n.section].name}), n.tags.map(t=>el('button',{class:'tagx',text:'#'+t,onclick:()=>{ tagFilter=t; section='all'; tab='notes'; closeLayer(); render(); }})), el('span',{text:'Edited '+when(n.updatedAt)})));
-  sh.append(renderBody(n.body));
+  const view = el('div',{class:'viewbody'}, renderBody(n.body));
+  const back = backlinksOf(n);
+  if (back.length){
+    const bl = el('div',{class:'backlinks'}, el('span',{class:'label',text:'Linked from · '+back.length}));
+    for (const b of back.sort((a,c)=>c.updatedAt.localeCompare(a.updatedAt))){
+      const ctx = contextLine(b.body, n.title);
+      bl.append(el('button',{class:'note',onclick:()=>openNote(b.id)}, el('span',{class:'t',text:b.title}), ctx ? el('span',{class:'ex',text:ctx}) : null));
+    }
+    view.append(bl);
+  } else view.append(el('p',{class:'hint',text:'No other notes link here yet. Write [['+n.title+']] in another note to connect them.'}));
+  sh.append(view);
 }
 
 function openEditor(id, seed){
   const existing = id ? S.notes.find(x=>x.id===id) : null;
   const d = existing ? {...existing, tags:[...existing.tags]} : {id:uid(), title:'', body:'', tags:[], section:'inbox', pinned:false, createdAt:nowIso(), updatedAt:nowIso()};
   if (!existing && seed){ const lines = seed.split('\n'); d.title = lines[0].slice(0,90); d.body = lines.slice(1).join('\n'); }
-  let saved = !!existing;
+  let saved = !!existing; const origTitle = existing ? existing.title : null;
   const sh = sheet();
   const title = el('input',{class:'titlein',id:'noteTitle',type:'text',placeholder:'Title',value:d.title,'aria-label':'Title'});
-  const body = el('textarea',{class:'bodyin',id:'noteBody',placeholder:'Write it down. Use # for headings, - for lists, **bold**, and ==highlight== for the part that matters most.','aria-label':'Note'});
+  const body = el('textarea',{class:'bodyin',id:'noteBody',placeholder:'Write it down. Link other notes with [[Note title]]. Use # for headings, - for lists, **bold**, and ==highlight== for the part that matters most.','aria-label':'Note'});
   body.value = d.body;
   const sec = el('select',{id:'noteSection','aria-label':'Section'}, SECTIONS.map(s=>el('option',{value:s.id,text:s.name, selected: s.id===d.section})));
   const tagIn = el('input',{id:'tagInput',type:'text',placeholder:'+ tag',autocapitalize:'off','aria-label':'Add a tag'});
@@ -320,16 +374,195 @@ function openEditor(id, seed){
   const later = () => { status.textContent = 'Saving…'; clearTimeout(tmr); tmr = setTimeout(persist, 500); };
   title.addEventListener('input', later); body.addEventListener('input', later); sec.addEventListener('change', persist);
 
+  // [[ link suggestions
+  const suggest = el('div',{class:'suggest',hidden:true,'aria-label':'Link to a note'});
+  function linkContext(){ const pos = body.selectionStart; const m = /\[\[([^\]\n]*)$/.exec(body.value.slice(0,pos)); return m ? {start:m.index, pos, q:m[1]} : null; }
+  function insertLink(t){
+    const c = linkContext(); if (!c) return;
+    const after = body.value.slice(c.pos), close = after.startsWith(']]') ? 2 : 0;
+    body.value = body.value.slice(0,c.start) + '[['+t+']]' + after.slice(close);
+    const caret = c.start + t.length + 4; body.focus(); body.setSelectionRange(caret, caret);
+    suggest.hidden = true; later();
+  }
+  function drawSuggest(){
+    const c = linkContext(); if (!c){ suggest.hidden = true; return; }
+    const q = norm(c.q);
+    const hits = S.notes.filter(x => x.id!==d.id && (!q || norm(x.title).includes(q))).sort((a,b)=>(norm(b.title).startsWith(q)?1:0)-(norm(a.title).startsWith(q)?1:0) || b.updatedAt.localeCompare(a.updatedAt)).slice(0,8);
+    const chips = hits.map(x => el('button',{class:'chip',onpointerdown:e=>e.preventDefault(),onclick:()=>insertLink(x.title)}, x.title));
+    if (c.q.trim() && !findByTitle(c.q)) chips.push(el('button',{class:'chip',onpointerdown:e=>e.preventDefault(),onclick:()=>insertLink(c.q.trim())}, 'New: '+c.q.trim()));
+    if (!chips.length) chips.push(el('span',{class:'hint',text:'Type a note title, then ]]'}));
+    suggest.replaceChildren(...chips); suggest.hidden = false;
+  }
+  for (const ev of ['input','click','keyup']) body.addEventListener(ev, drawSuggest);
+  const linkBtn = el('button',{class:'icon',text:'[[ ]] Link',onpointerdown:e=>e.preventDefault(),onclick:()=>{
+    const pos = body.selectionStart ?? body.value.length; body.value = body.value.slice(0,pos)+'[['+body.value.slice(pos); body.focus(); body.setSelectionRange(pos+2,pos+2); drawSuggest(); later(); }});
+
   const confirm = el('div',{class:'confirm',hidden:true}, el('span',{text:'Delete this note for good?'}),
     el('button',{class:'btn danger',text:'Delete',onclick:()=>{ S.notes = S.notes.filter(x=>x.id!==d.id); save(); closeLayer(); toast('Deleted.'); render(); }}),
     el('button',{class:'btn',text:'Keep',onclick:()=>{ confirm.hidden=true; }}));
-  const done = () => { clearTimeout(tmr); persist(); closeLayer(); if (saved) openNote(d.id); else render(); };
+  const done = () => {
+    clearTimeout(tmr); persist();
+    if (origTitle && d.title && norm(origTitle)!==norm(d.title)){ const k = renameLinks(origTitle, d.title, d.id); if (k){ save(); toast('Updated links in '+k+' note'+(k===1?'':'s')+'.'); } }
+    closeLayer(); if (saved) openNote(d.id); else render();
+  };
 
   sh.append(el('div',{class:'bar'},
     el('button',{class:'icon',text:'Done',onclick:done}),
-    el('div',{class:'grp'}, status, existing ? el('button',{class:'icon',style:'color:var(--danger)',text:'Delete',onclick:()=>{ confirm.hidden=false; }}) : null)));
-  sh.append(confirm, title, body, el('div',{class:'metarow'}, sec, tagBox));
+    el('div',{class:'grp'}, status, linkBtn, existing ? el('button',{class:'icon',style:'color:var(--danger)',text:'Delete',onclick:()=>{ confirm.hidden=false; }}) : null)));
+  sh.append(confirm, title, body, suggest, el('div',{class:'metarow'}, sec, tagBox));
   setTimeout(()=> (existing ? body : (d.title ? body : title)).focus(), 80);
+}
+
+/* ---------- graph ---------- */
+function renderGraph(app){
+  const notes = S.notes.filter(n => n.section!=='archive');
+  const idx = new Map(notes.map((n,i)=>[norm(n.title), i]));
+  const edges = [], seen = new Set();
+  notes.forEach((n,i) => { for (const t of linksOf(n.body)){ const j = idx.get(norm(t)); if (j==null || j===i) continue; const k = i<j ? i+'-'+j : j+'-'+i; if (!seen.has(k)){ seen.add(k); edges.push([i,j]); } } });
+  app.append(el('header',{class:'top'}, el('h1',{text:'Graph'}), el('span',{class:'count',text: notes.length+' notes · '+edges.length+' link'+(edges.length===1?'':'s')})));
+  if (!notes.length){ app.append(el('div',{class:'empty',text:'No notes yet. Once you have a few, link them with [[Note title]] and they’ll connect here.'})); return; }
+  const wrap = el('div',{class:'graphwrap'}), cv = el('canvas',{class:'graph',role:'img','aria-label':'Map of your notes and the links between them'});
+  wrap.append(cv); app.append(wrap);
+  app.append(el('div',{class:'legend'}, el('span',{}, el('i',{style:'background:var(--copper)'}), 'Linked note'), el('span',{}, el('i',{style:'background:var(--ink-3)'}), 'Not linked yet'), el('span',{text:'Bigger dot = more links. Tap one to open it.'})));
+  if (!edges.length) app.append(el('p',{class:'hint',text:'Nothing is linked yet. Open a note, tap “[[ ]] Link”, and pick another note to connect them.'}));
+
+  const N = notes.length, deg = new Array(N).fill(0); for (const [a,b] of edges){ deg[a]++; deg[b]++; }
+  const P = notes.map((n,i)=>{ const a = i*2.39996, r = 30*Math.sqrt(i+1); return {x:Math.cos(a)*r, y:Math.sin(a)*r, vx:0, vy:0}; });
+  const iters = N > 300 ? 120 : 260;
+  for (let it=0; it<iters; it++){
+    const cool = 1 - it/iters;
+    for (let i=0;i<N;i++) for (let j=i+1;j<N;j++){
+      let dx=P[i].x-P[j].x, dy=P[i].y-P[j].y, d2=dx*dx+dy*dy+0.01; if (d2>90000) continue;
+      const f = 900/d2, d=Math.sqrt(d2); dx/=d; dy/=d;
+      P[i].vx+=dx*f; P[i].vy+=dy*f; P[j].vx-=dx*f; P[j].vy-=dy*f;
+    }
+    for (const [a,b] of edges){ const dx=P[b].x-P[a].x, dy=P[b].y-P[a].y, d=Math.sqrt(dx*dx+dy*dy)||1, f=(d-70)*0.04; P[a].vx+=dx/d*f; P[a].vy+=dy/d*f; P[b].vx-=dx/d*f; P[b].vy-=dy/d*f; }
+    for (let i=0;i<N;i++){ const p=P[i]; p.vx-=p.x*0.012; p.vy-=p.y*0.012; p.vx*=0.82; p.vy*=0.82; const m=Math.min(12*cool+1, Math.hypot(p.vx,p.vy)); const s=Math.hypot(p.vx,p.vy)||1; p.x+=p.vx/s*m; p.y+=p.vy/s*m; }
+  }
+
+  const css = getComputedStyle(document.documentElement), col = v => css.getPropertyValue(v).trim();
+  const W = wrap.clientWidth || 340, H = Math.round(Math.min(window.innerHeight*0.62, Math.max(300, W*1.05)));
+  const dpr = Math.min(window.devicePixelRatio||1, 3);
+  cv.width = W*dpr; cv.height = H*dpr; cv.style.height = H+'px';
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity; for (const p of P){ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
+  const pad = 34, sc = Math.min((W-2*pad)/Math.max(1,maxX-minX), (H-2*pad)/Math.max(1,maxY-minY), 2.2);
+  const ox = (W - (maxX-minX)*sc)/2 - minX*sc, oy = (H - (maxY-minY)*sc)/2 - minY*sc;
+  const S2 = P.map(p => ({x:p.x*sc+ox, y:p.y*sc+oy}));
+  const rad = i => 4 + Math.min(9, Math.sqrt(deg[i])*2.6);
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = col('--rule'); ctx.lineWidth = 1.2;
+  for (const [a,b] of edges){ ctx.beginPath(); ctx.moveTo(S2[a].x,S2[a].y); ctx.lineTo(S2[b].x,S2[b].y); ctx.stroke(); }
+  for (let i=0;i<N;i++){ ctx.beginPath(); ctx.arc(S2[i].x,S2[i].y,rad(i),0,Math.PI*2); ctx.fillStyle = deg[i] ? col('--copper') : col('--ink-3'); ctx.fill(); }
+  const order = [...Array(N).keys()].sort((a,b)=>deg[b]-deg[a]);
+  const labelSet = new Set(N<=40 ? order : order.filter(i=>deg[i]).slice(0,18));
+  ctx.font = '500 12px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const i of labelSet){ const t = notes[i].title.length>24 ? notes[i].title.slice(0,23)+'…' : notes[i].title;
+    ctx.lineWidth = 3; ctx.strokeStyle = col('--page'); ctx.strokeText(t, S2[i].x, S2[i].y+rad(i)+3); ctx.fillStyle = col('--ink-2'); ctx.fillText(t, S2[i].x, S2[i].y+rad(i)+3); }
+  cv.onclick = e => {
+    const r = cv.getBoundingClientRect(), x = e.clientX-r.left, y = e.clientY-r.top; let best=-1, bd=24*24;
+    for (let i=0;i<N;i++){ const d=(S2[i].x-x)**2+(S2[i].y-y)**2; if (d<bd){ bd=d; best=i; } }
+    if (best>=0) openNote(notes[best].id);
+  };
+}
+let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(()=>{ if (tab==='graph' && !$('#layer').children.length) render(); }, 200); });
+
+/* ---------- vault: real Markdown files in folders, zipped (opens in Obsidian) ---------- */
+const CRC = (()=>{ const t = new Uint32Array(256); for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(b){ let c=0xFFFFFFFF; for (let i=0;i<b.length;i++) c = CRC[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), dt = ((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1)) & 0xFFFF, dd = (((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate()) & 0xFFFF;
+  for (const f of files){
+    const nm = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true); h.setUint16(10,dt,true); h.setUint16(12,dd,true);
+    h.setUint32(14,crc,true); h.setUint32(18,data.length,true); h.setUint32(22,data.length,true); h.setUint16(26,nm.length,true); h.setUint16(28,0,true);
+    parts.push(h.buffer, nm, data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true); c.setUint16(12,dt,true); c.setUint16(14,dd,true);
+    c.setUint32(16,crc,true); c.setUint32(20,data.length,true); c.setUint32(24,data.length,true); c.setUint16(28,nm.length,true); c.setUint32(42,off,true);
+    central.push(c.buffer, nm); off += 30 + nm.length + data.length;
+  }
+  const cSize = central.reduce((s,x)=>s+x.byteLength,0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,cSize,true); e.setUint32(16,off,true);
+  return new Blob([...parts, ...central, e.buffer], {type:'application/zip'});
+}
+async function readZip(buf){
+  const dv = new DataView(buf), dec = new TextDecoder(); let eo = -1;
+  for (let i = buf.byteLength-22; i >= Math.max(0, buf.byteLength-66000); i--) if (dv.getUint32(i,true)===0x06054b50){ eo = i; break; }
+  if (eo < 0) throw new Error('not a zip');
+  const count = dv.getUint16(eo+10,true); let p = dv.getUint32(eo+16,true); const out = [];
+  for (let k=0;k<count;k++){
+    if (dv.getUint32(p,true)!==0x02014b50) break;
+    const method = dv.getUint16(p+10,true), csize = dv.getUint32(p+20,true), nl = dv.getUint16(p+28,true), xl = dv.getUint16(p+30,true), cl = dv.getUint16(p+32,true), lho = dv.getUint32(p+42,true);
+    const name = dec.decode(new Uint8Array(buf, p+46, nl)); p += 46+nl+xl+cl;
+    if (!/\.md$/i.test(name) || name.split('/').some(s=>s.startsWith('.') || s==='__MACOSX')) continue;
+    const start = lho + 30 + dv.getUint16(lho+26,true) + dv.getUint16(lho+28,true), raw = new Uint8Array(buf, start, csize);
+    let bytes;
+    if (method===0) bytes = raw;
+    else if (method===8){ if (typeof DecompressionStream==='undefined') throw new Error('inflate'); bytes = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()); }
+    else continue;
+    out.push({name, text: dec.decode(bytes)});
+  }
+  return out;
+}
+function safeName(t){ return (t.replace(/[\\/:*?"<>|#^\[\]]/g,'-').replace(/\s+/g,' ').trim().slice(0,100)) || 'Untitled'; }
+function toMarkdown(n){
+  const fm = ['---'];
+  if (n.tags.length){ fm.push('tags:'); for (const t of n.tags) fm.push('  - '+t); }
+  fm.push('created: '+n.createdAt, 'updated: '+n.updatedAt); if (n.pinned) fm.push('pinned: true'); fm.push('---','');
+  return fm.join('\n') + n.body.replace(/\s+$/,'') + '\n';
+}
+function parseMarkdown(text){
+  let body = text.replace(/^﻿/,''), fm = {};
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(body);
+  if (m){ body = body.slice(m[0].length); let key = null;
+    for (const line of m[1].split(/\r?\n/)){
+      const kv = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line), li = /^\s*-\s+(.*)$/.exec(line);
+      if (kv){ key = kv[1].toLowerCase(); const v = kv[2].trim(); fm[key] = v==='' ? [] : v.startsWith('[') ? v.replace(/^\[|\]$/g,'').split(',').map(x=>x.trim()).filter(Boolean) : v.replace(/^["']|["']$/g,''); }
+      else if (li && key && Array.isArray(fm[key])) fm[key].push(li[1].trim().replace(/^["']|["']$/g,''));
+    } }
+  let tags = fm.tags || fm.tag || []; if (!Array.isArray(tags)) tags = String(tags).split(/[,\s]+/);
+  const inline = [...body.matchAll(/(^|\s)#([A-Za-z][\w/-]*)/g)].map(x=>x[2]);
+  return {body: body.replace(/^\s*\n/,''), tags:[...new Set([...tags, ...inline].map(cleanTag).filter(Boolean))], created: fm.created, updated: fm.updated, pinned: fm.pinned==='true'};
+}
+async function exportVault(){
+  const used = new Set(), files = [];
+  for (const n of S.notes){
+    const folder = SBYID[n.section].name; let base = safeName(n.title), name = folder+'/'+base+'.md', k = 2;
+    while (used.has(name.toLowerCase())) name = folder+'/'+base+' '+(k++)+'.md';
+    used.add(name.toLowerCase()); files.push({name:'Second Brain/'+name, text:toMarkdown(n)});
+  }
+  if (!files.length){ toast('No notes to export yet.'); return; }
+  const blob = makeZip(files), fname = 'Second Brain '+new Date().toISOString().slice(0,10)+'.zip';
+  const file = new File([blob], fname, {type:'application/zip'});
+  try{ if (matchMedia('(pointer:coarse)').matches && navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:'Second Brain vault'}); return; } }catch(e){ if (e && e.name==='AbortError') return; }
+  const a = el('a',{href:URL.createObjectURL(blob), download:fname}); document.body.append(a); a.click(); a.remove(); toast('Vault exported.');
+}
+async function readImport(fileList){
+  const raw = [];
+  for (const f of fileList){
+    if (/\.zip$/i.test(f.name)) raw.push(...await readZip(await f.arrayBuffer()));
+    else if (/\.(md|markdown|txt)$/i.test(f.name)) raw.push({name:f.name, text:await f.text()});
+  }
+  const segs = raw.map(r => r.name.split('/').filter(Boolean));
+  const root = segs.length && segs.every(s => s.length>1 && s[0]===segs[0][0]) ? 1 : 0;
+  return raw.map((r,i) => {
+    const sg = segs[i].slice(root), file = sg[sg.length-1], folder = sg.length>1 ? sg[0] : '';
+    const sec = SECTIONS.find(s => norm(s.name)===norm(folder) || (folder && norm(folder).replace(/^\d+[\s._-]*/,'')===norm(s.name)));
+    const md = parseMarkdown(r.text);
+    if (folder && !sec) md.tags = [...new Set([...md.tags, cleanTag(folder)])];
+    return {title: file.replace(/\.(md|markdown|txt)$/i,'').slice(0,90), section: sec ? sec.id : (folder ? 'resources' : 'inbox'), ...md};
+  });
+}
+function applyImport(items){
+  let added = 0, updated = 0; const t = nowIso();
+  for (const it of items){
+    const ex = S.notes.find(n => norm(n.title)===norm(it.title));
+    if (ex){ Object.assign(ex, {body:it.body, tags:it.tags, section:it.section, updatedAt: it.updated || t}); if (it.pinned) ex.pinned = true; updated++; }
+    else { S.notes.push({id:uid(), title:it.title, body:it.body, tags:it.tags, section:it.section, pinned:!!it.pinned, createdAt: it.created || t, updatedAt: it.updated || t}); added++; }
+  }
+  save(); return {added, updated};
 }
 
 /* ---------- tags ---------- */
@@ -357,9 +590,28 @@ function renderSettings(app){
     el('div',{class:'actions'},
       el('button',{class:'btn',text:'Copy backup',onclick:async()=>{ try{ await navigator.clipboard.writeText(data); toast('Backup copied.'); }catch(e){ ta.value=data; ta.select(); toast('Select and copy the text below.'); } }}),
       el('button',{class:'btn',text:'Download backup',onclick:()=>{ const a=el('a',{href:URL.createObjectURL(new Blob([data],{type:'application/json'})),download:'second-brain-'+new Date().toISOString().slice(0,10)+'.json'}); document.body.append(a); a.click(); a.remove(); }}),
-      el('button',{class:'btn',text:'Export as Markdown',onclick:()=>{ const md = S.notes.map(n=>'# '+n.title+'\n\n'+(n.tags.length?n.tags.map(t=>'#'+t).join(' ')+'\n\n':'')+n.body).join('\n\n---\n\n'); const a=el('a',{href:URL.createObjectURL(new Blob([md],{type:'text/markdown'})),download:'second-brain-'+new Date().toISOString().slice(0,10)+'.md'}); document.body.append(a); a.click(); a.remove(); }})),
+      ),
     el('label',{class:'label',for:'restore',text:'Restore'}), ta,
     el('div',{class:'actions'}, el('button',{class:'btn',text:'Restore from backup',onclick:()=>{ if (ta.value.trim()) confirm.hidden=false; else toast('Paste a backup first.'); }})), confirm));
+
+  const picker = el('input',{type:'file',id:'vaultFile',multiple:true,accept:'.zip,.md,.markdown,.txt,application/zip,text/markdown',hidden:true});
+  const impConfirm = el('div',{class:'confirm',hidden:true});
+  picker.addEventListener('change', async () => {
+    if (!picker.files.length) return;
+    try{
+      const items = await readImport([...picker.files]); picker.value = '';
+      if (!items.length){ toast('No Markdown notes found in that file.'); return; }
+      const same = items.filter(it => S.notes.some(n => norm(n.title)===norm(it.title))).length;
+      impConfirm.replaceChildren(el('span',{text:'Found '+items.length+' note'+(items.length===1?'':'s')+(same ? '. '+same+' already exist here and will be updated.' : '.')}),
+        el('button',{class:'btn primary',text:'Import',onclick:()=>{ const r = applyImport(items); impConfirm.hidden = true; toast('Imported: '+r.added+' new, '+r.updated+' updated.'); tab='notes'; section='all'; render(); }}),
+        el('button',{class:'btn',text:'Cancel',onclick:()=>{ impConfirm.hidden = true; }}));
+      impConfirm.hidden = false;
+    }catch(e){ picker.value=''; toast(e && e.message==='inflate' ? 'This phone can’t open that zip. Try importing the .md files directly.' : 'That file couldn’t be read.'); }
+  });
+  app.append(el('div',{class:'card'}, el('h2',{text:'Vault'}),
+    el('p',{class:'hint',text:'Export your notes as a real vault: a zip of Markdown files in Inbox, Projects, Areas, Resources and Archive folders, with tags kept and [[links]] intact. Unzip it and open the folder in Obsidian, or give it to Claude Code. Import works the other way: pick an Obsidian vault zip or .md files.'}),
+    el('div',{class:'actions'}, el('button',{class:'btn primary',text:'Export vault',onclick:exportVault}), el('button',{class:'btn',text:'Import vault or notes',onclick:()=>picker.click()})),
+    picker, impConfirm));
 
   const wipe = el('div',{class:'confirm',hidden:true}, el('span',{text:'Erase every note on this phone? This can’t be undone without a backup.'}),
     el('button',{class:'btn danger',text:'Erase all',onclick:()=>{ S={notes:[]}; save(); toast('Erased.'); tab='notes'; render(); }}),
@@ -368,11 +620,11 @@ function renderSettings(app){
     el('div',{class:'actions'}, el('button',{class:'btn danger',text:'Erase all notes',onclick:()=>{ wipe.hidden=false; }})), wipe));
 
   app.append(el('div',{class:'card'}, el('h2',{text:'Writing tips'}),
-    el('p',{class:'hint',text:'# Heading  ·  - list item  ·  > quote  ·  **bold**  ·  *italic*  ·  ==highlight==  ·  `code`. Links become tappable. On the capture box, the first line is the title and #tags are picked up automatically.'})));
+    el('p',{class:'hint',text:'[[Note title]] links to another note (tap “[[ ]] Link” while editing to pick one)  ·  # Heading  ·  - list item  ·  > quote  ·  **bold**  ·  *italic*  ·  ==highlight==  ·  `code`. Web links become tappable. On the capture box, the first line is the title and #tags are picked up automatically. Renaming a note updates every link to it.'})));
 }
 
 /* ---------- boot ---------- */
-for (const id of ['notes','tags','set']) $('#nav-'+id).addEventListener('click',()=>{ tab=id; closeLayer(); render(); window.scrollTo(0,0); });
+for (const id of ['notes','graph','tags','set']) $('#nav-'+id).addEventListener('click',()=>{ tab=id; closeLayer(); render(); window.scrollTo(0,0); });
 render();
 try{ if ('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{ try{ r.update(); }catch(e){} }).catch(()=>{});
