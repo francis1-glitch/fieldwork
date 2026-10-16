@@ -833,7 +833,7 @@ function viewLib(w){
   const fileIn=el('input',{type:'file',accept:'.zip,.csv',hidden:true,onchange:async e=>{
     const f=e.target.files[0]; if(!f) return;
     try{ const r=await importFile(f); render();
-      toast(r?`Imported ${r.ratings} ratings and ${r.watchlist} watchlist titles.${r.unmatchedRatings?` ${r.unmatchedRatings} ratings didn’t match a title yet.`:''}`:'Saved. It’ll match once the catalog is built.'); }
+      toast(r?`Imported ${r.ratings} ratings and ${r.watchlist} watchlist titles.${r.unmatchedRatings?` ${r.unmatchedRatings} rating${r.unmatchedRatings===1?'':'s'} didn’t match a title yet.`:''}`:'Saved. It’ll match once the catalog is built.'); }
     catch(err){ toast('Couldn’t read that file: '+err.message); } }});
   w.append(el('div',{class:'card'},
     el('h3',{text:'Bring in your history'}),
