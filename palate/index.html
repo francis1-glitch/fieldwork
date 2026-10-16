@@ -975,6 +975,7 @@ async function sendToStremio(quiet){
   stremioBusy=true;
   try{
     const base=[REPO.dir,'stremio','catalog'].filter(Boolean).join('/');
+    if(!Core.catalog().items.some(it=>it.imdb)){ if(!quiet) toast('Your catalog copy is out of date. Close and reopen Palate, then send again.'); return; }
     const m=stremioMetas('movie'), t=stremioMetas('tv');
     const a=await ghPut(base+'/movie/palate-movies.json', JSON.stringify({metas:m}), 'Palate picks for Stremio (movies)');
     const b=await ghPut(base+'/series/palate-shows.json', JSON.stringify({metas:t}), 'Palate picks for Stremio (shows)');
