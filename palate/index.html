@@ -103,7 +103,11 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:va
 .scrim{position:fixed;inset:0;background:var(--scrim);z-index:20;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--surface);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;
   padding:8px max(18px,env(safe-area-inset-left,0px)) calc(22px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
-.grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 2px}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);position:absolute;left:50%;top:8px;transform:translateX(-50%)}
+.sbar{position:sticky;top:-8px;z-index:2;margin:-8px calc(-1*max(18px,env(safe-area-inset-left,0px))) 0;padding:16px max(12px,env(safe-area-inset-left,0px)) 6px;
+  background:var(--surface);display:flex;align-items:center}
+.backbtn{border:0;background:none;color:var(--plum);font-weight:800;font-size:15.5px;display:inline-flex;align-items:center;gap:2px;padding:6px 8px 6px 2px;border-radius:8px}
+.backbtn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2.2}
 .dhead{display:flex;gap:14px}
 .dhead .poster{width:92px;height:138px;border-radius:9px;font-size:30px}
 .dhead .meta{display:flex;flex-direction:column;gap:5px;min-width:0}
@@ -633,14 +637,25 @@ function titleRow(it, opts={}){
     mine?el('div',{class:'score you'},el('b',{text:fmt(mine.r)}),el('span',{text:'yours'}))
         :el('div',{class:'score'},el('b',{text:fmt(p.p)}),el('span',{text:'±'+fmt(p.conf)})));
 }
+// Detail sheets sit on the history stack, so Back (button, swipe or hardware) closes them.
+let closeSheet=null;
+window.addEventListener('popstate',()=>{ if(closeSheet){ const c=closeSheet; closeSheet=null; c(); } });
 function sheet(build){
-  const sc=el('div',{class:'scrim',onclick:e=>{ if(e.target===sc) close(); }});
+  if(closeSheet){ const c=closeSheet; closeSheet=null; c(true); }
+  const sc=el('div',{class:'scrim',onclick:e=>{ if(e.target===sc) back(); }});
   const sh=el('div',{class:'sheet',role:'dialog','aria-modal':'true'});
-  const close=()=>{ sc.remove(); document.removeEventListener('keydown',esc); render(); };
-  const esc=e=>{ if(e.key==='Escape') close(); };
+  const remove=(quiet)=>{ sc.remove(); document.removeEventListener('keydown',esc); if(!quiet) render(); };
+  const back=()=>{ if(closeSheet===remove){ history.back(); } else remove(); };
+  const esc=e=>{ if(e.key==='Escape') back(); };
   document.addEventListener('keydown',esc);
-  sh.append(el('div',{class:'grab'})); build(sh,close); sc.append(sh); document.body.append(sc);
-  return close;
+  try{ history.pushState({palateSheet:1},''); closeSheet=remove; }catch(e){}
+  build(sh,back); sc.append(sh); document.body.append(sc);
+  return back;
+}
+function sheetBar(close){
+  return el('div',{class:'sbar'},
+    el('button',{class:'backbtn','aria-label':'Back',onclick:close},svg('<path d="M15 5l-7 7 7 7"/>'),'Back'),
+    el('div',{class:'grab'}));
 }
 
 // ---------- detail ----------
@@ -654,7 +669,7 @@ const CHAR_TAGS=['anti-hero','villain','mentor','underdog','genius','comic relie
 function openDetail(it){
   sheet((sh,close)=>{
     const draw=()=>{
-      sh.innerHTML=''; sh.append(el('div',{class:'grab'}));
+      sh.innerHTML=''; sh.append(sheetBar(close));
       const mine=S.ratings[it.id], lock=S.locks[it.id];
       const p=predict(it);
       const c=Core.catalog();
