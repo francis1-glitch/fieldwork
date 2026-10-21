@@ -133,6 +133,14 @@ table.sb tr.me td{font-weight:800;color:var(--plum)}
 
 /* rapid rate */
 .rapid{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.qhead{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.qprog{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.qprog i{display:block;height:100%;background:var(--plum);border-radius:3px}
+.qreveal{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:340px}
+.qreveal div{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px}
+.qreveal b{font-family:var(--serif);font-size:28px;line-height:1}
+.qreveal b.you{color:var(--star)}
+.qreveal span{font-size:12px;color:var(--ink2)}
 .rapid img,.rapid .poster{width:180px;height:270px;border-radius:12px;font-size:56px}
 .toast{position:fixed;left:50%;bottom:calc(var(--navh) + 18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;
   background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;max-width:90vw}
@@ -761,6 +769,7 @@ function viewYou(w){
     return;
   }
   if(nR<10){ w.append(el('div',{class:'note'},el('b',{text:`${nR} rated so far.`}),' Picks are crowd favorites until you’ve rated 10+. Import Letterboxd or use Quick rate in Library.')); }
+  w.append(el('button',{class:'btn wide',onclick:()=>{ rapidKind=youCat==='tv'?'tv':'movie'; go('rapid'); }},'Quick rate · 20 titles in about 2 minutes'));
   const mine=S.settings.services;
   if(mine.length) w.append(el('div',{class:'row small muted'},
     el('button',{class:'chip','aria-pressed':S.settings.onlyMine?'true':'false',text:'Only my services',onclick:()=>{ S.settings.onlyMine=!S.settings.onlyMine; save(); render(); }})));
@@ -873,21 +882,136 @@ function viewLib(w){
 }
 
 // ---------- Quick rate ----------
-let rapidKind='movie', rapidCount=0;
+// The deck favors titles you've probably seen (popular, close to your taste) that would teach the model the most
+// (things it has little evidence on, or where it disagrees with the crowd). Every card is also a blind test:
+// Palate's guess is recorded before your rating and graded against it.
+const SESSION_LEN=20;
+let rapidKind='movie', deck=null, sess=null, reveal=null, lastAct=null;
+function cosine(a,b){ let d=0,x=0,y=0; for(let i=0;i<a.length;i++){ d+=a[i]*b[i]; x+=a[i]*a[i]; y+=b[i]*b[i]; } return x&&y?d/Math.sqrt(x*y):0; }
+function teachLabel(f){
+  refit(); if(!MODEL) return null;
+  const fresh=f.filter(([k])=>/^(g|m|d|l):/.test(k)&&(MODEL.cnt.get(k)||0)<2).map(([k])=>Core.label(k)).filter(Boolean);
+  return [...new Set(fresh)].slice(0,2).join(', ')||null;
+}
+function buildDeck(kind){
+  const c=Core.catalog(); refit();
+  const ratedE=Object.keys(S.ratings).map(getItem).filter(it=>it&&it.kind===kind).map(it=>Core.catalog()&&it.e?it:null).filter(Boolean);
+  let centroid=null;
+  if(ratedE.length){ const vs=ratedE.map(it=>{ const f=featuresOf(it).filter(([k])=>/^e\d+$/.test(k)).map(x=>x[1]); return f; }).filter(v=>v.length);
+    if(vs.length){ centroid=new Array(vs[0].length).fill(0); vs.forEach(v=>v.forEach((x,i)=>centroid[i]+=x/vs.length)); } }
+  const R=Core.rng(Date.now()%1e9), out=[];
+  for(const it of c.items){
+    if(it.kind!==kind||it.vc<400||S.ratings[it.id]||S.seen[it.id]||S.skip[it.id]||(S.rapidPass||{})[it.id]) continue;
+    const f=featuresOf(it);
+    let seen=Math.min(1,(Math.log10(it.vc)-2.6)/2.2);
+    if(centroid){ const e=f.filter(([k])=>/^e\d+$/.test(k)).map(x=>x[1]); if(e.length) seen*=0.75+0.5*Math.max(0,cosine(e,centroid)); }
+    if(it.year&&it.year<1970) seen*=0.6;
+    let info=1;
+    if(MODEL){ const b=Core.baselinePreds(BASE,it); const p=Core.clamp(Core.predictRaw(MODEL,f,it));
+      info=(1-Core.coverage(MODEL,f))+0.8*Math.abs(p-(b.crowd??b.mean)); }
+    out.push([it, seen*(0.5+info)*(0.85+0.3*R())]);
+  }
+  out.sort((a,b)=>b[1]-a[1]);
+  return {kind, ids:out.slice(0,120).map(x=>x[0].id)};
+}
+function startSession(){
+  const rows=trainingRows();
+  const cv=rows.length>=20?Core.crossValidate(rows):null;
+  sess={n:0, blind:[], target:SESSION_LEN, before:cv?{model:cv.model.mae, crowd:cv.crowd.mae, n:cv.n}:null, done:false};
+}
+function nextCard(){
+  if(!deck||deck.kind!==rapidKind) deck=buildDeck(rapidKind);
+  while(deck.ids.length){ const id=deck.ids[0]; if(!S.ratings[id]&&!S.seen[id]&&!S.skip[id]&&!(S.rapidPass||{})[id]) return getItem(id); deck.ids.shift(); }
+  deck=buildDeck(rapidKind); return deck.ids.length?getItem(deck.ids[0]):null;
+}
+function blindStats(list){
+  if(!list.length) return null;
+  const m=k=>{ let a=0,w=0; for(const b of list){ const e=Math.abs((b[k]??b.mean)-b.r); a+=e; if(e<=0.5) w++; } return {mae:a/list.length, within:w/list.length}; };
+  return {n:list.length, model:m('p'), crowd:m('crowd'), mean:m('mean')};
+}
 function viewRapid(w){
   const c=Core.catalog(); if(!c){ w.append(el('div',{class:'empty',text:'Needs the catalog.'})); return; }
-  w.append(el('div',{class:'seg'},[['movie','Movies'],['tv','Shows']].map(([k,l])=>el('button',{class:'chip','aria-pressed':rapidKind===k?'true':'false',text:l,onclick:()=>{ rapidKind=k; render(); }}))));
-  const it=c.items.find(x=>x.kind===rapidKind&&!S.ratings[x.id]&&!S.seen[x.id]&&!S.skip[x.id]&&!(S.rapidPass||{})[x.id]);
-  if(!it){ w.append(el('div',{class:'empty',text:'You’ve been through everything here.'})); return; }
+  if(!sess) startSession();
+  w.append(el('div',{class:'seg'},[['movie','Movies'],['tv','Shows']].map(([k,l])=>el('button',{class:'chip','aria-pressed':rapidKind===k?'true':'false',text:l,onclick:()=>{ rapidKind=k; reveal=null; render(); }}))));
+  if(sess.done) return rapidSummary(w);
+
+  const all=blindStats(S.blind||[]);
+  const prog=el('div',{class:'qprog',role:'progressbar','aria-valuemin':'0','aria-valuemax':String(sess.target),'aria-valuenow':String(sess.n)},el('i',{style:'width:'+Math.min(100,sess.n/sess.target*100)+'%'}));
+  const head=el('div',{class:'qhead'},
+    el('div',{class:'row small muted',style:'justify-content:space-between;width:100%'}, el('span',{text:`${sess.n} of ${sess.target} this round`}), el('span',{text:`${Object.keys(S.ratings).length} rated total`})), prog,
+    all?el('div',{class:'small muted',text:`Blind guesses so far: Palate misses by ${all.model.mae.toFixed(2)}★, the crowd by ${all.crowd.mae.toFixed(2)}★ (${all.n} title${all.n===1?"":"s"})`}):null);
+
+  if(reveal){
+    const r=reveal, d=r.r-r.p;
+    const msg=Math.abs(d)<=0.5?'Palate nailed it.':Math.abs(r.r-(r.crowd??r.mean))<Math.abs(d)?'The crowd was closer.':d>0?'You liked it more than Palate guessed.':'You liked it less than Palate guessed.';
+    w.append(head, el('div',{class:'rapid'},
+      posterEl(r.item,true), el('h2',{text:r.item.title}),
+      el('div',{class:'qreveal'},
+        el('div',{},el('b',{class:'you',text:fmt(r.r)}),el('span',{text:'You'})),
+        el('div',{},el('b',{text:fmt(r.p)}),el('span',{text:'Palate guessed'})),
+        el('div',{},el('b',{text:fmt(r.crowd??r.mean)}),el('span',{text:'Crowd'}))),
+      el('div',{class:'verdict',style:'font-size:18px',text:msg}),
+      el('div',{class:'row',style:'justify-content:center'},
+        el('button',{class:'btn primary',text:'Next',onclick:()=>{ reveal=null; if(sess.n>=sess.target) sess.done=true; render(); }}),
+        el('button',{class:'btn ghost',text:'Undo',onclick:undo}))));
+    clearTimeout(reveal.timer); reveal.timer=setTimeout(()=>{ if(reveal===r&&view==='rapid'){ reveal=null; if(sess.n>=sess.target) sess.done=true; render(); } },2200);
+    return;
+  }
+
+  const it=nextCard();
+  if(!it){ w.append(head, el('div',{class:'empty',text:'You’ve been through everything popular here. Switch to '+(rapidKind==='movie'?'Shows':'Movies')+'.'})); return; }
+  const f=featuresOf(it), p=predict(it), teach=teachLabel(f);
   const val=el('span',{class:'starval num'});
-  const next=()=>{ rapidCount++; render(); };
-  w.append(el('div',{class:'rapid'},
-    el('div',{class:'small muted',text:`${rapidCount} this session · ${Object.keys(S.ratings).length} rated total`}),
+  const advance=()=>{ if(sess.n>=sess.target){ sess.done=true; } render(); };
+  w.append(head, el('div',{class:'rapid'},
     posterEl(it,true), el('h2',{text:it.title}), el('div',{class:'small muted',text:subline(it)}),
-    el('div',{class:'row',style:'justify-content:center'},starsEl(0,(v,done)=>{ val.textContent=fmt(v); if(done){ rate(it.id,v); setTimeout(next,220); } }),val),
+    teach?el('div',{class:'small',style:'color:var(--plum)',text:'Teaches Palate about: '+teach}):null,
+    el('div',{class:'row',style:'justify-content:center'},starsEl(0,(v,done)=>{ val.textContent=fmt(v);
+      if(!done) return;
+      const b={id:it.id, title:it.title, p:p.p, crowd:p.crowd, mean:p.mean, r:v, at:Date.now()};
+      S.blind=(S.blind||[]); S.blind.push(b); sess.blind.push(b); sess.n++;
+      lastAct={type:'rate', id:it.id, blind:b};
+      rate(it.id,v);
+      reveal={item:it, r:v, p:p.p, crowd:p.crowd, mean:p.mean};
+      render(); }),val),
     el('div',{class:'row',style:'justify-content:center'},
-      el('button',{class:'btn',text:'Haven’t seen',onclick:()=>{ S.rapidPass=S.rapidPass||{}; S.rapidPass[it.id]=1; save(); next(); }}),
-      el('button',{class:'btn ghost',text:'Seen, can’t rate',onclick:()=>{ S.seen[it.id]=1; save(); next(); }}))));
+      el('button',{class:'btn',text:'Haven’t seen',onclick:()=>{ S.rapidPass=S.rapidPass||{}; S.rapidPass[it.id]=1; lastAct={type:'pass',id:it.id}; save(); advance(); }}),
+      el('button',{class:'btn ghost',text:'Seen, can’t rate',onclick:()=>{ S.seen[it.id]=1; lastAct={type:'seen',id:it.id}; save(); advance(); }}),
+      lastAct?el('button',{class:'btn ghost',text:'Undo',onclick:undo}):null)));
+}
+function undo(){
+  const a=lastAct; if(!a) return; lastAct=null;
+  if(a.type==='rate'){ unrate(a.id); delete S.seen[a.id];
+    S.blind=(S.blind||[]).filter(b=>b!==a.blind); sess.blind=sess.blind.filter(b=>b!==a.blind); sess.n=Math.max(0,sess.n-1); sess.done=false; }
+  else if(a.type==='pass'){ delete (S.rapidPass||{})[a.id]; }
+  else if(a.type==='seen'){ delete S.seen[a.id]; }
+  save(); if(deck&&deck.ids[0]!==a.id) deck.ids.unshift(a.id);
+  reveal=null; render(); toast('Undone.');
+}
+function rapidSummary(w){
+  const s=blindStats(sess.blind);
+  const rows=trainingRows(), cv=rows.length>=20?Core.crossValidate(rows):null;
+  if(cv){ CV=cv; S.lambda=cv.lambda; S.cvRmse=cv.model.rmse; save(); dirty=true; }
+  const card=el('div',{class:'card'}, el('h3',{text:'Round done'}));
+  if(s){
+    const won=s.model.mae<s.crowd.mae;
+    card.append(el('div',{class:'verdict',text: won?`Palate beat the crowd this round: ${s.model.mae.toFixed(2)}★ off vs ${s.crowd.mae.toFixed(2)}★.`:`The crowd won this round: ${s.crowd.mae.toFixed(2)}★ off vs Palate’s ${s.model.mae.toFixed(2)}★.`}),
+      el('div',{class:'small muted',text:`Blind guesses on the ${s.n} titles you rated. Palate made each guess before it saw your rating.`}),
+      scoreTable([['Palate',s.model,true],['Crowd score',s.crowd],['Your average',s.mean]]));
+  }
+  if(cv){
+    const gap=cv.crowd.mae-cv.model.mae, sure=cv.gap.hi<0, worse=cv.gap.lo>0;
+    const b=sess.before, bgap=b?b.crowd-b.model:null;
+    card.append(el('div',{class:'label',text:'Backtest on all your ratings'}),
+      el('div',{class:'small',text:(sure?'Beats the crowd':worse?'Not beating the crowd':'Too close to call')+` · edge ${gap>=0?'+':''}${gap.toFixed(2)}★ over ${cv.n} titles`+(b?` (was ${bgap>=0?'+':''}${bgap.toFixed(2)}★ over ${b.n})`:'')}));
+  }
+  const surprises=sess.blind.slice().sort((a,b)=>Math.abs(b.r-(b.crowd??b.mean))-Math.abs(a.r-(a.crowd??a.mean))).slice(0,3).filter(x=>Math.abs(x.r-(x.crowd??x.mean))>=0.75);
+  if(surprises.length) card.append(el('div',{class:'label',text:'Where you split from the crowd'}),
+    el('div',{class:'reasons'},surprises.map(x=>{ const d=x.r-(x.crowd??x.mean); return el('div',{class:'reason'},el('span',{text:x.title}),el('span',{class:'v '+(d>0?'up':'down'),text:(d>0?'+':'−')+Math.abs(d).toFixed(1)+'★ vs crowd'})); })));
+  card.append(el('div',{class:'row'},
+    el('button',{class:'btn primary',text:'Another round',onclick:()=>{ startSession(); lastAct=null; render(); }}),
+    el('button',{class:'btn',text:'See picks',onclick:()=>{ sess=null; go('you'); }})));
+  w.append(card);
 }
 
 // ---------- Scoreboard ----------
@@ -920,6 +1044,10 @@ function viewScore(w){
     L.n?scoreTable([['Palate',L.model,true],['Crowd score',L.crowd],['Your average',L.mean]],L.n)
        :el('div',{class:'small muted',text:'Lock a prediction on anything you haven’t seen yet. When you rate it, it gets graded here. This is the real test — no hindsight.'}),
     L.pend.length?el('div',{class:'small muted',text:`${L.pend.length} locked, waiting for your rating: `+L.pend.slice(0,5).map(([,l])=>l.title).join(', ')+(L.pend.length>5?'…':'')}):null));
+  const BL=blindStats(S.blind||[]);
+  w.append(el('div',{class:'card'},el('div',{class:'label',text:'Blind guesses from Quick rate'}),
+    BL?scoreTable([['Palate',BL.model,true],['Crowd score',BL.crowd],['Your average',BL.mean]],BL.n)
+      :el('div',{class:'small muted',text:'Every Quick rate card records Palate’s guess before you rate, then grades it. Titles you’ve already seen, but the model never saw your rating.'})));
   refit();
   if(MODEL){
     const eff=[...MODEL.W.entries()].filter(([k,v])=>!/^e\d+$/.test(k)&&!k.startsWith('c:')&&k!=='q'&&k!=='qb'&&k!=='mb'&&(MODEL.cnt.get(k)||0)>=3)
@@ -1035,6 +1163,8 @@ function mergeBackup(d){
   for(const [id,l] of Object.entries(d.locks||{})){ const cur=S.locks[id]; if(!cur||(cur.r==null&&l.r!=null)) S.locks[id]=l; }
   for(const [id,t] of Object.entries(d.tags||{})) S.tags[id]=[...new Set([...(S.tags[id]||[]),...t])];
   for(const [src,rows] of Object.entries(d.pending||{})){ const have=new Set((S.pending[src]||[]).map(r=>r.type+'|'+r.name+'|'+r.year)); S.pending[src]=(S.pending[src]||[]).concat(rows.filter(r=>!have.has(r.type+'|'+r.name+'|'+r.year))); }
+  S.rapidPass=Object.assign({}, d.rapidPass||{}, S.rapidPass||{});
+  { const have=new Set((S.blind||[]).map(b=>b.id+'|'+b.at)); S.blind=(S.blind||[]).concat((d.blind||[]).filter(b=>!have.has(b.id+'|'+b.at))).sort((a,b)=>a.at-b.at); }
   if(!S.settings.services.length&&d.settings&&d.settings.services) S.settings.services=d.settings.services;
   rematchPending(); markDirty(); save(); return n;
 }
