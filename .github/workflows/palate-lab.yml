@@ -1,0 +1,37 @@
+name: Palate lab
+
+# One-off test data: "fans of X also liked Y" lists from MovieLens and TMDB.
+# Writes palate/data/lab/neighbors.json. Nothing personal.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: palate-lab
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas numpy scipy requests
+      - name: Build neighbour lists
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: python palate/pipeline/build_neighbors.py
+      - name: Commit data
+        run: |
+          git config user.name "palate-bot"
+          git config user.email "palate-bot@users.noreply.github.com"
+          git add palate/data/lab
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -m "Palate lab neighbours $(date -u +%F)"
+          git pull --rebase origin main
+          git push origin HEAD:main
