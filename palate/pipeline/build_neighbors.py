@@ -238,8 +238,27 @@ def main():
         with open(OUT) as f:
             prev = json.load(f)
     res = {"built": dt.date.today().isoformat(), "topk": TOPK, "shrink": SHRINK}
-    res["ml"] = prev.get("ml", {}) if a.skip_ml else ml_neighbors(ids)
-    res["tmdb"] = prev.get("tmdb", {}) if a.skip_tmdb else tmdb_neighbors(ids, a.limit)
+    # Each part is optional: if one source can't be reached, keep going with the other,
+    # so a single blocked download never sinks the whole run.
+    errors = []
+    res["ml"] = prev.get("ml", {})
+    if not a.skip_ml:
+        try:
+            res["ml"] = ml_neighbors(ids)
+        except Exception as e:
+            errors.append(f"MovieLens part skipped: {e}")
+            print("!!", errors[-1], flush=True)
+    res["tmdb"] = prev.get("tmdb", {})
+    if not a.skip_tmdb:
+        try:
+            res["tmdb"] = tmdb_neighbors(ids, a.limit)
+        except Exception as e:
+            errors.append(f"TMDB part skipped: {e}")
+            print("!!", errors[-1], flush=True)
+    res["errors"] = errors
+    if not res["ml"] and not res["tmdb"]:
+        print("Neither source worked:", errors, flush=True)
+        sys.exit(1)
     with open(OUT, "w") as f:
         json.dump(res, f, separators=(",", ":"))
     print("wrote", OUT, os.path.getsize(OUT) // 1024, "KB;", len(res["ml"]), "ml lists,", len(res["tmdb"]), "tmdb lists", flush=True)
