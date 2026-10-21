@@ -123,6 +123,15 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
 .empty{border:1px dashed var(--line);border-radius:6px;padding:16px;color:var(--muted);font-size:14px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--navh) + 16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:4px;font-size:13.5px;max-width:calc(100% - 32px);z-index:30}
 
+/* Nemesis's reply to a log */
+#reply{position:fixed;left:0;right:0;bottom:calc(var(--navh) + 12px + env(safe-area-inset-bottom,0px));z-index:25;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+.reply{pointer-events:auto;width:100%;max-width:528px;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--nem);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.reply .label{color:var(--nem)}
+.reply p{margin:0;font-family:var(--mono);font-size:13.5px;line-height:1.6;min-height:1.6em}
+.reply .dismiss{font-size:11px;color:var(--muted)}
+.said{display:block;margin-top:3px;font-family:var(--mono);font-size:12px;color:var(--nem);line-height:1.5}
+@media (prefers-reduced-motion:no-preference){.reply{animation:up .2s ease-out}}
+
 /* bottom tab bar */
 .nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:10;
   padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
@@ -174,6 +183,7 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
   <button id="nav-set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</button>
 </div></nav>
 <div id="layer"></div>
+<div id="reply"></div>
 <div id="toast" class="toast" hidden></div>
 
 <script>
@@ -356,14 +366,18 @@ function seasonInfo(wk){
 function ensureWeek(wk){ if (!S.weeks[wk]) S.weeks[wk] = {week:wk, entries:[]}; return S.weeks[wk]; }
 function addEntry(track, value, extra){
   const wk = wkKey(now()), w = ensureWeek(wk);
-  w.entries.push(Object.assign({t:new Date().toISOString(), track, value}, extra||{}));
+  const np0 = nemesisPlan(wk, Number(S.meta.edge)), before = {wk, you:youValues(wk)[track], nem:liveNemesis(wk, np0.plan, np0.pace)[track]};
+  const entry = Object.assign({t:new Date().toISOString(), track, value}, extra||{});
+  w.entries.push(entry);
   if (track==='chess'){ if (w.chessStart==null) w.chessStart = S.meta.chessRating!=null ? Number(S.meta.chessRating) : Number(value); S.meta.chessRating = Number(value); }
   if (track==='gym' && extra && extra.lift && extra.e1rm){
     if (!S.meta.bestLifts[extra.lift] || extra.e1rm > S.meta.bestLifts[extra.lift]) S.meta.bestLifts[extra.lift] = extra.e1rm;
     if (!S.meta.firstLifts[extra.lift]) S.meta.firstLifts[extra.lift] = {e1rm:extra.e1rm, wk};
   }
-  if (save()) toast('Logged.');
+  try{ entry.reply = nemesisReact(track, entry, before); }catch(e){ entry.reply = ''; }
+  const ok = save();
   render();
+  if (ok){ if (entry.reply) showReply(entry.reply); else toast('Logged.'); }
 }
 function removeEntry(wk, idx){ S.weeks[wk].entries.splice(idx,1); save(); render(); }
 
@@ -409,6 +423,169 @@ function weekLine(live, np){
   return line;
 }
 
+/* ---------------- live reactions: Nemesis answers every log, built from your own numbers ---------------- */
+const SHORT = {gym:['session','sessions'], cardio:['session','sessions'], cpa:['hour','hours'], cold:['conversation','conversations'], chess:['point','points']};
+const unitOf = (id,n) => SHORT[id] ? SHORT[id][Math.abs(n)===1?0:1] : '';
+const EXCUSES = ['tired','busy','sick','late','work','sore','traffic','no time','short on time','lazy','hungover','rain','slept','forgot','stress','headache','long day'];
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const numTxt = v => String(Math.round(v*100)/100);
+const fillT = (s, d) => s.replace(/\{(\w+)\}/g, (_,k) => d[k]!=null ? d[k] : '');
+function allEntries(){ return Object.keys(S.weeks).sort().flatMap(k=>(S.weeks[k].entries||[]).map((e,i)=>Object.assign({wk:k, idx:i}, e))); }
+function nemLift(k, cur){
+  const f = (S.meta.firstLifts||{})[k]; if (!f) return null;
+  return Math.round(f.e1rm*(1.04 + Math.max(0, weeksBetween(f.wk, cur))*0.006*(1+Number(S.meta.edge))));
+}
+function dayKey(d){ return fmt(new Date(d)); }
+function choose(r, id, variants){
+  // pick a variant, avoiding ones used recently so the voice doesn't repeat itself
+  const recent = S.meta.recentLines || [];
+  const fresh = variants.map((v,i)=>i).filter(i=>!recent.includes(id+':'+i));
+  const pool = fresh.length ? fresh : variants.map((v,i)=>i);
+  const i = pool[Math.floor(r()*pool.length)];
+  return {key:id+':'+i, text:variants[i]};
+}
+function nemesisReact(track, entry, before){
+  const t = TBYID[track], wk = before.wk, r = rng(S.meta.seed+'|react|'+entry.t);
+  const youNow = youValues(wk)[track], nemNow = before.nem;
+  const stBefore = before.you > nemNow ? 'W' : before.you < nemNow ? 'L' : 'T';
+  const stAfter = youNow > nemNow ? 'W' : youNow < nemNow ? 'L' : 'T';
+  const when = new Date(entry.t), hour = when.getHours(), dow = DAYS[when.getDay()];
+  const prev = allEntries().filter(e=>e.track===track && e.t < entry.t);
+  const lastSame = prev[prev.length-1];
+  const d = {track:t.name, you:fmtVal(t,youNow), nem:fmtVal(t,nemNow), dow};
+  const obs = [];
+  const add = (id, pri, variants) => obs.push(Object.assign({pri}, choose(r, id, variants.map(v=>fillT(v,d)))));
+
+  // first ever log on this track
+  if (!prev.length) add('first', 6, ['First {track} log. I started counting the day you installed me.', 'Your first {track} entry. Mine was a while ago.', 'So you do {track}. Noted. I’ve been at it all week.']);
+
+  // standing on this track after the log
+  if (stAfter==='W' && stBefore!=='W'){ d.gap = numTxt(youNow-nemNow);
+    add('flip', 9, ['That puts you ahead on {track}, {you} to {nem}. Temporarily.', '{you} to {nem}. You lead {track}. I have until Sunday.', 'Ahead on {track} by {gap}. Enjoy the view. It’s the first thing I fix.']); }
+  else if (stAfter==='T' && stBefore==='L')
+    add('level', 8, ['Level on {track} at {you}. You caught up. Catching up isn’t winning.', '{you} each on {track}. I’ll be ahead again before you check.']);
+  else if (stAfter==='L' && track==='chess'){ d.gap = numTxt(nemNow-youNow);
+    add('behind-chess', 7, ['Chess this week: you {you}, me {nem}. {gap} points down, and you dug that hole yourself.', 'Rating change this week, you {you}, me {nem}. That’s the wrong direction.']); }
+  else if (stAfter==='L'){ d.gap = numTxt(nemNow-youNow); d.u = unitOf(track, nemNow-youNow);
+    add('behind', 7, ['Still {gap} {u} behind on {track}. I’m at {nem}.', '{track}: {you} to my {nem}. That entry was necessary. It wasn’t enough.', 'You moved. So did I. {track} stands {you}–{nem}, mine.']); }
+  else if (stAfter==='W'){ d.gap = numTxt(youNow-nemNow);
+    add('extend', 5, ['Up {gap} on {track}. Leads are where you relax. I don’t.', '{you} to {nem} on {track}. You’re ahead. Write that down; it won’t last to Sunday.']); }
+
+  // gap since last log on this track
+  if (lastSame){
+    const days = Math.floor((new Date(dayKey(entry.t)) - new Date(dayKey(lastSame.t)))/864e5);
+    d.days = days;
+    if (days >= 5) add('gap', 8, ['First {track} entry in {days} days. I didn’t take {days} days off.', '{days} days since your last {track} log. I logged mine every one of them.', 'Back after {days} days. The gap is on your record, not mine.']);
+  }
+
+  // gym: the top set
+  if (track==='gym' && entry.lift){
+    const name = (LIFTS.find(l=>l[0]===entry.lift)||[,entry.lift])[1];
+    const prior = prev.filter(e=>e.lift===entry.lift && e.e1rm), best = prior.reduce((m,e)=>Math.max(m,e.e1rm),0), nl = nemLift(entry.lift, wk);
+    Object.assign(d, {lift:name, set:entry.weight+'×'+entry.reps, e1:entry.e1rm, best, nl, by: entry.e1rm-best, short:(nl||0)-entry.e1rm});
+    if (!prior.length) add('lift-first', 7, ['{lift} {set}, about {e1} estimated max. That’s your baseline. Mine is {nl}.', 'First {lift} set on record: {set}. Estimated {e1}. I’m at {nl}.']);
+    else if (entry.e1rm > best && nl && entry.e1rm >= nl) add('lift-pass', 10, ['{lift} {set}. Estimated {e1}, a new best, and above my {nl}. That has not happened before. I’ll be under the bar tomorrow.', '{e1} on {lift}. Over my {nl}. Recorded. Corrected by next week.']);
+    else if (entry.e1rm > best) add('lift-pr', 10, ['{lift} {set}. Estimated {e1}, a new best by {by} lb. Mine is {nl}. Closer. Not close.', 'New {lift} best: {e1}, up {by}. Still {short} lb under me.', '{set} on {lift}. Best by {by} lb. I added more than that this month.']);
+    else if (entry.e1rm < best*0.93) add('lift-down', 7, ['{lift} {set}. Estimated {e1}. Your best is {best}. That was a step back.', '{e1} on {lift}, {best} is your best. Heavy day or light effort. I know which.']);
+    else add('lift-hold', 5, ['{lift} {set}, estimated {e1}. Your best is still {best}. Maintenance, not progress.', '{set}. Same neighborhood as last time. I moved neighborhoods.']);
+  }
+
+  // CPA: session size and pace
+  if (track==='cpa'){
+    const sizes = prev.map(e=>Number(e.value)||0).filter(x=>x>0), avg = sizes.length ? sizes.reduce((a,b)=>a+b,0)/sizes.length : 0;
+    const longest = sizes.reduce((m,x)=>Math.max(m,x),0);
+    Object.assign(d, {h:numTxt(entry.value), avg:numTxt(Math.round(avg*4)/4)});
+    if (sizes.length>=3 && entry.value > longest) add('cpa-long', 9, ['{h} hours in one sitting. Your longest session on record. I do that on a Tuesday.', '{h} hours. A personal record. Mine isn’t a record; it’s a schedule.']);
+    else if (sizes.length>=3 && entry.value >= avg*1.5) add('cpa-big', 7, ['{h} hours. Well over your usual {avg}. Do it twice and I’ll take notice.', '{h} hours against a usual {avg}. Better. Repeatable is the question.']);
+    else if (sizes.length>=3 && entry.value <= avg*0.6) add('cpa-small', 7, ['{h} hours. Your average session is {avg}. That was a warm-up you logged.', '{h}. You usually do {avg}. FAR doesn’t care that you were busy.']);
+    const st = startOf(wk), f = clamp((now()-st)/(closeTime(wk)-st), 0.05, 1);
+    if (f < 0.9){ d.pace = numTxt(Math.round(youNow/f*2)/2); add('cpa-pace', 4, ['At this rate you finish the week near {pace} hours. My number is higher.', 'Pace check: {pace} hours by Sunday. Not enough.']); }
+  }
+
+  // chess: rating movement
+  if (track==='chess'){
+    const ratings = prev.map(e=>Number(e.value)), last = ratings.length ? ratings[ratings.length-1] : null, peak = ratings.reduce((m,x)=>Math.max(m,x),0);
+    if (last!=null){
+      const delta = entry.value - last; let downs = 0; const all = ratings.concat(entry.value);
+      for (let i=all.length-1;i>0;i--){ if (all[i]<all[i-1]) downs++; else break; }
+      Object.assign(d, {rt:entry.value, dl:Math.abs(delta), peak, toPeak:peak-entry.value, downs});
+      if (entry.value > peak) add('chess-peak', 10, ['{rt}. A new peak. I’d congratulate you, but I’m already higher.', 'Career high, {rt}. Up {dl}. Hold it for a week and I’ll be impressed.']);
+      else if (delta > 0) add('chess-up', 6, ['Up {dl} to {rt}. Your peak is {peak}. {toPeak} to go just to match yourself.', '+{dl}. {rt} now. Still under your {peak} peak.']);
+      else if (delta < 0 && downs >= 3) add('chess-slide', 9, ['Down {dl} to {rt}. That’s {downs} entries in a row going down. Stop playing tired.', '{rt}. {downs} straight drops. The board isn’t the problem.']);
+      else if (delta < 0) add('chess-down', 7, ['Down {dl} to {rt}. You logged that one voluntarily.', '{rt}, minus {dl}. I don’t lose rating. I don’t play rated.']);
+      else add('chess-flat', 4, ['{rt}. Unchanged. You played, and nothing happened.']);
+    }
+  }
+
+  // cold opens: who and how many
+  if (track==='cold'){
+    const lastWkCount = entriesOf(addWeeks(wk,-1)).filter(e=>e.track==='cold').length;
+    Object.assign(d, {n:youNow, lw:lastWkCount});
+    if (entry.note) { d.who = entry.note.slice(0,40); add('cold-who', 6, ['“{who}.” Conversation number {n} this week. I’ve started more.', 'Noted: {who}. Number {n} this week. Did they talk back, or did you just say hello?']); }
+    if (lastWkCount && youNow > lastWkCount) add('cold-more', 5, ['{n} this week. You had {lw} all of last week. Fine.', 'Already past last week’s {lw}. Don’t make a speech about it.']);
+  }
+
+  // the note: excuses get remembered
+  if (entry.note && track!=='cold'){
+    const low = entry.note.toLowerCase(), hasWord = (s,x) => new RegExp('\\b'+x+'\\b').test(s), ex = EXCUSES.find(x=>hasWord(low,x));
+    d.q = entry.note.length>48 ? entry.note.slice(0,46)+'…' : entry.note;
+    if (ex){
+      const same = allEntries().filter(e=>e.t<entry.t && e.note && hasWord(e.note.toLowerCase(), ex));
+      const onDow = same.filter(e=>new Date(e.t).getDay()===when.getDay()).length;
+      Object.assign(d, {ex, cnt:same.length+1, ord:ordinal(same.length+1)});
+      if (same.length>=2 && onDow>=1) add('excuse-day', 10, ['“{ex}” again. That’s the {ord} time, and not your first {dow}. You have a pattern. I have a plan.', '{ord} “{ex}.” Another {dow}. Your excuses run on a schedule.']);
+      else if (same.length>=1) add('excuse-repeat', 9, ['“{q}.” That’s the {ord} time you’ve written “{ex}.” I keep all of them.', '“{ex}” for the {ord} time. I don’t get {ex}.']);
+      else add('excuse-new', 7, ['“{q}.” Filed. I’ll bring it up later.', '“{q}.” A new one. It goes in the file.']);
+    } else add('note', 3, ['“{q}.” Kept.', 'Note filed: “{q}.”']);
+  }
+
+  // time of day
+  if (hour >= 23 || hour < 4){ d.clock = when.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    add('late', 3, ['Logged at {clock}. Last-minute work counts. Barely.', '{clock}. You’re logging when you should be sleeping. I don’t sleep.']); }
+  else if (hour < 7){ d.clock = when.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    add('early', 4, ['{clock}. Early. I was already done.', 'Before 7. Unusual for you. Make it usual.']); }
+
+  // day streak across all tracks
+  const daysLogged = new Set(allEntries().map(e=>dayKey(e.t)));
+  let streak = 0; for (let i=0;i<60;i++){ const dd = new Date(when); dd.setDate(dd.getDate()-i); if (daysLogged.has(dayKey(dd))) streak++; else break; }
+  d.streak = streak;
+  if (streak >= 3) add('streak', streak>=7?6:4, ['Day {streak} in a row with something logged. My streak doesn’t have a number. It doesn’t end.', '{streak} straight days. Respectable. For you.']);
+
+  // same point last week
+  if (t.kind==='count' || t.kind==='hours'){
+    const lastWkStart = openTime(addWeeks(wk,-1)), offset = now() - openTime(wk);
+    const lw = entriesOf(addWeeks(wk,-1)).filter(e=>e.track===track && new Date(e.t) - lastWkStart <= offset).reduce((s,e)=>s+(Number(e.value)||1),0);
+    if (lw && youNow < lw){ d.lw = numTxt(lw); add('vs-last', 6, ['By this point last week you had {lw} on {track}. You have {you}. Going backward.', 'Last week at this hour: {lw}. Now: {you}. I noticed.']); }
+    else if (lw && youNow > lw*1.4){ d.lw = numTxt(lw); add('vs-last-up', 4, ['Ahead of last week’s pace, {you} to {lw}. Last week was low.']); }
+  }
+
+  // assemble: best two observations, then a closer
+  obs.sort((a,b)=>b.pri-a.pri || r()-.5);
+  // excuses always get answered: the top observation, plus the excuse callback if there is one
+  const exc = obs.find(o=>o.key.startsWith('excuse'));
+  const picked = exc && obs[0]!==exc ? [obs[0], exc] : obs.slice(0, 2);
+  if (!picked.length) picked.push(choose(r, 'plain', [fillT('{track}: {you} to my {nem}.', d)]));
+  const closers = stAfter==='W' ? ['I’ll respond tonight.', 'Sunday decides it. Not today.', ''] : stAfter==='L' ? ['Keep going. It won’t matter.', 'I’m still ahead.', ''] : ['Tied is a temporary condition.', ''];
+  const c = choose(r, 'close-'+stAfter, closers);
+  const keys = picked.map(p=>p.key).concat(c.text ? [c.key] : []);
+  S.meta.recentLines = (S.meta.recentLines||[]).concat(keys).slice(-40);
+  return picked.map(p=>p.text).concat(c.text ? [c.text] : []).join(' ');
+}
+function ordinal(n){ const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+
+let replyT;
+function showReply(text){
+  const layer = $('#reply'); clearTimeout(replyT);
+  const p = el('p',{});
+  const box = el('button',{class:'reply', 'aria-live':'polite', onclick:()=>layer.replaceChildren()}, el('span',{class:'label',text:'Nemesis'}), p, el('span',{class:'dismiss',text:'Tap to dismiss'}));
+  layer.replaceChildren(box);
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) p.textContent = text;
+  else { let i = 0; const step = () => { if (!box.isConnected) return; i = Math.min(text.length, i+2); p.textContent = text.slice(0,i); if (i < text.length) setTimeout(step, 18); }; step(); }
+  replyT = setTimeout(()=>{ if (box.isConnected) layer.replaceChildren(); }, 14000);
+}
+function lastReply(wk){ const e = entriesOf(wk).filter(x=>x.reply); return e.length ? e[e.length-1] : null; }
+
 /* ---------------- UI helpers ---------------- */
 const $ = s => document.querySelector(s);
 function el(tag, attrs, ...kids){
@@ -422,7 +599,7 @@ function el(tag, attrs, ...kids){
   return n;
 }
 let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true, 2600); }
-function fmtVal(t, v){ if (v==null) return 'sealed'; if (t.kind==='chess') return (v>0?'+':'')+v; return String(Math.round(v*100)/100); }
+function fmtVal(t, v){ if (v==null) return 'sealed'; if (t.kind==='chess') return (v>0?'+':v===0?'±':'')+v; return String(Math.round(v*100)/100); }
 function openSheet(build){
   const layer = $('#layer'); layer.replaceChildren();
   const sh = el('div',{class:'sheet',role:'dialog','aria-modal':'true'}, el('div',{class:'grab'}));
@@ -482,7 +659,10 @@ function renderWeek(v, cur, you, nl, np, live){
       el('span',{class:'state '+stCls,text:stTxt})));
   }
   v.append(list);
-  v.append(el('div',{class:'voice',style:'margin-top:14px'}, el('span',{class:'label',text:'Nemesis'}), el('p',{text:weekLine(live,np)})));
+  const lr = lastReply(cur);
+  const vb = el('div',{class:'voice',style:'margin-top:14px'}, el('span',{class:'label',text:'Nemesis'}), el('p',{text:weekLine(live,np)}));
+  if (lr) vb.append(el('span',{class:'label',style:'margin-top:8px',text:'Last word · '+TBYID[lr.track].name+' · '+new Date(lr.t).toLocaleString(undefined,{weekday:'short',hour:'numeric',minute:'2-digit'})}), el('p',{text:lr.reply}));
+  v.append(vb);
 
   const best = S.meta.bestLifts||{}, first = S.meta.firstLifts||{}, rows = LIFTS.filter(([k])=>best[k]);
   if (rows.length){
@@ -533,7 +713,7 @@ function openLog(t){
         let txt = new Date(e.t).toLocaleDateString(undefined,{weekday:'short'})+' · '+(t.kind==='hours'?e.value+' h':t.kind==='chess'?'rating '+e.value:'+1');
         if (e.lift) txt += ' · '+e.lift+' '+e.weight+'×'+e.reps+' (e1RM '+e.e1rm+')';
         if (e.note) txt += ' · '+e.note;
-        box.append(el('div',{class:'entry'}, el('span',{class:'t',text:txt}), el('button',{class:'x',text:'Remove',onclick:()=>{ removeEntry(cur,i); closeSheet(); openLog(t); }})));
+        box.append(el('div',{class:'entry'}, el('span',{class:'t'}, txt, e.reply ? el('span',{class:'said',text:e.reply}) : null), el('button',{class:'x',text:'Remove',onclick:()=>{ removeEntry(cur,i); closeSheet(); openLog(t); }})));
       }
       sh.append(box);
     }
