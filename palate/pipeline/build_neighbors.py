@@ -56,23 +56,43 @@ def grouplens_bundle():
     from cryptography.x509.oid import ExtensionOID, AuthorityInformationAccessOID
     leaf = x509.load_pem_x509_certificate(ssl.get_server_certificate(("files.grouplens.org", 443), timeout=60).encode())
     print("  grouplens certificate issued by:", leaf.issuer.rfc4514_string(), flush=True)
-    aia = leaf.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS).value
-    urls = [d.access_location.value for d in aia if d.access_method == AuthorityInformationAccessOID.CA_ISSUERS]
-    print("  issuer certificate at:", urls, flush=True)
-    pems = []
-    for u in urls:
-        raw = None
+    def issuers_of(cert):
+        try:
+            aia = cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS).value
+        except Exception:
+            return []
+        return [d.access_location.value for d in aia if d.access_method == AuthorityInformationAccessOID.CA_ISSUERS]
+
+    def fetch(u):
         for cand in [u, u.replace("http://", "https://", 1)]:
             for t in range(4):
                 try:
-                    r = requests.get(cand, timeout=60, headers=UA); r.raise_for_status(); raw = r.content; break
+                    r = requests.get(cand, timeout=60, headers=UA); r.raise_for_status(); raw = r.content
+                    try: return x509.load_der_x509_certificate(raw)
+                    except Exception: return x509.load_pem_x509_certificate(raw)
                 except Exception as e:
                     print(f"  fetch {cand} try {t+1} failed: {e}", flush=True); time.sleep(3 * (t + 1))
-            if raw: break
-        if not raw: continue
-        try: cert = x509.load_der_x509_certificate(raw)
-        except Exception: cert = x509.load_pem_x509_certificate(raw)
-        pems.append(cert.public_bytes(Encoding.PEM).decode())
+        return None
+
+    # walk up the chain: each certificate names where its issuer lives, until we reach one that is
+    # self-signed or whose issuer is already a trusted root
+    # Never add a root fetched from the network: only intermediates, which still have to chain
+    # up to a root certifi already trusts.
+    trusted = {c.subject for c in x509.load_pem_x509_certificates(open(certifi.where(), "rb").read())}
+    pems, cur = [], leaf
+    for hop in range(5):
+        if cur.issuer in trusted:
+            print("  chain reaches a trusted root:", cur.issuer.rfc4514_string(), flush=True); break
+        urls = issuers_of(cur)
+        print(f"  hop {hop+1}: issuer of {cur.subject.rfc4514_string()} at {urls}", flush=True)
+        nxt = None
+        for u in urls:
+            nxt = fetch(u)
+            if nxt: break
+        if not nxt or nxt.issuer == nxt.subject:
+            print("  stopped: no further issuer, or it's an untrusted root (not added)", flush=True); break
+        pems.append(nxt.public_bytes(Encoding.PEM).decode())
+        cur = nxt
     if not pems:
         raise RuntimeError("couldn't download the issuer certificate")
     f = tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False)
