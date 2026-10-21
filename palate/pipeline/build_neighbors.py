@@ -42,18 +42,50 @@ def catalog_ids():
     return [r[i] for r in cat["items"]]
 
 
+def grouplens_bundle():
+    """files.grouplens.org doesn't send its intermediate certificate, so Python can't verify it
+    (browsers fetch the missing one automatically). Do the same: read the issuer URL from the
+    server's certificate, fetch that intermediate, and verify against certifi + it. Still a full
+    certificate check, nothing is skipped."""
+    import ssl, tempfile, certifi
+    from cryptography import x509
+    from cryptography.hazmat.primitives.serialization import Encoding
+    from cryptography.x509.oid import ExtensionOID, AuthorityInformationAccessOID
+    leaf = x509.load_pem_x509_certificate(ssl.get_server_certificate(("files.grouplens.org", 443)).encode())
+    aia = leaf.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS).value
+    urls = [d.access_location.value for d in aia if d.access_method == AuthorityInformationAccessOID.CA_ISSUERS]
+    pems = []
+    for u in urls:
+        raw = requests.get(u, timeout=60).content
+        try: cert = x509.load_der_x509_certificate(raw)
+        except Exception: cert = x509.load_pem_x509_certificate(raw)
+        pems.append(cert.public_bytes(Encoding.PEM).decode())
+    f = tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False)
+    f.write(open(certifi.where()).read() + "\n" + "\n".join(pems)); f.close()
+    print("  using certifi + grouplens intermediate from", urls, flush=True)
+    return f.name
+
+
 def ml_neighbors(movie_ids):
     import pandas as pd
     from scipy.sparse import csr_matrix
 
     want = {int(x[1:]) for x in movie_ids if x.startswith("m")}
     blob = None
-    for url in ML_URLS:
+    verify = True
+    for attempt in range(2):
+        for url in ML_URLS:
+            try:
+                print("downloading", url, flush=True)
+                r = requests.get(url, timeout=900, verify=verify); r.raise_for_status(); blob = r.content; break
+            except Exception as e:
+                print("  failed:", e, flush=True)
+        if blob is not None or attempt == 1:
+            break
         try:
-            print("downloading", url, flush=True)
-            r = requests.get(url, timeout=900); r.raise_for_status(); blob = r.content; break
+            verify = grouplens_bundle()
         except Exception as e:
-            print("  failed:", e, flush=True)
+            print("  couldn't fetch the missing certificate:", e, flush=True); break
     if blob is None:
         raise RuntimeError("could not download MovieLens")
     z = zipfile.ZipFile(io.BytesIO(blob))
