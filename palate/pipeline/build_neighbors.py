@@ -42,6 +42,9 @@ def catalog_ids():
     return [r[i] for r in cat["items"]]
 
 
+UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) palate-lab/1.0"}
+
+
 def grouplens_bundle():
     """files.grouplens.org doesn't send its intermediate certificate, so Python can't verify it
     (browsers fetch the missing one automatically). Do the same: read the issuer URL from the
@@ -51,18 +54,29 @@ def grouplens_bundle():
     from cryptography import x509
     from cryptography.hazmat.primitives.serialization import Encoding
     from cryptography.x509.oid import ExtensionOID, AuthorityInformationAccessOID
-    leaf = x509.load_pem_x509_certificate(ssl.get_server_certificate(("files.grouplens.org", 443)).encode())
+    leaf = x509.load_pem_x509_certificate(ssl.get_server_certificate(("files.grouplens.org", 443), timeout=60).encode())
+    print("  grouplens certificate issued by:", leaf.issuer.rfc4514_string(), flush=True)
     aia = leaf.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS).value
     urls = [d.access_location.value for d in aia if d.access_method == AuthorityInformationAccessOID.CA_ISSUERS]
+    print("  issuer certificate at:", urls, flush=True)
     pems = []
     for u in urls:
-        raw = requests.get(u, timeout=60).content
+        raw = None
+        for cand in [u, u.replace("http://", "https://", 1)]:
+            for t in range(4):
+                try:
+                    r = requests.get(cand, timeout=60, headers=UA); r.raise_for_status(); raw = r.content; break
+                except Exception as e:
+                    print(f"  fetch {cand} try {t+1} failed: {e}", flush=True); time.sleep(3 * (t + 1))
+            if raw: break
+        if not raw: continue
         try: cert = x509.load_der_x509_certificate(raw)
         except Exception: cert = x509.load_pem_x509_certificate(raw)
         pems.append(cert.public_bytes(Encoding.PEM).decode())
+    if not pems:
+        raise RuntimeError("couldn't download the issuer certificate")
     f = tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False)
     f.write(open(certifi.where()).read() + "\n" + "\n".join(pems)); f.close()
-    print("  using certifi + grouplens intermediate from", urls, flush=True)
     return f.name
 
 
@@ -77,7 +91,7 @@ def ml_neighbors(movie_ids):
         for url in ML_URLS:
             try:
                 print("downloading", url, flush=True)
-                r = requests.get(url, timeout=900, verify=verify); r.raise_for_status(); blob = r.content; break
+                r = requests.get(url, timeout=900, verify=verify, headers=UA); r.raise_for_status(); blob = r.content; break
             except Exception as e:
                 print("  failed:", e, flush=True)
         if blob is not None or attempt == 1:
@@ -85,7 +99,13 @@ def ml_neighbors(movie_ids):
         try:
             verify = grouplens_bundle()
         except Exception as e:
-            print("  couldn't fetch the missing certificate:", e, flush=True); break
+            print("  couldn't fetch the missing certificate:", e, flush=True)
+            if os.environ.get("ALLOW_UNVERIFIED_ML") == "1":
+                print("  ALLOW_UNVERIFIED_ML is on: downloading MovieLens WITHOUT a certificate check", flush=True)
+                verify = False
+            else:
+                print("  To download anyway, rerun with 'Allow unverified MovieLens download' ticked.", flush=True)
+                break
     if blob is None:
         raise RuntimeError("could not download MovieLens")
     z = zipfile.ZipFile(io.BytesIO(blob))
