@@ -77,6 +77,7 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:va
 .seg::-webkit-scrollbar{display:none}
 .seg .chip{white-space:nowrap}
 .chip .cnt{opacity:.7;font-weight:500}
+.btn.on{border-color:var(--plum);color:var(--plum)}
 .libctl{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .libctl .fld{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink2);font-weight:600;min-width:0}
 .libctl select{font:inherit;font-size:15px;color:var(--ink);background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;min-width:0}
@@ -446,7 +447,7 @@ const ICON={
 };
 
 // ---------- state ----------
-function blank(){ return {ratings:{}, items:{}, seen:{}, skip:{}, watchlist:{}, locks:{}, tags:{}, reviews:{}, pending:{lb:[]},
+function blank(){ return {ratings:{}, items:{}, seen:{}, skip:{}, watchlist:{}, favs:{}, locks:{}, tags:{}, reviews:{}, pending:{lb:[]},
   settings:{services:[], onlyMine:true}, imports:{}}; }
 function load(){ try{ const r=localStorage.getItem(STORE); if(r){ return Object.assign(blank(), JSON.parse(r)); } }catch(e){} return blank(); }
 let S=load();
@@ -505,7 +506,8 @@ async function overview(id){
   return OVS[id]||'';
 }
 function servicesOf(id){ return (PROV&&PROV.items[id])||[]; }
-function onMyServices(id){ const mine=S.settings.services; if(!mine.length) return true; return servicesOf(id).some(p=>mine.includes(String(p))); }
+const hasStremio=()=>S.settings.services.includes('stremio');
+function onMyServices(id){ const mine=S.settings.services; if(!mine.length||mine.includes('stremio')) return true; return servicesOf(id).some(p=>mine.includes(String(p))); }
 
 // ---------- rating actions ----------
 function rate(id, r, src='app'){
@@ -693,6 +695,7 @@ function openDetail(it){
         meta.append(el('div',{class:'small muted',text:it.g.map(g=>c.genres[g]).filter(Boolean).join(', ')}));
         if(it.a.length) meta.append(el('div',{class:'small muted',text:it.a.slice(0,3).map(i=>c.people[i]).join(', ')}));
         const sv=servicesOf(it.id).map(s=>PROV&&PROV.names[s]).filter(Boolean);
+        if(hasStremio()&&it.imdb) sv.unshift('Stremio');
         if(sv.length) meta.append(el('div',{class:'small',text:'Streaming: '+sv.slice(0,4).join(', ')}));
       }
       if(it.kind==='book'&&it.subjects&&it.subjects.length) meta.append(el('div',{class:'small muted',text:it.subjects.slice(0,4).join(', ')}));
@@ -735,7 +738,11 @@ function openDetail(it){
 
       const acts=el('div',{class:'row'});
       if(!mine&&!lock) acts.append(el('button',{class:'btn primary',text:'Lock prediction',onclick:()=>{ lockPrediction(it); draw(); }}));
-      if(!mine) acts.append(el('button',{class:'btn',text:S.watchlist[it.id]?'On watchlist ✓':'Watchlist',onclick:()=>{ S.watchlist[it.id]?delete S.watchlist[it.id]:S.watchlist[it.id]=Date.now(); if(!S.items[it.id]&&it.kind==='book') S.items[it.id]=it; save(); draw(); }}));
+      const keepIt=()=>{ if(!S.items[it.id]&&it.kind!=='movie'&&it.kind!=='tv') S.items[it.id]=it; };
+      const fav=!!(S.favs||{})[it.id];
+      acts.append(el('button',{class:'btn'+(fav?' on':''),'aria-pressed':fav?'true':'false',text:fav?'♥ Favorite':'♡ Add to favorites',onclick:()=>{ S.favs=S.favs||{}; fav?delete S.favs[it.id]:S.favs[it.id]=Date.now(); keepIt(); save(); stremioSoon(); draw(); toast(fav?'Removed from favorites.':'Added to favorites.'); }}));
+      if(!mine&&(it.kind==='movie'||it.kind==='tv'||it.kind==='book')){ const lname=listName(it), on=!!S.watchlist[it.id];
+        acts.append(el('button',{class:'btn'+(on?' on':''),'aria-pressed':on?'true':'false',text:on?'On '+lname+' ✓':'Add to '+lname,onclick:()=>{ on?delete S.watchlist[it.id]:S.watchlist[it.id]=Date.now(); keepIt(); save(); draw(); toast(on?'Removed from your '+lname+'.':'Added to your '+lname+'.'); }})); }
       if(!mine) acts.append(el('button',{class:'btn ghost',text:'Not for me',onclick:()=>{ S.skip[it.id]=1; save(); close(); toast('Hidden from picks.'); }}));
       if(mine) acts.append(el('button',{class:'btn ghost danger',text:'Remove rating',onclick:()=>{ unrate(it.id); draw(); }}));
       if(lock&&lock.r==null) acts.append(el('button',{class:'btn ghost',text:'Cancel lock',onclick:()=>{ delete S.locks[it.id]; save(); draw(); }}));
@@ -761,7 +768,7 @@ function addBookSheet(prefill, onDone){
 function migrateItem(oldId, it){
   if(oldId===it.id){ S.items[it.id]=it; }
   else {
-    for(const k of ['ratings','seen','skip','watchlist','locks','tags','reviews']){ if(S[k]&&S[k][oldId]!=null){ if(S[k][it.id]==null) S[k][it.id]=S[k][oldId]; delete S[k][oldId]; } }
+    for(const k of ['ratings','seen','skip','watchlist','favs','locks','tags','reviews']){ if(S[k]&&S[k][oldId]!=null){ if(S[k][it.id]==null) S[k][it.id]=S[k][oldId]; delete S[k][oldId]; } }
     (S.blind||[]).forEach(b=>{ if(b.id===oldId) b.id=it.id; });
     S.items[it.id]=it; delete S.items[oldId];
   }
@@ -794,7 +801,7 @@ function recommend(kind, n=40, opts={}){
   const sc=[];
   for(const it of c.items){
     if(it.kind!==kind||S.ratings[it.id]||S.seen[it.id]||S.skip[it.id]||it.vc<60) continue;
-    if(!opts.anyService&&S.settings.onlyMine&&S.settings.services.length&&!onMyServices(it.id)) continue;
+    if(!opts.anyService&&S.settings.onlyMine&&S.settings.services.length&&!hasStremio()&&!onMyServices(it.id)) continue;
     const p=predict(it); sc.push([it,p,p.p-0.25*p.conf]);
   }
   sc.sort((a,b)=>b[2]-a[2]);
@@ -805,10 +812,12 @@ function recommend(kind, n=40, opts={}){
 }
 function viewYou(w){
   const nR=Object.keys(S.ratings).length;
-  w.append(el('div',{class:'seg',role:'tablist'},[['movie','Movies'],['tv','Shows'],['book','Books'],['watch','Watchlist']].map(([k,l])=>
+  w.append(el('div',{class:'seg',role:'tablist'},[['movie','Movies'],['tv','Shows'],['book','Books'],['watch','Watchlist'],['read','Readlist'],['fav','Favorites']].map(([k,l])=>
     el('button',{class:'chip','aria-pressed':youCat===k?'true':'false',text:l,onclick:()=>{ youCat=k; render(); }}))));
   if(catStatus==='loading'){ w.append(el('div',{class:'empty',text:'Loading the catalog…'})); return; }
-  if(youCat==='watch'){ return viewWatchlist(w); }
+  if(youCat==='watch'){ return viewWatchlist(w,false); }
+  if(youCat==='read'){ return viewWatchlist(w,true); }
+  if(youCat==='fav'){ return viewFavorites(w); }
   if(youCat==='book'){ return viewBookRecs(w); }
   if(catStatus==='missing'){
     w.append(el('div',{class:'empty'},el('b',{text:'The movie & TV catalog isn’t built yet.'}),el('br'),
@@ -818,7 +827,7 @@ function viewYou(w){
   if(nR<10){ w.append(el('div',{class:'note'},el('b',{text:`${nR} rated so far.`}),' Picks are crowd favorites until you’ve rated 10+. Import Letterboxd or use Quick rate in Library.')); }
   w.append(el('button',{class:'btn wide',onclick:()=>{ rapidKind=youCat==='tv'?'tv':'movie'; go('rapid'); }},'Quick rate · 20 titles in about 2 minutes'));
   const mine=S.settings.services;
-  if(mine.length) w.append(el('div',{class:'row small muted'},
+  if(mine.length&&!hasStremio()) w.append(el('div',{class:'row small muted'},
     el('button',{class:'chip','aria-pressed':S.settings.onlyMine?'true':'false',text:'Only my services',onclick:()=>{ S.settings.onlyMine=!S.settings.onlyMine; save(); render(); }})));
   const {top,wild}=recommend(youCat);
   if(!top.length){ w.append(el('div',{class:'empty',text:'Nothing left to suggest with these filters.'})); return; }
@@ -826,11 +835,18 @@ function viewYou(w){
   if(wild.length&&MODEL){ w.append(el('div',{class:'label',text:'Wildcards — outside what you usually rate'}), el('div',{class:'list'},wild.map(([it,p])=>titleRow(it,{pred:p,tag:'wildcard'})))); }
   if(top.length>10) w.append(el('div',{class:'label',text:'More picks'}), el('div',{class:'list'},top.slice(10).map(([it,p])=>titleRow(it,{pred:p}))));
 }
-function viewWatchlist(w){
-  const ids=Object.keys(S.watchlist).filter(id=>getItem(id));
-  if(!ids.length){ w.append(el('div',{class:'empty',text:'Your watchlist is empty. Letterboxd’s watchlist comes in with the import.'})); return; }
+const listName=it=>it.kind==='book'?'readlist':'watchlist';
+function viewWatchlist(w, books){
+  const ids=Object.keys(S.watchlist).filter(id=>{ const it=getItem(id); return it&&!S.ratings[id]&&(books?it.kind==='book':(it.kind==='movie'||it.kind==='tv')); });
+  if(!ids.length){ w.append(el('div',{class:'empty',text: books?'Your readlist is empty. Open any book and tap “Add to readlist”.':'Your watchlist is empty. Open any movie or show and tap “Add to watchlist”. Letterboxd’s watchlist comes in with the import.'})); return; }
   const rows=ids.map(id=>[getItem(id),predict(getItem(id))]).sort((a,b)=>b[1].p-a[1].p);
-  w.append(el('div',{class:'small muted',text:'Ranked by how much the model thinks you’ll like each one.'}), el('div',{class:'list'},rows.map(([it,p])=>titleRow(it,{pred:p}))));
+  w.append(el('div',{class:'small muted',text:`${rows.length} ${rows.length===1?'title':'titles'}, ranked by how much Palate thinks you’ll like each one. The order updates as you rate.`}), el('div',{class:'list'},rows.map(([it,p])=>titleRow(it,{pred:p}))));
+}
+function viewFavorites(w){
+  const ids=Object.keys(S.favs||{}).filter(id=>getItem(id));
+  if(!ids.length){ w.append(el('div',{class:'empty',text:'No favorites yet. Open anything you love and tap “Add to favorites”. Favorites lead your Stremio favorites row.'})); return; }
+  const rows=ids.map(id=>getItem(id)).sort((a,b)=>((S.ratings[b.id]||{}).r||0)-((S.ratings[a.id]||{}).r||0)||(S.favs[b.id]-S.favs[a.id]));
+  w.append(el('div',{class:'small muted',text:`${rows.length} favorite${rows.length===1?'':'s'}`}), el('div',{class:'list'},rows.map(it=>titleRow(it,{why:false}))));
 }
 let bookRecCache=null;
 function viewBookRecs(w){
@@ -976,7 +992,7 @@ function filterOptions(list){
   if(c&&(kinds.has('movie')||kinds.has('tv'))) bucket('Director / creator', it=>(it.m||[]).slice(0,2).map(String), k=>c.people[+k]||k, 2);
   if(kinds.has('book')) bucket('Author', it=>it.kind==='book'?(it.authors||[]):[], k=>k);
   bucket('Tag', it=>[...new Set([...(it.tags||[]),...(S.tags[it.id]||[])])], k=>'#'+k);
-  bucket('Other', (it)=>[S.reviews[it.id]?'review':null, S.locks[it.id]&&S.locks[it.id].r!=null?'locked':null], k=>({review:'Has your review',locked:'Locked a prediction'})[k]);
+  bucket('Other', (it)=>[(S.favs||{})[it.id]?'fav':null, S.reviews[it.id]?'review':null, S.locks[it.id]&&S.locks[it.id].r!=null?'locked':null], k=>({fav:'Favorites',review:'Has your review',locked:'Locked a prediction'})[k]);
   return groups;
 }
 
@@ -1198,8 +1214,9 @@ function stremioMetas(kind){
 }
 // your own highest-rated titles, best first (4★ and up)
 function stremioFavorites(kind){
-  return Object.entries(S.ratings).map(([id,r])=>[getItem(id),r]).filter(([it,r])=>it&&it.kind===kind&&it.imdb&&r.r>=4)
-    .sort((a,b)=>(b[1].r-a[1].r)||((b[1].at||0)-(a[1].at||0))).slice(0,100)
+  const F=S.favs||{}, ids=new Set([...Object.keys(F), ...Object.entries(S.ratings).filter(([,r])=>r.r>=4).map(([id])=>id)]);
+  return [...ids].map(id=>[getItem(id),S.ratings[id]||{r:0}]).filter(([it])=>it&&it.kind===kind&&it.imdb)
+    .sort((a,b)=>((F[b[0].id]?1:0)-(F[a[0].id]?1:0))||(b[1].r-a[1].r)||((b[1].at||0)-(a[1].at||0))).slice(0,100)
     .map(([it])=>({id:it.imdb, type:kind==='movie'?'movie':'series', name:it.title,
       poster:it.poster?'https://image.tmdb.org/t/p/w342'+it.poster:undefined, releaseInfo:it.year?String(it.year):undefined}));
 }
@@ -1239,7 +1256,7 @@ function stremioCard(){
   }
   const st=S.stremio;
   card.append(...[
-    el('div',{class:'small muted',text: st?`Last sent ${new Date(st.at).toLocaleString()} · ${st.movies} movie and ${st.shows} show picks, ${st.favs??0} favorites (your 4★+ titles, best first). Stremio gets titles only, not your star ratings.`:'Not sent yet.'}),
+    el('div',{class:'small muted',text: st?`Last sent ${new Date(st.at).toLocaleString()} · ${st.movies} movie and ${st.shows} show picks, ${st.favs??0} favorites (hearted first, then your 4★+ titles). Stremio gets titles only, not your star ratings.`:'Not sent yet.'}),
     S.stremioErr?el('div',{class:'small',style:'color:var(--bad)',text:S.stremioErr}):null,
     el('div',{class:'label',text:'Add-on link (paste in Stremio → Add-ons → search box)'}),
     el('div',{class:'small',style:'word-break:break-all;font-weight:600',text:ADDON_URL}),
@@ -1258,7 +1275,7 @@ function mergeBackup(d){
   const n={ratings:0};
   for(const [id,r] of Object.entries(d.ratings||{})){ const cur=S.ratings[id]; if(!cur||(r.at||0)>(cur.at||0)){ if(!cur) n.ratings++; S.ratings[id]=r; } }
   for(const k of ['items','reviews']) Object.assign(S[k], Object.fromEntries(Object.entries(d[k]||{}).filter(([id])=>!S[k][id])));
-  for(const k of ['seen','skip','watchlist']) for(const [id,v] of Object.entries(d[k]||{})) if(!(id in S[k])&&!(k==='watchlist'&&S.ratings[id])) S[k][id]=v;
+  S.favs=S.favs||{}; for(const k of ['seen','skip','watchlist','favs']) for(const [id,v] of Object.entries(d[k]||{})) if(!(id in S[k])&&!(k==='watchlist'&&S.ratings[id])) S[k][id]=v;
   for(const [id,l] of Object.entries(d.locks||{})){ const cur=S.locks[id]; if(!cur||(cur.r==null&&l.r!=null)) S.locks[id]=l; }
   for(const [id,t] of Object.entries(d.tags||{})) S.tags[id]=[...new Set([...(S.tags[id]||[]),...t])];
   for(const [src,rows] of Object.entries(d.pending||{})){ const have=new Set((S.pending[src]||[]).map(r=>r.type+'|'+r.name+'|'+r.year)); S.pending[src]=(S.pending[src]||[]).concat(rows.filter(r=>!have.has(r.type+'|'+r.name+'|'+r.year))); }
@@ -1277,8 +1294,8 @@ function viewSettings(w){
     const counts={}; for(const v of Object.values(PROV.items)) for(const p of v) counts[p]=(counts[p]||0)+1;
     const ids=Object.keys(PROV.names).sort((a,b)=>(counts[b]||0)-(counts[a]||0)).slice(0,30);
     const mine=new Set(S.settings.services);
-    w.append(el('div',{class:'card'},el('h3',{text:'Your streaming services'}),el('div',{class:'small muted',text:'Picks can stick to what you can watch tonight (US).'}),
-      el('div',{class:'chips'},ids.map(id=>el('button',{class:'chip','aria-pressed':mine.has(id)?'true':'false',text:PROV.names[id],onclick:()=>{
+    w.append(el('div',{class:'card'},el('h3',{text:'Your streaming services'}),el('div',{class:'small muted',text: mine.has('stremio')?'Stremio is on, so Palate treats every movie and show as available and never filters picks by service.':'Picks can stick to what you can watch tonight (US). Turn on Stremio if you can watch anything.'}),
+      el('div',{class:'chips'},['stremio',...ids].map(id=>el('button',{class:'chip','aria-pressed':mine.has(id)?'true':'false',text:id==='stremio'?'Stremio (everything)':PROV.names[id],onclick:()=>{
         mine.has(id)?mine.delete(id):mine.add(id); S.settings.services=[...mine]; save(); render(); }})))));
   }
   w.append(stremioCard());
