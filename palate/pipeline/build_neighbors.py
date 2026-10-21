@@ -63,13 +63,26 @@ def grouplens_bundle():
             return []
         return [d.access_location.value for d in aia if d.access_method == AuthorityInformationAccessOID.CA_ISSUERS]
 
-    def fetch(u):
+    def parse(raw):
+        # issuer files come as a single certificate (DER or PEM) or a PKCS#7 bundle (.p7c)
+        from cryptography.hazmat.primitives.serialization import pkcs7
+        for load in (lambda b: [x509.load_der_x509_certificate(b)], lambda b: [x509.load_pem_x509_certificate(b)],
+                     pkcs7.load_der_pkcs7_certificates, pkcs7.load_pem_pkcs7_certificates):
+            try:
+                certs = load(raw)
+                if certs: return certs
+            except Exception:
+                pass
+        raise ValueError("not a certificate or PKCS#7 bundle")
+
+    def fetch(u, want):
         for cand in [u, u.replace("http://", "https://", 1)]:
             for t in range(4):
                 try:
-                    r = requests.get(cand, timeout=60, headers=UA); r.raise_for_status(); raw = r.content
-                    try: return x509.load_der_x509_certificate(raw)
-                    except Exception: return x509.load_pem_x509_certificate(raw)
+                    r = requests.get(cand, timeout=60, headers=UA); r.raise_for_status()
+                    certs = parse(r.content)
+                    match = [c for c in certs if c.subject == want] or certs
+                    return match[0]
                 except Exception as e:
                     print(f"  fetch {cand} try {t+1} failed: {e}", flush=True); time.sleep(3 * (t + 1))
         return None
@@ -87,7 +100,7 @@ def grouplens_bundle():
         print(f"  hop {hop+1}: issuer of {cur.subject.rfc4514_string()} at {urls}", flush=True)
         nxt = None
         for u in urls:
-            nxt = fetch(u)
+            nxt = fetch(u, cur.issuer)
             if nxt: break
         if not nxt or nxt.issuer == nxt.subject:
             print("  stopped: no further issuer, or it's an untrusted root (not added)", flush=True); break
