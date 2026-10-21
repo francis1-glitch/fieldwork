@@ -842,11 +842,18 @@ function viewWatchlist(w, books){
   const rows=ids.map(id=>[getItem(id),predict(getItem(id))]).sort((a,b)=>b[1].p-a[1].p);
   w.append(el('div',{class:'small muted',text:`${rows.length} ${rows.length===1?'title':'titles'}, ranked by how much Palate thinks you’ll like each one. The order updates as you rate.`}), el('div',{class:'list'},rows.map(([it,p])=>titleRow(it,{pred:p}))));
 }
+let favCat='all';
 function viewFavorites(w){
-  const ids=Object.keys(S.favs||{}).filter(id=>getItem(id));
-  if(!ids.length){ w.append(el('div',{class:'empty',text:'No favorites yet. Open anything you love and tap “Add to favorites”. Favorites lead your Stremio favorites row.'})); return; }
-  const rows=ids.map(id=>getItem(id)).sort((a,b)=>((S.ratings[b.id]||{}).r||0)-((S.ratings[a.id]||{}).r||0)||(S.favs[b.id]-S.favs[a.id]));
-  w.append(el('div',{class:'small muted',text:`${rows.length} favorite${rows.length===1?'':'s'}`}), el('div',{class:'list'},rows.map(it=>titleRow(it,{why:false}))));
+  const all=Object.keys(S.favs||{}).map(getItem).filter(Boolean);
+  if(!all.length){ w.append(el('div',{class:'empty',text:'No favorites yet. Open anything you love and tap “Add to favorites”. Favorites lead your Stremio favorites row.'})); return; }
+  const counts={}; all.forEach(it=>counts[it.kind]=(counts[it.kind]||0)+1);
+  const KINDS=[['all','All'],['movie','Movies'],['tv','Shows'],['book','Books'],['dish','Dishes'],['character','Characters'],['other','Other']];
+  if(favCat!=='all'&&!counts[favCat]) favCat='all';
+  w.append(el('div',{class:'seg',role:'tablist','aria-label':'Favorites category'},KINDS.filter(([k])=>k==='all'||counts[k]).map(([k,l])=>
+    el('button',{class:'chip','aria-pressed':favCat===k?'true':'false',onclick:()=>{ favCat=k; render(); }},l+' ',el('span',{class:'cnt',text:String(k==='all'?all.length:counts[k])})))));
+  const rows=(favCat==='all'?all:all.filter(it=>it.kind===favCat)).sort((a,b)=>((S.ratings[b.id]||{}).r||0)-((S.ratings[a.id]||{}).r||0)||(S.favs[b.id]-S.favs[a.id]));
+  const name=favCat==='all'?'favorite':({movie:'favorite movie',tv:'favorite show',book:'favorite book',dish:'favorite dish',character:'favorite character',other:'favorite'})[favCat];
+  w.append(el('div',{class:'small muted',text:`${rows.length} ${name}${rows.length===1?'':'s'}, highest rated first`}), el('div',{class:'list'},rows.map(it=>titleRow(it,{why:false}))));
 }
 let bookRecCache=null;
 function viewBookRecs(w){
