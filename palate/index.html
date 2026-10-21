@@ -76,6 +76,11 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:va
 .seg{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-inline:-2px;padding:2px}
 .seg::-webkit-scrollbar{display:none}
 .seg .chip{white-space:nowrap}
+.chip .cnt{opacity:.7;font-weight:500}
+.libctl{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.libctl .fld{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink2);font-weight:600;min-width:0}
+.libctl select{font:inherit;font-size:15px;color:var(--ink);background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%;min-width:0}
+.libctl input{grid-column:1/-1}
 
 /* title rows */
 .list{display:flex;flex-direction:column;gap:8px}
@@ -581,7 +586,7 @@ function bookFromOL(d){
 }
 
 // ---------- routing ----------
-let view='you', youCat='movie', libFilter='all';
+let view='you', youCat='movie';
 function go(v){ view=v; window.scrollTo(0,0); render(); }
 
 function render(){
@@ -734,9 +739,51 @@ function openDetail(it){
       if(!mine) acts.append(el('button',{class:'btn ghost',text:'Not for me',onclick:()=>{ S.skip[it.id]=1; save(); close(); toast('Hidden from picks.'); }}));
       if(mine) acts.append(el('button',{class:'btn ghost danger',text:'Remove rating',onclick:()=>{ unrate(it.id); draw(); }}));
       if(lock&&lock.r==null) acts.append(el('button',{class:'btn ghost',text:'Cancel lock',onclick:()=>{ delete S.locks[it.id]; save(); draw(); }}));
+      if(it.kind!=='movie'&&it.kind!=='tv') acts.append(el('button',{class:'btn ghost',text:'Change category',onclick:()=>changeKindSheet(S.items[it.id]||it)}));
       sh.append(acts);
     };
     draw();
+  });
+}
+
+// ---------- books by hand, and moving things between categories ----------
+function addBookSheet(prefill, onDone){
+  sheet((sh,close)=>{
+    const title=el('input',{placeholder:'Title',value:prefill||'','aria-label':'Title'}), author=el('input',{placeholder:'Author','aria-label':'Author'}), year=el('input',{placeholder:'Year (optional)',inputmode:'numeric','aria-label':'Year'});
+    sh.append(sheetBar(close), el('h2',{text:'Add a book'}), el('div',{class:'small muted',text:'For books Open Library doesn’t have. Author matters most: it’s what Palate learns from.'}), title, author, year,
+      el('button',{class:'btn primary',text:'Add and rate',onclick:()=>{
+        if(!title.value.trim()){ toast('Give it a title.'); return; }
+        const it={id:'b:x'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), kind:'book', title:title.value.trim(), authors:author.value.trim()?[author.value.trim()]:[], year:parseInt(year.value,10)||null, subjects:[], cover:null, ola:null, olc:0};
+        S.items[it.id]=it; save(); openDetail(it); }}));
+  });
+}
+// move everything you've attached to one id (rating, tags, lock, review…) onto another
+function migrateItem(oldId, it){
+  if(oldId===it.id){ S.items[it.id]=it; }
+  else {
+    for(const k of ['ratings','seen','skip','watchlist','locks','tags','reviews']){ if(S[k]&&S[k][oldId]!=null){ if(S[k][it.id]==null) S[k][it.id]=S[k][oldId]; delete S[k][oldId]; } }
+    (S.blind||[]).forEach(b=>{ if(b.id===oldId) b.id=it.id; });
+    S.items[it.id]=it; delete S.items[oldId];
+  }
+  markDirty(); save(); stremioSoon();
+}
+function changeKindSheet(it){
+  sheet((sh,close)=>{
+    sh.append(sheetBar(close), el('h2',{text:'Change category'}), el('div',{class:'small muted',text:'Your rating and tags come along.'}));
+    const box=el('div',{class:'list'});
+    const toKind=k=>{ const n=Object.assign({},it,{kind:k}); if(k==='book'){ n.authors=it.authors||(it.where?[it.where]:[]); n.subjects=it.subjects||[]; } migrateItem(it.id,n); toast('Moved to '+Core.label('c:'+k)+'.'); render(); openDetail(n); };
+    sh.append(el('div',{class:'chips'},[['book','Book'],['dish','Dish'],['character','Character'],['other','Other']].filter(([k])=>k!==it.kind).map(([k,l])=>
+      el('button',{class:'chip',text:l,onclick:()=>{
+        if(k!=='book') return toKind(k);
+        box.innerHTML=''; box.append(el('div',{class:'small muted',text:'Looking for “'+it.title+'” on Open Library…'}));
+        olSearch(it.title+(it.where?' '+it.where:''),6).catch(()=>olSearch(it.title,6)).then(bs=>{
+          box.innerHTML='';
+          if(bs.length) box.append(el('div',{class:'label',text:'Is it one of these? Picking one brings in the author, subjects and reader rating.'}));
+          bs.forEach(b=>box.append(el('button',{class:'title',onclick:()=>{ migrateItem(it.id,b); toast('Moved to Books.'); render(); openDetail(b); }},
+            posterEl(b), el('div',{class:'mid'},el('span',{class:'nm',text:b.title}),el('span',{class:'sub',text:subline(b)})))));
+          box.append(el('button',{class:'btn wide',text:bs.length?'None of these: keep it as typed':'Keep it as typed',onclick:()=>toKind('book')}));
+        }).catch(()=>{ box.innerHTML=''; box.append(el('div',{class:'small muted',text:'Couldn’t reach Open Library.'}), el('button',{class:'btn wide',text:'Move it to Books as typed',onclick:()=>toKind('book')})); });
+      }}))), box);
   });
 }
 
@@ -806,22 +853,32 @@ function viewBookRecs(w){
 }
 
 // ---------- Grade ----------
-let gradeQ='', gradeKind='', gradeRes=null;
+let gradeQ='', gradeKind='', gradeRes=null, olSeq=0;
 function viewGrade(w){
-  const input=el('input',{type:'search',placeholder:'Search a movie, show or book',value:gradeQ,enterkeyhint:'search','aria-label':'Search'});
+  const isBook=gradeKind==='book';
+  const input=el('input',{type:'search',placeholder:isBook?'Search books by title or author':'Search a movie, show or book',value:gradeQ,enterkeyhint:'search','aria-label':'Search'});
   const res=el('div',{class:'list'});
+  const manual=()=>el('button',{class:'btn wide ghost',text:'Not finding it? Add a book by hand',onclick:()=>addBookSheet(input.value.trim())});
+  const books=async(q, into, btn)=>{
+    const seq=++olSeq;
+    if(btn){ btn.disabled=true; btn.textContent='Searching Open Library…'; } else into.append(el('div',{class:'small muted',text:'Searching Open Library…'}));
+    try{ const bs=await olSearch(q); if(seq!==olSeq) return;
+      if(btn) btn.remove(); else into.innerHTML='';
+      if(!bs.length) into.append(el('div',{class:'empty',text:'No books found on Open Library.'}));
+      bs.forEach(b=>into.append(titleRow(b))); into.append(manual()); }
+    catch(err){ if(seq!==olSeq) return; if(btn){ btn.disabled=false; btn.textContent='Couldn’t reach Open Library — retry'; } else { into.innerHTML=''; into.append(el('div',{class:'empty',text:'Couldn’t reach Open Library. You can still add the book by hand.'}), manual()); } }
+  };
   const run=()=>{ gradeQ=input.value; res.innerHTML='';
-    const hits=Core.search(gradeQ, gradeKind==='book'?'__none':gradeKind||null, 20);
+    const q=gradeQ.trim();
+    if(isBook){ if(q.length>1) books(q,res); else res.append(el('div',{class:'small muted',text:'Type a title or author. Books come from Open Library; anything missing you can add by hand.'}), manual()); return; }
+    const hits=Core.search(gradeQ, gradeKind||null, 20);
     hits.forEach(it=>res.append(titleRow(it)));
-    if(gradeQ.trim().length>1) res.append(el('button',{class:'btn wide',text:'Search books for “'+gradeQ.trim()+'”',onclick:async(e)=>{
-      e.target.disabled=true; e.target.textContent='Searching Open Library…';
-      try{ const bs=await olSearch(gradeQ.trim()); e.target.remove(); if(!bs.length) res.append(el('div',{class:'empty',text:'No books found.'})); bs.forEach(b=>res.append(titleRow(b))); }
-      catch(err){ e.target.disabled=false; e.target.textContent='Couldn’t reach Open Library — retry'; } }}));
+    if(q.length>1&&!gradeKind){ const b=el('button',{class:'btn wide',text:'Search books for “'+q+'”'}); b.onclick=()=>books(q,res,b); res.append(b); }
     else if(!hits.length&&catStatus==='missing') res.append(el('div',{class:'small muted',text:'Movie & TV search turns on once the catalog is built. Books work now.'}));
   };
-  let t; input.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(run,180); });
-  w.append(input, el('div',{class:'seg'},[['','All'],['movie','Movies'],['tv','Shows']].map(([k,l])=>el('button',{class:'chip','aria-pressed':gradeKind===k?'true':'false',text:l,onclick:()=>{ gradeKind=k; render(); }}))), res);
-  if(gradeQ) run();
+  let t; input.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(run,isBook?450:180); });
+  w.append(input, el('div',{class:'seg'},[['','All'],['movie','Movies'],['tv','Shows'],['book','Books']].map(([k,l])=>el('button',{class:'chip','aria-pressed':gradeKind===k?'true':'false',text:l,onclick:()=>{ gradeKind=k; render(); }}))), res);
+  if(gradeQ||isBook) run();
 
   // dishes, characters, anything else
   const card=el('div',{class:'card'});
@@ -867,18 +924,60 @@ function viewLib(w){
       el('button',{class:'btn',text:'Quick rate',onclick:()=>go('rapid'),disabled:catStatus!=='ok'})),
     pend?el('div',{class:'small muted',text:`${pend} imported rows ${catStatus==='ok'?'didn’t match a title in the catalog':'waiting for the catalog'}.`}):null,
     fileIn));
-  w.append(el('div',{class:'row small'},['movie','tv','book','dish','character','other'].filter(k=>counts[k]).map(k=>el('span',{class:'chip',text:`${Core.label('c:'+k)} ${counts[k]}`}))));
   if(!rated.length){ w.append(el('div',{class:'empty',text:'Nothing rated yet.'})); return; }
-  w.append(el('div',{class:'seg'},[['all','Recent'],['hi','Highest'],['lo','Lowest'],['movie','Movies'],['tv','Shows'],['book','Books'],['x','Other']].map(([k,l])=>
-    el('button',{class:'chip','aria-pressed':libFilter===k?'true':'false',text:l,onclick:()=>{ libFilter=k; render(); }}))));
-  let list=rated;
-  if(['movie','tv','book'].includes(libFilter)) list=list.filter(([it])=>it.kind===libFilter);
-  if(libFilter==='x') list=list.filter(([it])=>!['movie','tv','book'].includes(it.kind));
-  list.sort(libFilter==='hi'?(a,b)=>b[1].r-a[1].r:libFilter==='lo'?(a,b)=>a[1].r-b[1].r:(a,b)=>b[1].at-a[1].at);
+
+  // category (with counts), then sort and filter that adapt to the category
+  const KINDS=[['all','All'],['movie','Movies'],['tv','Shows'],['book','Books'],['dish','Dishes'],['character','Characters'],['other','Other']];
+  if(libCat!=='all'&&!counts[libCat]) libCat='all';
+  w.append(el('div',{class:'seg',role:'tablist','aria-label':'Category'},KINDS.filter(([k])=>k==='all'||counts[k]).map(([k,l])=>
+    el('button',{class:'chip','aria-pressed':libCat===k?'true':'false',onclick:()=>{ libCat=k; libFilt=''; render(); }},l+' ',el('span',{class:'cnt',text:String(k==='all'?rated.length:counts[k])})))));
+  let list=libCat==='all'?rated:rated.filter(([it])=>it.kind===libCat);
+  const opts=filterOptions(list);
+  if(libFilt&&!opts.some(g=>g.items.some(o=>o.v===libFilt))) libFilt='';
+  const sortSel=el('select',{'aria-label':'Sort',onchange:e=>{ libSort=e.target.value; render(); }},
+    LIB_SORTS.filter(([k])=>!(k==='year'&&libCat==='dish')).map(([k,l])=>el('option',{value:k,text:l,selected:libSort===k})));
+  const filtSel=el('select',{'aria-label':'Filter',onchange:e=>{ libFilt=e.target.value; render(); }},
+    el('option',{value:'',text:'No filter'}),
+    opts.map(g=>el('optgroup',{label:g.label},g.items.map(o=>el('option',{value:o.v,text:`${o.l} (${o.n})`,selected:libFilt===o.v})))));
+  const q=el('input',{type:'search',placeholder:'Find in your library',value:libQ,'aria-label':'Find in your library'});
+  let qt; q.addEventListener('input',()=>{ clearTimeout(qt); qt=setTimeout(()=>{ libQ=q.value; render(); const n=document.querySelector('.libctl input'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } },250); });
+  w.append(el('div',{class:'libctl'},el('label',{class:'fld'},el('span',{text:'Sort'}),sortSel),el('label',{class:'fld'},el('span',{text:'Filter'}),filtSel),q));
+  const total=list.length;
+  if(libFilt){ const f=opts.flatMap(g=>g.items).find(o=>o.v===libFilt); if(f) list=list.filter(([it,r])=>f.test(it,r)); }
+  if(libQ.trim()){ const n=Core.norm(libQ); list=list.filter(([it])=>Core.norm(it.title).includes(n)||(it.authors||[]).some(a=>Core.norm(a).includes(n))); }
+  const crowdOff=(it,r)=>{ const c=Core.crowdOf(it); refit(); const b=c&&BASE?Core.baselinePreds(BASE,it).crowd:null; return b==null?null:r.r-b; };
+  const cmp={recent:(a,b)=>b[1].at-a[1].at, hi:(a,b)=>b[1].r-a[1].r||b[1].at-a[1].at, lo:(a,b)=>a[1].r-b[1].r||b[1].at-a[1].at,
+    az:(a,b)=>a[0].title.localeCompare(b[0].title), year:(a,b)=>(b[0].year||0)-(a[0].year||0),
+    above:(a,b)=>(crowdOff(b[0],b[1])??-9)-(crowdOff(a[0],a[1])??-9), below:(a,b)=>(crowdOff(a[0],a[1])??9)-(crowdOff(b[0],b[1])??9)}[libSort]||((a,b)=>b[1].at-a[1].at);
+  list.sort(cmp);
+  w.append(el('div',{class:'small muted',text:list.length===total?`${total} ${total===1?'title':'titles'}`:`Showing ${list.length} of ${total}`}));
+  if(!list.length){ w.append(el('div',{class:'empty',text:'Nothing matches. Try another filter.'})); return; }
   const box=el('div',{class:'list'}); w.append(box);
-  let shown=0; const more=()=>{ list.slice(shown,shown+40).forEach(([it])=>box.append(titleRow(it,{why:false}))); shown+=40;
+  const showOff=libSort==='above'||libSort==='below';
+  let shown=0; const more=()=>{ list.slice(shown,shown+40).forEach(([it,r])=>{ const d=showOff?crowdOff(it,r):null; box.append(titleRow(it,{why:false,tag:d==null?null:(d>=0?'+':'−')+Math.abs(d).toFixed(1)+'★ vs crowd'})); }); shown+=40;
     if(shown<list.length) box.append(el('button',{class:'btn wide ghost',text:`Show more (${list.length-shown})`,onclick:e=>{ e.target.remove(); more(); }})); };
   more();
+}
+const LIB_SORTS=[['recent','Recently rated'],['hi','Highest rated'],['lo','Lowest rated'],['az','Title A–Z'],['year','Newest release'],['above','Most above the crowd'],['below','Most below the crowd']];
+let libCat='all', libSort='recent', libFilt='', libQ='';
+// filter choices built from what's actually in the list, each with a count
+function filterOptions(list){
+  const groups=[], c=Core.catalog();
+  const bucket=(label, keyFn, nameFn, min=1, cap=40)=>{
+    const m=new Map(); for(const [it,r] of list){ for(const k of keyFn(it,r)||[]){ if(k==null||k==='') continue; m.set(k,(m.get(k)||0)+1); } }
+    const items=[...m.entries()].filter(([,n])=>n>=min).sort((a,b)=>b[1]-a[1]).slice(0,cap).map(([k,n])=>({v:label+'|'+k, l:nameFn(k), n, test:(it,r)=>(keyFn(it,r)||[]).includes(k)}));
+    if(items.length) groups.push({label, items});
+  };
+  bucket('Your rating', (it,r)=>[r.r>=5?'5':r.r>=4?'4':r.r>=3?'3':r.r>=2?'2':'1'], k=>({5:'5★',4:'4–4.5★',3:'3–3.5★',2:'2–2.5★',1:'Under 2★'})[k]);
+  const kinds=new Set(list.map(([it])=>it.kind));
+  if(kinds.size>1) bucket('Category', it=>[it.kind], k=>Core.label('c:'+k));
+  if(c&&(kinds.has('movie')||kinds.has('tv'))) bucket('Genre', it=>(it.g||[]).map(String), k=>c.genres[k]||k);
+  bucket('Decade', it=>it.year?[String(Math.floor(it.year/10)*10)]:[], k=>k+'s');
+  if(c&&(kinds.has('movie')||kinds.has('tv'))) bucket('Director / creator', it=>(it.m||[]).slice(0,2).map(String), k=>c.people[+k]||k, 2);
+  if(kinds.has('book')) bucket('Author', it=>it.kind==='book'?(it.authors||[]):[], k=>k);
+  bucket('Tag', it=>[...new Set([...(it.tags||[]),...(S.tags[it.id]||[])])], k=>'#'+k);
+  bucket('Other', (it)=>[S.reviews[it.id]?'review':null, S.locks[it.id]&&S.locks[it.id].r!=null?'locked':null], k=>({review:'Has your review',locked:'Locked a prediction'})[k]);
+  return groups;
 }
 
 // ---------- Quick rate ----------
