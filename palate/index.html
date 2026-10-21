@@ -366,21 +366,59 @@ const Core = (() => {
     return {mean:clamp(mean), crowd};
   }
 
+  // ---------- nearest neighbours: titles like this one that you've rated ----------
+  // Tested on his own ratings (Oct 21): beats the crowd where ridge on raw taste vectors didn't, because
+  // MovieLens vectors vary 400x in length and blew predictions up. Unit-length vectors fix that.
+  const KNN={k:30, p:3, shrink:0.5, wg:0.15};
+  const unitCache=new Map();
+  function unitEmb(it){
+    if(unitCache.has(it.id)) return unitCache.get(it.id);
+    const e=emb(it); let u=null;
+    if(e){ let n=0; for(let i=0;i<e.length;i++) n+=e[i]*e[i]; n=Math.sqrt(n); if(n>0){ u=new Float32Array(e.length); for(let i=0;i<e.length;i++) u[i]=e[i]/n; } }
+    unitCache.set(it.id,u); return u;
+  }
+  function gmKeys(f){ const m=new Map(); for(const [k] of f){ if(k.startsWith('m:')) m.set(k,2); else if(k.startsWith('g:')) m.set(k,0.5); } return m; }
+  const knnKind=it=>it.kind==='movie'||it.kind==='tv';
+  function knnIndex(rows, B){
+    return rows.filter(r=>knnKind(r.item)).map(r=>{ const b=baselinePreds(B,r.item); return {id:r.id, item:r.item, u:unitEmb(r.item), gm:gmKeys(r.f), y:r.y, res:r.y-(b.crowd??b.mean)}; });
+  }
+  function knnPredict(I, B, item, f){
+    const b=baselinePreds(B,item), base=b.crowd??b.mean, u=unitEmb(item), gm=gmKeys(f), sc=[];
+    for(const t of I){
+      if(t.id===item.id) continue;
+      let s=0; if(u&&t.u){ let d=0; for(let i=0;i<u.length;i++) d+=u[i]*t.u[i]; s=d; }
+      let sh=0; for(const [k,w] of gm) if(t.gm.has(k)) sh+=w; s+=KNN.wg*sh;
+      if(s>0) sc.push([s,t]);
+    }
+    sc.sort((a,b)=>b[0]-a[0]);
+    const top=sc.slice(0,KNN.k); let w=0, acc=0;
+    for(const [x,t] of top){ const ww=x**KNN.p; w+=ww; acc+=ww*t.res; }
+    const den=w+KNN.shrink;
+    return {p:clamp(base+(w?acc/den:0)), base, strength:w/den,
+      nb:top.slice(0,8).map(([x,t])=>({item:t.item, y:t.y, sim:x, v:(x**KNN.p)*t.res/den}))};
+  }
+
   // ---------- seeded rng ----------
   function rng(seed){ let s=seed>>>0||1; return ()=>{ s^=s<<13; s>>>=0; s^=s>>17; s^=s<<5; s>>>=0; return s/4294967296; }; }
 
-  function crossValidate(rows, lambdas=[3,10,30,100,300], folds=5){
+  function crossValidate(rows, lambdas=[3,10,30,100,300,1000,3000], folds=5){
     if(rows.length<20) return null;
     const R=rng(42), order=rows.map((_,i)=>i).sort(()=>0); // deterministic shuffle below
     for(let i=order.length-1;i>0;i--){ const j=Math.floor(R()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
     const fold=new Array(rows.length); order.forEach((ri,k)=>fold[ri]=k%folds);
     const res={}; let bestL=lambdas[0], bestE=1e9;
     const preds={};
+    // movies and shows are predicted from similar titles; everything else by the ridge model
+    const kp=new Array(rows.length);
+    for(let k=0;k<folds;k++){
+      const tr=rows.filter((_,i)=>fold[i]!==k), B=fitBaselines(tr), I=knnIndex(tr,B);
+      if(I.length>=10) rows.forEach((r,i)=>{ if(fold[i]===k&&knnKind(r.item)) kp[i]=knnPredict(I,B,r.item,r.f).p; });
+    }
     for(const L of lambdas){
       const p=new Array(rows.length);
       for(let k=0;k<folds;k++){
         const tr=rows.filter((_,i)=>fold[i]!==k); const M=fit(tr,L,fitBaselines(tr));
-        rows.forEach((r,i)=>{ if(fold[i]===k) p[i]=clamp(predictRaw(M,r.f,r.item)); });
+        rows.forEach((r,i)=>{ if(fold[i]===k) p[i]=kp[i]!=null?kp[i]:clamp(predictRaw(M,r.f,r.item)); });
       }
       const mae=rows.reduce((s,r,i)=>s+Math.abs(p[i]-r.y),0)/rows.length;
       res[L]=mae; preds[L]=p; if(mae<bestE){ bestE=mae; bestL=L; }
@@ -419,7 +457,7 @@ const Core = (() => {
   }
 
   return {parseCSV, readZip, norm, loadCatalog, catalog, match, search, features, label, fit, predictRaw, clamp, fitBaselines,
-          baselinePreds, crowdOf, crossValidate, explain, coverage, rng};
+          baselinePreds, crowdOf, crossValidate, explain, coverage, rng, knnIndex, knnPredict, knnKind};
 })();
 </script>
 
@@ -454,7 +492,7 @@ let S=load();
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); return true; }catch(e){ toast('Couldn’t save — storage may be full.'); return false; } }
 
 let PROV=null, OVS=null, catStatus='loading';
-let MODEL=null, BASE=null, CV=null, dirty=true;
+let MODEL=null, BASE=null, CV=null, KIDX=null, dirty=true;
 
 function toast(msg){ const t=el('div',{class:'toast',role:'status',text:msg}); document.body.append(t); setTimeout(()=>t.remove(),2600); }
 
@@ -477,12 +515,18 @@ function refit(force){
   const rows=trainingRows();
   BASE=Core.fitBaselines(rows);
   MODEL=rows.length>=10?Core.fit(rows, (CV&&CV.lambda)||S.lambda||30, BASE):null;
+  KIDX=Core.knnIndex(rows, BASE);
   dirty=false;
 }
 function markDirty(){ dirty=true; CV=null; }
 function predict(it){
   refit();
   const f=featuresOf(it); const b=Core.baselinePreds(BASE,it);
+  if(Core.knnKind(it)&&KIDX&&KIDX.length>=10){
+    const k=Core.knnPredict(KIDX,BASE,it,f), rmse=(S.cvRmse||0.8);
+    const why=k.nb.filter(n=>Math.abs(n.v)>=0.03).slice(0,5).map(n=>({key:'nb:'+n.item.id, label:'You gave '+n.item.title+' '+fmt(n.y)+'★', v:n.v}));
+    return {p:k.p, crowd:b.crowd, mean:b.mean, conf:rmse*(1.35-0.6*k.strength), why, cov:k.strength, nb:k.nb};
+  }
   if(!MODEL){ return {p:b.crowd??b.mean, crowd:b.crowd, mean:b.mean, conf:1.0, why:[], learning:true, cov:0}; }
   const p=Core.clamp(Core.predictRaw(MODEL,f,it)); const cov=Core.coverage(MODEL,f);
   const rmse=(S.cvRmse||0.8);
@@ -802,7 +846,8 @@ function recommend(kind, n=40, opts={}){
   for(const it of c.items){
     if(it.kind!==kind||S.ratings[it.id]||S.seen[it.id]||S.skip[it.id]||it.vc<60) continue;
     if(!opts.anyService&&S.settings.onlyMine&&S.settings.services.length&&!hasStremio()&&!onMyServices(it.id)) continue;
-    const p=predict(it); sc.push([it,p,p.p-0.25*p.conf]);
+    // rank by the prediction, minus a little for uncertainty and more for titles nothing you've rated resembles
+    const p=predict(it); sc.push([it,p,p.p-0.25*p.conf-(Core.knnKind(it)&&KIDX&&KIDX.length>=10?0.45*(1-(p.cov||0)):0)]);
   }
   sc.sort((a,b)=>b[2]-a[2]);
   const top=sc.slice(0,n);
@@ -1029,8 +1074,7 @@ function buildDeck(kind){
     if(centroid){ const e=f.filter(([k])=>/^e\d+$/.test(k)).map(x=>x[1]); if(e.length) seen*=0.75+0.5*Math.max(0,cosine(e,centroid)); }
     if(it.year&&it.year<1970) seen*=0.6;
     let info=1;
-    if(MODEL){ const b=Core.baselinePreds(BASE,it); const p=Core.clamp(Core.predictRaw(MODEL,f,it));
-      info=(1-Core.coverage(MODEL,f))+0.8*Math.abs(p-(b.crowd??b.mean)); }
+    if(MODEL){ const pr=predict(it); info=(1-(pr.cov||0))+0.8*Math.abs(pr.p-(pr.crowd??pr.mean)); }
     out.push([it, seen*(0.5+info)*(0.85+0.3*R())]);
   }
   out.sort((a,b)=>b[1]-a[1]);
