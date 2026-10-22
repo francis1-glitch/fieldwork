@@ -43,6 +43,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
 .top h1{font-size:30px;line-height:1.1}
 .top .count{font-size:13px;color:var(--ink-3)}
+.top .hright{display:flex;align-items:center;gap:6px}
+.top .imp{padding:6px 10px;font-size:14px}
+.shead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.shead h2{font-size:22px;margin:0}
+.sbody{display:flex;flex-direction:column;gap:10px}
+.sbody textarea{width:100%;min-height:150px;font:14px/1.5 ui-monospace,Menlo,monospace;color:var(--ink);background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:10px;resize:vertical}
+.sbody .actions{display:flex;flex-wrap:wrap;gap:8px}
+.preview{display:flex;flex-direction:column;gap:8px}
+.plist{margin:0;padding-left:20px;font-size:14px;max-height:34vh;overflow:auto} .plist li{margin:.2em 0}
 
 .capture{background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .capture textarea{border:0;background:transparent;resize:none;min-height:46px;font:16px/1.5 var(--serif);color:var(--ink);padding:2px;outline:none;width:100%}
@@ -314,7 +323,7 @@ function render(){
 
 function renderNotes(app){
   const live = S.notes.filter(n=>n.section!=='archive').length;
-  app.append(el('header',{class:'top'}, el('h1',{text:'Second Brain'}), el('span',{class:'count',text: live+' note'+(live===1?'':'s')})));
+  app.append(el('header',{class:'top'}, el('h1',{text:'Second Brain'}), el('div',{class:'hright'}, el('span',{class:'count',text: live+' note'+(live===1?'':'s')}), el('button',{class:'btn ghost imp',text:'Import',onclick:openImportSheet}))));
 
   // quick capture
   const cap = el('textarea',{id:'capture',rows:'2',placeholder:'Capture a thought…','aria-label':'Capture a thought'});
@@ -794,7 +803,7 @@ function parseMarkdown(text){
     } }
   let tags = fm.tags || fm.tag || []; if (!Array.isArray(tags)) tags = String(tags).split(/[,\s]+/);
   const inline = [...body.matchAll(/(^|\s)#([A-Za-z][\w/-]*)/g)].map(x=>x[2]);
-  return {body: body.replace(/^\s*\n/,''), tags:[...new Set([...tags, ...inline].map(cleanTag).filter(Boolean))], created: fm.created, updated: fm.updated, pinned: fm.pinned==='true'};
+  return {body: body.replace(/^\s*\n/,''), tags:[...new Set([...tags, ...inline].map(cleanTag).filter(Boolean))], created: fm.created, updated: fm.updated, pinned: fm.pinned==='true', fm};
 }
 function canvasJSON(c, pathOf){
   const byId = new Map(c.nodes.map(n=>[n.id,n]));
@@ -822,6 +831,75 @@ async function exportVault(){
   try{ if (matchMedia('(pointer:coarse)').matches && navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:'Second Brain vault'}); return; } }catch(e){ if (e && e.name==='AbortError') return; }
   const a = el('a',{href:URL.createObjectURL(blob), download:fname}); document.body.append(a); a.click(); a.remove(); toast('Vault exported.');
 }
+function sectionFrom(v){ if (typeof v!=='string' || !v.trim()) return null; const k = norm(v); const s = SECTIONS.find(x => norm(x.name)===k || x.id===k); return s ? s.id : null; }
+/* Paste from Claude: one or more notes, each starting with a --- frontmatter block that has a title:
+   ---
+   title: Note title
+   section: Resources        (Inbox, Projects, Areas, Resources or Archive)
+   tags: [tag-one, tag-two]
+   pinned: false
+   ---
+   Body in Markdown, [[links]] to other notes.
+   Text with no frontmatter becomes one note: a leading "# Heading" (or the first line) is the title. */
+function parseBundle(text){
+  text = String(text||'').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').replace(/^\s*```[a-z]*\n|\n```\s*$/g,'');
+  const lines = text.split('\n'), starts = [];
+  for (let i=0;i<lines.length;i++){
+    if (lines[i].trim()!=='---') continue;
+    for (let j=i+1;j<Math.min(lines.length,i+40);j++){
+      if (lines[j].trim()==='---'){ if (lines.slice(i+1,j).some(l=>/^title:\s*\S/i.test(l))) starts.push(i); break; }
+    }
+  }
+  const chunks = starts.length ? starts.map((s,k)=>lines.slice(s, starts[k+1]??lines.length).join('\n')) : [text];
+  const notes = [];
+  for (const ch of chunks){
+    if (!ch.trim()) continue;
+    const md = parseMarkdown(ch.trim()+'\n');
+    let title = typeof md.fm.title==='string' ? md.fm.title.trim() : '', body = md.body;
+    if (!title){ const b = body.split('\n'); const h = b.findIndex(l=>l.trim()); title = (b[h]||'Untitled').replace(/^#+\s*/,'').replace(/#[\w-]+/g,'').trim() || 'Untitled'; body = b.slice(h+1).join('\n').replace(/^\s*\n/,''); }
+    notes.push({...md, title:title.slice(0,90), body:body.trimEnd(), section: sectionFrom(md.fm.section) || 'inbox'});
+  }
+  return notes;
+}
+const CLAUDE_FORMAT = `Format notes for my Second Brain app so I can paste them straight in. Output ONE plain-text block (no commentary inside it). Start every note with this frontmatter, then its body:
+
+---
+title: Note title (max 90 characters, unique)
+section: Resources
+tags: [tag-one, tag-two]
+pinned: false
+---
+Body in light Markdown: # Heading, ## Subheading, - bullet lists, > quotes, **bold**, *italic*, ==highlight==, links like [[Other note title]].
+
+Rules: section is one of Inbox, Projects, Areas, Resources, Archive. Tags are lowercase-with-dashes, no # in the frontmatter. Don't use # before a word in the body unless it's meant as a tag. No tables or numbered lists (use - bullets). A note with the same title as an existing one replaces it.`;
+function openImportSheet(){
+  const sh = sheet('short');
+  const ta = el('textarea',{id:'pasteNotes',rows:'8',placeholder:'Paste notes from Claude here…','aria-label':'Paste notes'});
+  const out = el('div',{class:'preview'});
+  const picker = el('input',{type:'file',multiple:true,accept:'.zip,.md,.markdown,.txt,.canvas,application/zip,text/markdown',hidden:true});
+  const show = res => {
+    out.replaceChildren();
+    if (!res.notes.length && !res.canvases.length){ out.append(el('p',{class:'hint',text:'No notes found. Check that each note starts with a --- block that has a title:, or paste plain text.'})); return; }
+    const isNew = it => !S.notes.some(n => norm(n.title)===norm(it.title));
+    const nNew = res.notes.filter(isNew).length, nUpd = res.notes.length - nNew;
+    out.append(el('p',{class:'hint',text:`${res.notes.length} note${res.notes.length===1?'':'s'}: ${nNew} new, ${nUpd} will update an existing note${res.canvases.length?`, plus ${res.canvases.length} canvas${res.canvases.length===1?'':'es'}`:''}.`}),
+      el('ul',{class:'plist'}, res.notes.slice(0,40).map(it => el('li',{}, el('strong',{text:it.title}), ' · '+(SECTIONS.find(s=>s.id===it.section)||{name:'Inbox'}).name+(it.tags.length?' · '+it.tags.slice(0,4).map(t=>'#'+t).join(' '):'')+(isNew(it)?'':' · updates')))),
+      el('div',{class:'actions'}, el('button',{class:'btn primary',text:'Import '+res.notes.length+' note'+(res.notes.length===1?'':'s'),onclick:()=>{ const r = applyImport(res); closeLayer(); toast('Imported: '+r.added+' new, '+r.updated+' updated'+(r.boards?', '+r.boards+' canvas'+(r.boards===1?'':'es'):'')+'.'); tab='notes'; section='all'; query=''; tagFilter=null; render(); }})));
+  };
+  picker.addEventListener('change', async () => { if (!picker.files.length) return;
+    try{ const res = await readImport([...picker.files]); picker.value=''; show(res); }
+    catch(e){ picker.value=''; toast(e && e.message==='inflate' ? 'This phone can’t open that zip. Try the .md files directly.' : 'That file couldn’t be read.'); } });
+  sh.append(el('div',{class:'shead'}, el('h2',{text:'Import notes'}), el('button',{class:'btn ghost',text:'Close',onclick:closeLayer})),
+    el('div',{class:'sbody'},
+      el('p',{class:'hint',text:'Paste notes Claude wrote, or pick a file Claude sent (.zip vault or .md). Titles, sections, #tags, pins and [[links]] come through as written.'}),
+      ta,
+      el('div',{class:'actions'},
+        el('button',{class:'btn primary',text:'Read pasted notes',onclick:()=>{ if(!ta.value.trim()){ toast('Paste something first.'); return; } show({notes:parseBundle(ta.value), canvases:[]}); }}),
+        el('button',{class:'btn',text:'Choose file',onclick:()=>picker.click()}),
+        el('button',{class:'btn ghost',text:'Copy format for Claude',onclick:async()=>{ try{ await navigator.clipboard.writeText(CLAUDE_FORMAT); toast('Copied. Paste it into Claude before your request.'); }catch(e){ ta.value=CLAUDE_FORMAT; toast('Copy the format from the box.'); } }})),
+      out, picker));
+  setTimeout(()=>ta.focus(),60);
+}
 async function readImport(fileList){
   const raw = [];
   for (const f of fileList){
@@ -837,7 +915,8 @@ async function readImport(fileList){
     const sec = SECTIONS.find(s => norm(s.name)===norm(folder) || (folder && norm(folder).replace(/^\d+[\s._-]*/,'')===norm(s.name)));
     const md = parseMarkdown(r.text);
     if (folder && !sec) md.tags = [...new Set([...md.tags, cleanTag(folder)])];
-    notes.push({title: file.replace(/\.(md|markdown|txt)$/i,'').slice(0,90), section: sec ? sec.id : (folder ? 'resources' : 'inbox'), ...md});
+    const fmSec = sectionFrom(md.fm.section);
+    notes.push({...md, title: (typeof md.fm.title==='string' && md.fm.title.trim() ? md.fm.title.trim() : file.replace(/\.(md|markdown|txt)$/i,'')).slice(0,90), section: fmSec || (sec ? sec.id : (folder ? 'resources' : 'inbox'))});
   });
   return {notes, canvases};
 }
