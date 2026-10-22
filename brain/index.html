@@ -1093,6 +1093,18 @@ function renderSettings(app){
 /* ---------- boot ---------- */
 for (const id of ['notes','canvas','graph','tags','set']) $('#nav-'+id).addEventListener('click',()=>{ tab=id; closeLayer(); render(); window.scrollTo(0,0); });
 render();
+// Notes sent from Palate (favorites) wait in 'brain.inbox' until Second Brain opens, then import like a paste.
+function takeInbox(){
+  let box=null; try{ box=JSON.parse(localStorage.getItem('brain.inbox')||'null'); }catch(e){}
+  if (!box || typeof box.text!=='string') return;
+  try{ localStorage.removeItem('brain.inbox'); }catch(e){}
+  const notes = parseBundle(box.text); if (!notes.length) return;
+  const r = applyImport({notes, canvases:[]});
+  toast('From '+(box.from==='palate'?'Palate':'another app')+': '+r.added+' new, '+r.updated+' updated.'); render();
+}
+takeInbox();
+window.addEventListener('storage', e => { if (e.key==='brain.inbox' && e.newValue) takeInbox(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) takeInbox(); });
 try{ if ('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{ try{ r.update(); }catch(e){} }).catch(()=>{});
   let reloaded=false; navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(reloaded) return; reloaded=true; const a=document.activeElement; if(!(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName))&&!$('#layer').children.length&&!board) location.reload(); });
