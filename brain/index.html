@@ -74,6 +74,21 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .btn:disabled{opacity:.5}
 
 .list{display:flex;flex-direction:column;gap:8px}
+.viewbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.seg2{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.seg2 button{border:0;background:var(--page);padding:7px 14px;font-weight:600;font-size:14px;color:var(--ink-2)}
+.seg2 button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.viewbar .btn{padding:6px 10px;font-size:13px}
+.tree{background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:6px 0}
+.trow{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;text-align:left;padding:7px 12px 7px calc(10px + var(--d)*18px);font-size:15px;color:var(--ink);position:relative;min-height:38px}
+.trow::before{content:"";position:absolute;left:calc(17px + (var(--d) - 1)*18px);top:0;bottom:0;border-left:1px solid var(--rule);opacity:calc(min(var(--d),1))}
+.trow:active,.trow:hover{background:var(--paper)}
+.trow .chev{width:14px;flex:none;color:var(--ink-3);font-size:12px}
+.trow .ficon{width:17px;height:17px;flex:none;display:inline-flex}
+.trow .ficon svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.trow.fold{font-weight:600} .trow.fold .ficon{color:var(--copper)} .trow.file .ficon{color:var(--ink-3)}
+.trow .tn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow .tc{font-size:12px;color:var(--ink-3);font-weight:500}
 .note{background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;text-align:left;width:100%;display:flex;flex-direction:column;gap:5px}
 .note .t{font-family:var(--serif);font-weight:600;font-size:17px;line-height:1.3}
 .note .ex{color:var(--ink-2);font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
@@ -347,15 +362,100 @@ function renderNotes(app){
   const search = el('input',{class:'search',id:'search',type:'search',placeholder:'Search notes and #tags',value:query,'aria-label':'Search notes'});
   search.addEventListener('input', () => { query = search.value; drawList(); });
   app.append(search);
+  const setView = v => { viewMode = v; try{ localStorage.setItem('brain.view', v); }catch(e){} render(); };
+  const allOpen = () => { const keys = new Set(SECTIONS.map(x=>x.id)); for (const n of S.notes){ let k = n.section; for (const part of folderOf(n)){ k += '/'+part; keys.add(k); } } return keys; };
+  app.append(el('div',{class:'viewbar'},
+    el('div',{class:'seg2',role:'group','aria-label':'View'},
+      el('button',{'aria-pressed':String(viewMode!=='folders'),text:'List',onclick:()=>setView('list')}),
+      el('button',{'aria-pressed':String(viewMode==='folders'),text:'Folders',onclick:()=>setView('folders')})),
+    viewMode==='folders' ? el('div',{class:'actions'},
+      el('button',{class:'btn ghost',text:'Expand all',onclick:()=>{ openFolders = allOpen(); saveOpen(); drawTree(); }}),
+      el('button',{class:'btn ghost',text:'Collapse',onclick:()=>{ openFolders = new Set(); saveOpen(); drawTree(); }})) : null));
   const counts = s => S.notes.filter(n => s==='all' ? n.section!=='archive' : n.section===s).length;
-  app.append(el('div',{class:'chips',role:'group','aria-label':'Sections'},
+  if (viewMode!=='folders') app.append(el('div',{class:'chips',role:'group','aria-label':'Sections'},
     [{id:'all',name:'All'}].concat(SECTIONS).map(s => el('button',{class:'chip','aria-pressed':String(section===s.id), title:s.hint||'', onclick:()=>{ section=s.id; render(); }}, s.name, el('span',{class:'n',text:counts(s.id)})))));
   if (tagFilter) app.append(el('div',{class:'chips'}, el('button',{class:'chip','aria-pressed':'true',onclick:()=>{ tagFilter=null; render(); }}, '#'+tagFilter+'  ✕')));
 
   const list = el('div',{class:'list',id:'list'}); app.append(list);
   drawList();
 }
+/* ---------- folders (Obsidian-style tree) ----------
+   Top level = sections. Inside, a note sits in its own folder path (n.folder, e.g. "Kitchen Codex/Recipes"),
+   or, if it has none, an automatic one from its collection tags. */
+const COLLECTIONS = [
+  ['kitchen-codex','Kitchen Codex', [['recipe','Recipes'],['technique','Techniques'],['cuisine','Cuisines'],['foundation','Foundations'],['template','Templates']]],
+  ['esoteric-journal','Esoteric Journal', [['template','Templates']]],
+  ['palate','Palate', [['favorite','Favorites']]],
+];
+const PALATE_KIND = {film:'Films', series:'Series', book:'Books', dish:'Dishes', character:'Characters'};
+function folderOf(n){
+  if (n.folder) return String(n.folder).split('/').map(x=>x.trim()).filter(Boolean);
+  for (const [tag,name,subs] of COLLECTIONS){
+    if (!n.tags.includes(tag)) continue;
+    const sub = subs.find(([t])=>n.tags.includes(t));
+    if (tag==='palate' && sub){ const k = Object.keys(PALATE_KIND).find(t=>n.tags.includes(t)); return k ? [name, sub[1], PALATE_KIND[k]] : [name, sub[1]]; }
+    return sub ? [name, sub[1]] : [name];
+  }
+  return [];
+}
+const allFolders = () => [...new Set(S.notes.flatMap(n => { const f = folderOf(n); return f.map((_,i)=>f.slice(0,i+1).join('/')); }))].sort();
+let viewMode = (()=>{ try{ return localStorage.getItem('brain.view')||'list'; }catch(e){ return 'list'; } })();
+let openFolders = (()=>{ try{ return new Set(JSON.parse(localStorage.getItem('brain.open')||'null') || SECTIONS.map(s=>s.id)); }catch(e){ return new Set(SECTIONS.map(s=>s.id)); } })();
+const saveOpen = () => { try{ localStorage.setItem('brain.open', JSON.stringify([...openFolders])); }catch(e){} };
+const ICON_FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7V17.5A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>';
+const ICON_FILE = '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z M14 3v4h4"/></svg>';
+function svgIcon(markup){ const t = document.createElement('span'); t.className='ficon'; t.innerHTML = markup; return t; } // static markup, no user content
+function drawTree(){
+  const list = $('#list'); if (!list) return; list.replaceChildren();
+  const q = query.trim().toLowerCase().replace(/^#/,'');
+  const items = S.notes.filter(n => (!tagFilter || n.tags.includes(tagFilter)) &&
+    (!q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q) || n.tags.some(t=>t.includes(q))));
+  const searching = !!(q || tagFilter);
+  const root = SECTIONS.map(s => ({key:s.id, name:s.name, folders:new Map(), notes:[]}));
+  const byId = Object.fromEntries(root.map(r=>[r.key,r]));
+  for (const n of items){
+    let node = byId[n.section] || byId.inbox, key = node.key;
+    for (const part of folderOf(n)){ key += '/'+part;
+      if (!node.folders.has(part)) node.folders.set(part, {key, name:part, folders:new Map(), notes:[]});
+      node = node.folders.get(part); }
+    node.notes.push(n);
+  }
+  const count = nd => nd.notes.length + [...nd.folders.values()].reduce((a,f)=>a+count(f),0);
+  const tree = el('div',{class:'tree',role:'tree'});
+  const walk = (nd, depth, parent) => {
+    const n = count(nd); if (searching && !n) return;
+    const open = searching || openFolders.has(nd.key);
+    const row = el('button',{class:'trow fold',role:'treeitem','aria-expanded':String(open),style:'--d:'+depth,onclick:()=>{ open ? openFolders.delete(nd.key) : openFolders.add(nd.key); saveOpen(); drawTree(); }},
+      el('span',{class:'chev',text: open ? '▾' : '▸'}), svgIcon(ICON_FOLDER), el('span',{class:'tn',text:nd.name}), el('span',{class:'tc',text:String(n)}));
+    parent.append(row);
+    if (!open) return;
+    [...nd.folders.values()].sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>walk(f, depth+1, parent));
+    nd.notes.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0) || a.title.localeCompare(b.title)).forEach(note =>
+      parent.append(el('button',{class:'trow file',role:'treeitem',style:'--d:'+(depth+1),onclick:()=>openNote(note.id)},
+        el('span',{class:'chev'}), svgIcon(ICON_FILE), el('span',{class:'tn',text:note.title}), note.pinned ? el('span',{class:'tc',text:'📌'}) : null)));
+  };
+  root.forEach(r => { if (!searching || count(r)) walk(r, 0, tree); });
+  if (!tree.children.length) tree.append(el('div',{class:'empty',text: q ? 'No notes match “'+query+'”.' : 'No notes yet.'}));
+  list.append(tree);
+}
+function moveSheet(n){
+  const sh = sheet('short'), cur = n.folder || '';
+  const inp = el('input',{id:'folderIn',value:cur,placeholder:folderOf(n).join('/') || 'e.g. Trips/Spain','aria-label':'Folder path',list:'folderList'});
+  const dl = el('datalist',{id:'folderList'}, allFolders().map(f=>el('option',{value:f})));
+  const sec = el('select',{'aria-label':'Section'}, SECTIONS.map(s=>el('option',{value:s.id,text:s.name,selected:s.id===n.section})));
+  sh.append(el('div',{class:'shead'}, el('h2',{text:'Move note'}), el('button',{class:'btn ghost',text:'Close',onclick:()=>openNote(n.id)})),
+    el('div',{class:'sbody'},
+      el('p',{class:'hint',text:'Section is the top folder. Inside it, type a folder path with / between levels (Kitchen Codex/Recipes). Leave the path empty to use the automatic folder from the note’s tags.'}),
+      el('label',{class:'label',text:'Section'}), sec,
+      el('label',{class:'label',for:'folderIn',text:'Folder'}), inp, dl,
+      el('div',{class:'actions'}, el('button',{class:'btn primary',text:'Move',onclick:()=>{
+        const v = inp.value.split('/').map(x=>x.trim()).filter(Boolean).join('/');
+        if (v) n.folder = v; else delete n.folder; n.section = sec.value; n.updatedAt = nowIso(); save(); toast('Moved to '+[SBYID[n.section].name, ...folderOf(n)].join(' / ')); openNote(n.id); }}))));
+  setTimeout(()=>inp.focus(),60);
+}
+
 function drawList(){
+  if (viewMode==='folders') return drawTree();
   const list = $('#list'); if (!list) return; list.replaceChildren();
   const items = filtered();
   if (!S.notes.length){ list.append(el('div',{class:'empty'}, 'Your second brain is empty. Capture anything above: an idea, a quote, something you learned, a person’s name and how you met. Link notes together by writing [[Note title]]. Sort it later.')); return; }
@@ -382,12 +482,13 @@ function openNote(id){
   sh.append(el('div',{class:'bar'},
     el('button',{class:'icon',text:'Close',onclick:()=>{ closeLayer(); render(); }}),
     el('div',{class:'grp'},
+      el('button',{class:'icon',text:'Move',title:'Move to a section or folder',onclick:()=>moveSheet(n)}),
       el('button',{class:'icon',text:'Map',title:'Build a canvas from this note’s links',onclick:()=>mapNote(id)}),
       el('button',{class:'icon','aria-pressed':String(!!n.pinned),text:n.pinned?'Pinned':'Pin',onclick:()=>{ n.pinned=!n.pinned; save(); openNote(id); }}),
       el('button',{class:'icon',text:'Edit',onclick:()=>openEditor(id)}))));
   sh.append(el('h2',{style:'font-size:24px',text:n.title}));
   sh.append(el('div',{class:'meta small muted',style:'display:flex;gap:8px;flex-wrap:wrap;align-items:center'},
-    el('span',{class:'sec',text:SBYID[n.section].name}), n.tags.map(t=>el('button',{class:'tagx',text:'#'+t,onclick:()=>{ tagFilter=t; section='all'; tab='notes'; closeLayer(); render(); }})), el('span',{text:'Edited '+when(n.updatedAt)})));
+    el('span',{class:'sec',text:[SBYID[n.section].name, ...folderOf(n)].join(' / ')}), n.tags.map(t=>el('button',{class:'tagx',text:'#'+t,onclick:()=>{ tagFilter=t; section='all'; tab='notes'; closeLayer(); render(); }})), el('span',{text:'Edited '+when(n.updatedAt)})));
   const view = el('div',{class:'viewbody'}, renderBody(n.body));
   const back = backlinksOf(n);
   if (back.length){
@@ -858,7 +959,7 @@ function safeName(t){ return (t.replace(/[\\/:*?"<>|#^\[\]]/g,'-').replace(/\s+/
 function toMarkdown(n){
   const fm = ['---'];
   if (n.tags.length){ fm.push('tags:'); for (const t of n.tags) fm.push('  - '+t); }
-  fm.push('created: '+n.createdAt, 'updated: '+n.updatedAt); if (n.pinned) fm.push('pinned: true'); fm.push('---','');
+  fm.push('created: '+n.createdAt, 'updated: '+n.updatedAt); if (n.pinned) fm.push('pinned: true'); if (n.folder) fm.push('folder: '+n.folder); fm.push('---','');
   return fm.join('\n') + n.body.replace(/\s+$/,'') + '\n';
 }
 function parseMarkdown(text){
@@ -885,7 +986,7 @@ function canvasJSON(c, pathOf){
 async function exportVault(){
   const used = new Set(), files = [], pathOf = new Map();
   for (const n of S.notes){
-    const folder = SBYID[n.section].name; let base = safeName(n.title), name = folder+'/'+base+'.md', k = 2;
+    const folder = [SBYID[n.section].name, ...folderOf(n).map(safeName)].join('/'); let base = safeName(n.title), name = folder+'/'+base+'.md', k = 2;
     while (used.has(name.toLowerCase())) name = folder+'/'+base+' '+(k++)+'.md';
     used.add(name.toLowerCase()); pathOf.set(n.id, name); files.push({name:'Second Brain/'+name, text:toMarkdown(n)});
   }
@@ -926,7 +1027,7 @@ function parseBundle(text){
     const md = parseMarkdown(ch.trim()+'\n');
     let title = typeof md.fm.title==='string' ? md.fm.title.trim() : '', body = md.body;
     if (!title){ const b = body.split('\n'); const h = b.findIndex(l=>l.trim()); title = (b[h]||'Untitled').replace(/^#+\s*/,'').replace(/#[\w-]+/g,'').trim() || 'Untitled'; body = b.slice(h+1).join('\n').replace(/^\s*\n/,''); }
-    notes.push({...md, title:title.slice(0,90), body:body.trimEnd(), section: sectionFrom(md.fm.section) || 'inbox'});
+    notes.push({...md, title:title.slice(0,90), body:body.trimEnd(), section: sectionFrom(md.fm.section) || 'inbox', folder: typeof md.fm.folder==='string' ? md.fm.folder.trim() : ''});
   }
   return notes;
 }
@@ -937,6 +1038,7 @@ title: Note title (max 90 characters, unique)
 section: Resources
 tags: [tag-one, tag-two]
 pinned: false
+folder: Optional/Subfolder (leave out to file it automatically)
 ---
 Body in light Markdown: # Heading, ## Subheading, - bullet lists, > quotes, **bold**, *italic*, ==highlight==, links like [[Other note title]].
 
@@ -985,6 +1087,8 @@ async function readImport(fileList){
     const md = parseMarkdown(r.text);
     if (folder && !sec) md.tags = [...new Set([...md.tags, cleanTag(folder)])];
     const fmSec = sectionFrom(md.fm.section);
+    const sub = sg.length>2 ? sg.slice(1,-1).join('/') : '';
+    md.folder = (typeof md.fm.folder==='string' && md.fm.folder.trim()) ? md.fm.folder.trim() : (sec && sub ? sub : '');
     notes.push({...md, title: (typeof md.fm.title==='string' && md.fm.title.trim() ? md.fm.title.trim() : file.replace(/\.(md|markdown|txt)$/i,'')).slice(0,90), section: fmSec || (sec ? sec.id : (folder ? 'resources' : 'inbox'))});
   });
   return {notes, canvases};
@@ -993,8 +1097,8 @@ function applyImport(res){
   let added = 0, updated = 0, boards = 0; const t = nowIso();
   for (const it of res.notes){
     const ex = S.notes.find(n => norm(n.title)===norm(it.title));
-    if (ex){ Object.assign(ex, {body:it.body, tags:it.tags, section:it.section, updatedAt: it.updated || t}); if (it.pinned) ex.pinned = true; updated++; }
-    else { S.notes.push({id:uid(), title:it.title, body:it.body, tags:it.tags, section:it.section, pinned:!!it.pinned, createdAt: it.created || t, updatedAt: it.updated || t}); added++; }
+    if (ex){ Object.assign(ex, {body:it.body, tags:it.tags, section:it.section, updatedAt: it.updated || t}); if (it.pinned) ex.pinned = true; if (it.folder) ex.folder = it.folder; updated++; }
+    else { const nn = {id:uid(), title:it.title, body:it.body, tags:it.tags, section:it.section, pinned:!!it.pinned, createdAt: it.created || t, updatedAt: it.updated || t}; if (it.folder) nn.folder = it.folder; S.notes.push(nn); added++; }
   }
   for (const cv of res.canvases){
     const ids = new Set(), nodes = [];
