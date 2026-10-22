@@ -135,7 +135,11 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .viewbody .render{flex:none;overflow:visible}
 /* graph */
 .graphwrap{background:var(--page);border:1px solid var(--rule);border-radius:8px;overflow:hidden;position:relative}
-canvas.graph{display:block;width:100%;touch-action:manipulation;cursor:pointer}
+canvas.graph{display:block;width:100%;touch-action:none;cursor:grab}
+.gzoom{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
+.gzoom .btn{min-width:40px;padding:6px 8px;font-size:16px;background:var(--paper)}
+.gbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.gbar .gsel{flex:1 1 160px;min-width:0;font-weight:600;overflow-wrap:anywhere}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 /* canvas board */
@@ -477,46 +481,111 @@ function renderGraph(app){
   if (!notes.length){ app.append(el('div',{class:'empty',text:'No notes yet. Once you have a few, link them with [[Note title]] and they’ll connect here.'})); return; }
   const wrap = el('div',{class:'graphwrap'}), cv = el('canvas',{class:'graph',role:'img','aria-label':'Map of your notes and the links between them'});
   wrap.append(cv); app.append(wrap);
-  app.append(el('div',{class:'legend'}, el('span',{}, el('i',{style:'background:var(--copper)'}), 'Linked note'), el('span',{}, el('i',{style:'background:var(--ink-3)'}), 'Not linked yet'), el('span',{text:'Bigger dot = more links. Tap one to open it.'})));
+  app.append(el('div',{class:'legend'}, el('span',{}, el('i',{style:'background:var(--copper)'}), 'Linked note'), el('span',{}, el('i',{style:'background:var(--ink-3)'}), 'Not linked yet'), el('span',{text:'Drag to move, pinch or +/− to zoom. Tap a dot to highlight its links, tap again to open.'})));
   if (!edges.length) app.append(el('p',{class:'hint',text:'Nothing is linked yet. Open a note, tap “[[ ]] Link”, and pick another note to connect them.'}));
 
-  const N = notes.length, deg = new Array(N).fill(0); for (const [a,b] of edges){ deg[a]++; deg[b]++; }
-  const P = notes.map((n,i)=>{ const a = i*2.39996, r = 30*Math.sqrt(i+1); return {x:Math.cos(a)*r, y:Math.sin(a)*r, vx:0, vy:0}; });
-  const iters = N > 300 ? 120 : 260;
-  for (let it=0; it<iters; it++){
-    const cool = 1 - it/iters;
-    for (let i=0;i<N;i++) for (let j=i+1;j<N;j++){
-      let dx=P[i].x-P[j].x, dy=P[i].y-P[j].y, d2=dx*dx+dy*dy+0.01; if (d2>90000) continue;
-      const f = 900/d2, d=Math.sqrt(d2); dx/=d; dy/=d;
-      P[i].vx+=dx*f; P[i].vy+=dy*f; P[j].vx-=dx*f; P[j].vy-=dy*f;
+  const N = notes.length, deg = new Array(N).fill(0), adj = notes.map(()=>[]);
+  for (const [a,b] of edges){ deg[a]++; deg[b]++; adj[a].push(b); adj[b].push(a); }
+
+  // 1. split into clusters (connected groups); lay out each on its own so unrelated notes never tangle
+  const comp = new Array(N).fill(-1), groups = [];
+  for (let i=0;i<N;i++){ if (comp[i]>=0 || !deg[i]) continue; const g=[i]; comp[i]=groups.length;
+    for (let q=0;q<g.length;q++) for (const j of adj[g[q]]) if (comp[j]<0){ comp[j]=groups.length; g.push(j); }
+    groups.push(g); }
+  groups.sort((x,y)=>y.length-x.length);
+  const P = new Array(N);
+  const boxes = groups.map(g => {
+    const n = g.length, L = new Map(g.map((v,k)=>[v,k]));
+    const Q = g.map((v,k)=>{ const a=k*2.39996, r=40*Math.sqrt(k+1); return {x:Math.cos(a)*r, y:Math.sin(a)*r, vx:0, vy:0}; });
+    const E = []; for (const v of g) for (const w of adj[v]) if (v<w) E.push([L.get(v), L.get(w)]);
+    const iters = n > 300 ? 180 : 400;
+    for (let it=0; it<iters; it++){
+      const cool = 1 - it/iters;
+      for (let i=0;i<n;i++) for (let j=i+1;j<n;j++){
+        let dx=Q[i].x-Q[j].x, dy=Q[i].y-Q[j].y, d2=dx*dx+dy*dy+0.01; if (d2>640000) continue;
+        const f = 7000/d2, d=Math.sqrt(d2); dx/=d; dy/=d;
+        Q[i].vx+=dx*f; Q[i].vy+=dy*f; Q[j].vx-=dx*f; Q[j].vy-=dy*f;
+      }
+      for (const [a,b] of E){ const dx=Q[b].x-Q[a].x, dy=Q[b].y-Q[a].y, d=Math.sqrt(dx*dx+dy*dy)||1, f=(d-150)*0.03; Q[a].vx+=dx/d*f; Q[a].vy+=dy/d*f; Q[b].vx-=dx/d*f; Q[b].vy-=dy/d*f; }
+      for (const p of Q){ p.vx-=p.x*0.004; p.vy-=p.y*0.004; p.vx*=0.82; p.vy*=0.82; const sp=Math.hypot(p.vx,p.vy)||1, m=Math.min(14*cool+1, sp); p.x+=p.vx/sp*m; p.y+=p.vy/sp*m; }
     }
-    for (const [a,b] of edges){ const dx=P[b].x-P[a].x, dy=P[b].y-P[a].y, d=Math.sqrt(dx*dx+dy*dy)||1, f=(d-70)*0.04; P[a].vx+=dx/d*f; P[a].vy+=dy/d*f; P[b].vx-=dx/d*f; P[b].vy-=dy/d*f; }
-    for (let i=0;i<N;i++){ const p=P[i]; p.vx-=p.x*0.012; p.vy-=p.y*0.012; p.vx*=0.82; p.vy*=0.82; const m=Math.min(12*cool+1, Math.hypot(p.vx,p.vy)); const s=Math.hypot(p.vx,p.vy)||1; p.x+=p.vx/s*m; p.y+=p.vy/s*m; }
+    let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity; for (const p of Q){ x0=Math.min(x0,p.x); x1=Math.max(x1,p.x); y0=Math.min(y0,p.y); y1=Math.max(y1,p.y); }
+    return {g, Q, w:x1-x0+140, h:y1-y0+90, x0, y0};
+  });
+  // 2. shelf-pack the clusters left to right, wrapping rows, with wide gutters between them
+  const GAP = 120, rowMax = Math.max(900, ...boxes.map(b=>b.w));
+  let cx = 0, cy = 0, rowH = 0, maxW = 0;
+  for (const bx of boxes){
+    if (cx > 0 && cx + bx.w > rowMax){ cx = 0; cy += rowH + GAP; rowH = 0; }
+    bx.g.forEach((v,k)=>{ P[v] = {x: cx + 70 + (bx.Q[k].x - bx.x0), y: cy + 45 + (bx.Q[k].y - bx.y0)}; });
+    cx += bx.w + GAP; rowH = Math.max(rowH, bx.h); maxW = Math.max(maxW, cx);
   }
+  // 3. notes with no links sit in a tidy grid underneath
+  const lone = [...Array(N).keys()].filter(i=>!deg[i]);
+  const loneTop = boxes.length ? cy + rowH + GAP : 0, cols = Math.max(4, Math.floor(Math.max(maxW, 600)/150));
+  lone.forEach((v,k)=>{ P[v] = {x: 75 + (k%cols)*150, y: loneTop + 30 + Math.floor(k/cols)*80}; });
 
   const css = getComputedStyle(document.documentElement), col = v => css.getPropertyValue(v).trim();
-  const W = wrap.clientWidth || 340, H = Math.round(Math.min(window.innerHeight*0.62, Math.max(300, W*1.05)));
+  const W = wrap.clientWidth || 340, H = Math.round(Math.max(360, window.innerHeight*0.68));
   const dpr = Math.min(window.devicePixelRatio||1, 3);
   cv.width = W*dpr; cv.height = H*dpr; cv.style.height = H+'px';
   let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity; for (const p of P){ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
-  const pad = 34, sc = Math.min((W-2*pad)/Math.max(1,maxX-minX), (H-2*pad)/Math.max(1,maxY-minY), 2.2);
-  const ox = (W - (maxX-minX)*sc)/2 - minX*sc, oy = (H - (maxY-minY)*sc)/2 - minY*sc;
-  const S2 = P.map(p => ({x:p.x*sc+ox, y:p.y*sc+oy}));
-  const rad = i => 4 + Math.min(9, Math.sqrt(deg[i])*2.6);
-  const ctx = cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
-  ctx.strokeStyle = col('--rule'); ctx.lineWidth = 1.2;
-  for (const [a,b] of edges){ ctx.beginPath(); ctx.moveTo(S2[a].x,S2[a].y); ctx.lineTo(S2[b].x,S2[b].y); ctx.stroke(); }
-  for (let i=0;i<N;i++){ ctx.beginPath(); ctx.arc(S2[i].x,S2[i].y,rad(i),0,Math.PI*2); ctx.fillStyle = deg[i] ? col('--copper') : col('--ink-3'); ctx.fill(); }
+  const rad = i => 5 + Math.min(10, Math.sqrt(deg[i])*2.8);
+  const fitK = Math.min((W-60)/Math.max(1,maxX-minX), (H-60)/Math.max(1,maxY-minY));
+  // start readable (not squeezed): fit if it fits, otherwise zoom in on the biggest cluster and let you pan
+  let k = Math.min(1.4, Math.max(fitK, 0.95)), tx, ty;
+  const centerOn = (x,y) => { tx = W/2 - x*k; ty = H/2 - y*k; };
+  if (fitK >= 0.95) centerOn((minX+maxX)/2, (minY+maxY)/2);
+  else if (boxes.length){ const b0 = boxes[0].g.map(v=>P[v]); centerOn(b0.reduce((s,p)=>s+p.x,0)/b0.length, b0.reduce((s,p)=>s+p.y,0)/b0.length); }
+  else centerOn((minX+maxX)/2, minY + H/2/k - 30);
+  let sel = -1;
   const order = [...Array(N).keys()].sort((a,b)=>deg[b]-deg[a]);
-  const labelSet = new Set(N<=40 ? order : order.filter(i=>deg[i]).slice(0,18));
-  ctx.font = '500 12px Figtree, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  for (const i of labelSet){ const t = notes[i].title.length>24 ? notes[i].title.slice(0,23)+'…' : notes[i].title;
-    ctx.lineWidth = 3; ctx.strokeStyle = col('--page'); ctx.strokeText(t, S2[i].x, S2[i].y+rad(i)+3); ctx.fillStyle = col('--ink-2'); ctx.fillText(t, S2[i].x, S2[i].y+rad(i)+3); }
-  cv.onclick = e => {
-    const r = cv.getBoundingClientRect(), x = e.clientX-r.left, y = e.clientY-r.top; let best=-1, bd=24*24;
-    for (let i=0;i<N;i++){ const d=(S2[i].x-x)**2+(S2[i].y-y)**2; if (d<bd){ bd=d; best=i; } }
-    if (best>=0) openNote(notes[best].id);
+  const ctx = cv.getContext('2d');
+  const draw = () => {
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+    ctx.setTransform(dpr*k,0,0,dpr*k,dpr*tx,dpr*ty);
+    const nb = sel>=0 ? new Set([sel, ...adj[sel]]) : null;
+    if (lone.length && boxes.length){ ctx.fillStyle = col('--ink-3'); ctx.font = '600 '+(11/Math.min(k,1))+'px Figtree, system-ui, sans-serif'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('NOT LINKED YET', 40, loneTop - 4); }
+    ctx.lineWidth = 1.3/k;
+    for (const [a,b] of edges){ const hot = nb && (a===sel||b===sel); ctx.strokeStyle = hot ? col('--copper') : col('--rule'); ctx.globalAlpha = nb && !hot ? 0.25 : 1; ctx.beginPath(); ctx.moveTo(P[a].x,P[a].y); ctx.lineTo(P[b].x,P[b].y); ctx.stroke(); }
+    for (let i=0;i<N;i++){ ctx.globalAlpha = nb && !nb.has(i) ? 0.25 : 1; ctx.beginPath(); ctx.arc(P[i].x,P[i].y,rad(i),0,Math.PI*2); ctx.fillStyle = deg[i] ? col('--copper') : col('--ink-3'); ctx.fill();
+      if (i===sel){ ctx.lineWidth = 2.5/k; ctx.strokeStyle = col('--ink'); ctx.stroke(); } }
+    // labels: all of them once you're zoomed in enough, otherwise the hubs
+    const fs = 12/k; ctx.font = '500 '+fs+'px Figtree, system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
+    const show = k >= 0.7 || N <= 40 ? order : order.slice(0, 25);
+    for (const i of show){ if (nb && !nb.has(i)) continue;
+      const sx = P[i].x*k+tx, sy = P[i].y*k+ty; if (sx<-80||sx>W+80||sy<-30||sy>H+30) continue;
+      const t = notes[i].title.length>28 ? notes[i].title.slice(0,27)+'…' : notes[i].title, y = P[i].y + rad(i) + 3/k;
+      ctx.globalAlpha = 1; ctx.lineWidth = 3/k; ctx.strokeStyle = col('--page'); ctx.strokeText(t, P[i].x, y); ctx.fillStyle = col('--ink-2'); ctx.fillText(t, P[i].x, y); }
+    ctx.globalAlpha = 1;
   };
+  draw();
+
+  // pan with a finger or mouse, pinch or wheel to zoom, tap a dot to select it
+  const bar = el('div',{class:'gbar'});
+  const zoomAt = (f, x, y) => { const nk = Math.max(0.2, Math.min(3, k*f)); tx = x - (x-tx)*(nk/k); ty = y - (y-ty)*(nk/k); k = nk; draw(); };
+  const showSel = () => { bar.replaceChildren(); if (sel<0) return;
+    bar.append(el('span',{class:'gsel',text:notes[sel].title+' · '+deg[sel]+' link'+(deg[sel]===1?'':'s')}), el('button',{class:'btn primary',text:'Open',onclick:()=>openNote(notes[sel].id)}), el('button',{class:'btn ghost',text:'Clear',onclick:()=>{ sel=-1; showSel(); draw(); }})); };
+  const ptrs = new Map(); let start = null, moved = false, pinch = null;
+  cv.style.touchAction = 'none';
+  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
+    if (ptrs.size===1){ start = {x:e.offsetX, y:e.offsetY, tx, ty}; moved = false; }
+    if (ptrs.size===2){ const [p1,p2] = [...ptrs.values()]; pinch = {d:Math.hypot(p1.x-p2.x,p1.y-p2.y), k}; moved = true; } });
+  cv.addEventListener('pointermove', e => { if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
+    if (ptrs.size===2 && pinch){ const [p1,p2] = [...ptrs.values()], d = Math.hypot(p1.x-p2.x,p1.y-p2.y); zoomAt((pinch.k*d/pinch.d)/k, (p1.x+p2.x)/2, (p1.y+p2.y)/2); return; }
+    if (ptrs.size===1 && start){ const dx = e.offsetX-start.x, dy = e.offsetY-start.y; if (Math.abs(dx)+Math.abs(dy) > 6) moved = true; if (moved){ tx = start.tx+dx; ty = start.ty+dy; draw(); } } });
+  const up = e => { const was = ptrs.has(e.pointerId); ptrs.delete(e.pointerId); if (ptrs.size<2) pinch = null;
+    if (was && ptrs.size===0 && !moved){ const x = (e.offsetX-tx)/k, y = (e.offsetY-ty)/k; let best=-1, bd=(22/k)**2;
+      for (let i=0;i<N;i++){ const d=(P[i].x-x)**2+(P[i].y-y)**2; if (d<bd){ bd=d; best=i; } }
+      if (best>=0 && best===sel) openNote(notes[best].id); else { sel = best; showSel(); draw(); } }
+    if (ptrs.size===0) start = null; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', e => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY*0.0015), e.offsetX, e.offsetY); }, {passive:false});
+  wrap.append(el('div',{class:'gzoom'},
+    el('button',{class:'btn','aria-label':'Zoom in',text:'+',onclick:()=>zoomAt(1.25,W/2,H/2)}),
+    el('button',{class:'btn','aria-label':'Zoom out',text:'−',onclick:()=>zoomAt(0.8,W/2,H/2)}),
+    el('button',{class:'btn','aria-label':'Show everything',text:'Fit',onclick:()=>{ k = Math.max(0.2, Math.min(1.4, fitK)); centerOn((minX+maxX)/2,(minY+maxY)/2); draw(); }})));
+  wrap.after(bar);
 }
 let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(()=>{ if (tab==='graph' && !$('#layer').children.length) render(); }, 200); });
 
