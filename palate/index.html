@@ -148,6 +148,7 @@ table.sb tr.me td{font-weight:800;color:var(--plum)}
 .qreveal b.you{color:var(--star)}
 .qreveal span{font-size:12px;color:var(--ink2)}
 .rapid img,.rapid .poster{width:180px;height:270px;border-radius:12px;font-size:56px}
+@media (max-height:900px){.rapid{gap:10px}.rapid img,.rapid .poster{width:120px;height:180px;font-size:40px}.rapid h2{font-size:20px}}
 .toast{position:fixed;left:50%;bottom:calc(var(--navh) + 18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;
   background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;max-width:90vw}
 @media (min-width:700px){.title .nm{font-size:16px}}
@@ -894,8 +895,16 @@ function viewYou(w){
   if(top.length>10) w.append(el('div',{class:'label',text:'More picks'}), el('div',{class:'list'},top.slice(10).map(([it,p])=>titleRow(it,{pred:p}))));
 }
 const listName=it=>it.kind==='book'?'readlist':'watchlist';
+let watchCat='all';
 function viewWatchlist(w, books){
-  const ids=Object.keys(S.watchlist).filter(id=>{ const it=getItem(id); return it&&!S.ratings[id]&&(books?it.kind==='book':(it.kind==='movie'||it.kind==='tv')); });
+  let ids=Object.keys(S.watchlist).filter(id=>{ const it=getItem(id); return it&&!S.ratings[id]&&(books?it.kind==='book':(it.kind==='movie'||it.kind==='tv')); });
+  if(!books&&ids.length){
+    const nm=ids.filter(id=>getItem(id).kind==='movie').length, nt=ids.length-nm;
+    if((watchCat==='movie'&&!nm)||(watchCat==='tv'&&!nt)) watchCat='all';
+    w.append(el('div',{class:'seg',role:'tablist','aria-label':'Watchlist category'},[['all','All',ids.length],['movie','Movies',nm],['tv','Shows',nt]].filter(([k,,n])=>k==='all'||n).map(([k,l,n])=>
+      el('button',{class:'chip','aria-pressed':watchCat===k?'true':'false',onclick:()=>{ watchCat=k; render(); }},l+' ',el('span',{class:'cnt',text:String(n)})))));
+    if(watchCat!=='all') ids=ids.filter(id=>getItem(id).kind===watchCat);
+  }
   if(!ids.length){ w.append(el('div',{class:'empty',text: books?'Your readlist is empty. Open any book and tap “Add to readlist”.':'Your watchlist is empty. Open any movie or show and tap “Add to watchlist”. Letterboxd’s watchlist comes in with the import.'})); return; }
   const rows=ids.map(id=>[getItem(id),predict(getItem(id))]).sort((a,b)=>b[1].p-a[1].p);
   w.append(el('div',{class:'small muted',text:`${rows.length} ${rows.length===1?'title':'titles'}, ranked by how much Palate thinks you’ll like each one. The order updates as you rate.`}), el('div',{class:'list'},rows.map(([it,p])=>titleRow(it,{pred:p}))));
