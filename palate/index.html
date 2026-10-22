@@ -1274,6 +1274,7 @@ function viewRapid(w){
       render(); }),val),
     el('div',{class:'row',style:'justify-content:center'},
       el('button',{class:'btn',text:'Haven’t seen',onclick:()=>{ S.rapidPass=S.rapidPass||{}; S.rapidPass[it.id]=1; lastAct={type:'pass',id:it.id}; save(); advance(); }}),
+      el('button',{class:'btn',text:'＋ Want to watch',onclick:()=>{ S.rapidPass=S.rapidPass||{}; S.rapidPass[it.id]=1; S.watchlist[it.id]=Date.now(); lastAct={type:'watch',id:it.id}; save(); toast('Added to your watchlist ('+(it.kind==='tv'?'Shows':'Movies')+').'); advance(); }}),
       el('button',{class:'btn ghost',text:'Seen, can’t rate',onclick:()=>{ S.seen[it.id]=1; lastAct={type:'seen',id:it.id}; save(); advance(); }}),
       lastAct?el('button',{class:'btn ghost',text:'Undo',onclick:undo}):null)));
 }
@@ -1282,6 +1283,7 @@ function undo(){
   if(a.type==='rate'){ unrate(a.id); delete S.seen[a.id];
     S.blind=(S.blind||[]).filter(b=>b!==a.blind); sess.blind=sess.blind.filter(b=>b!==a.blind); sess.n=Math.max(0,sess.n-1); sess.done=false; }
   else if(a.type==='pass'){ delete (S.rapidPass||{})[a.id]; }
+  else if(a.type==='watch'){ delete (S.rapidPass||{})[a.id]; delete S.watchlist[a.id]; }
   else if(a.type==='seen'){ delete S.seen[a.id]; }
   save(); if(deck&&deck.ids[0]!==a.id) deck.ids.unshift(a.id);
   reveal=null; render(); toast('Undone.');
