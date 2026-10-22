@@ -492,7 +492,7 @@ let S=load();
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); return true; }catch(e){ toast('Couldn’t save — storage may be full.'); return false; } }
 
 let PROV=null, OVS=null, catStatus='loading';
-let MODEL=null, BASE=null, CV=null, KIDX=null, dirty=true;
+let MODEL=null, BASE=null, CV=null, KIDX=null, DIDX=null, dirty=true;
 
 function toast(msg){ const t=el('div',{class:'toast',role:'status',text:msg}); document.body.append(t); setTimeout(()=>t.remove(),2600); }
 
@@ -516,12 +516,23 @@ function refit(force){
   BASE=Core.fitBaselines(rows);
   MODEL=rows.length>=10?Core.fit(rows, (CV&&CV.lambda)||S.lambda||30, BASE):null;
   KIDX=Core.knnIndex(rows, BASE);
+  // dishes: compare by shared tags (cuisine, protein, style) with the dishes you've rated
+  const dr=rows.filter(r=>r.item.kind==='dish');
+  DIDX=dr.length>=3?{mean:(dr.reduce((a,r)=>a+r.y,0)+3*(BASE?BASE.gmean:3.5))/(dr.length+3), items:dr.map(r=>({id:r.id,item:r.item,y:r.y,tags:new Set([...(r.item.tags||[]),...(S.tags[r.id]||[])])}))}:null;
   dirty=false;
 }
 function markDirty(){ dirty=true; CV=null; }
 function predict(it){
   refit();
   const f=featuresOf(it); const b=Core.baselinePreds(BASE,it);
+  if(it.kind==='dish'&&DIDX){
+    const tg=new Set([...(it.tags||[]),...(S.tags[it.id]||[])]), sc=[];
+    for(const d of DIDX.items){ if(d.id===it.id) continue; let inter=0; for(const t of tg) if(d.tags.has(t)) inter++; const uni=tg.size+d.tags.size-inter; const sim=uni?inter/uni:0; if(sim>0) sc.push([sim,d]); }
+    sc.sort((a,b)=>b[0]-a[0]); const top=sc.slice(0,15); let w=0,acc=0; for(const [x,d] of top){ const ww=x*x; w+=ww; acc+=ww*(d.y-DIDX.mean); }
+    const den=w+0.6, pp=Core.clamp(DIDX.mean+(w?acc/den:0)), strength=w/den, rmse=(S.cvRmse||0.8);
+    return {p:pp, crowd:null, mean:DIDX.mean, conf:rmse*(1.45-0.7*strength), cov:strength, nb:top.map(([x,d])=>({item:d.item,y:d.y,sim:x})),
+      why:top.slice(0,4).map(([x,d])=>({key:'nb:'+d.id, label:'You gave '+d.item.title+' '+fmt(d.y)+'★', v:(x*x)*(d.y-DIDX.mean)/den})).filter(x=>Math.abs(x.v)>=0.03)};
+  }
   if(Core.knnKind(it)&&KIDX&&KIDX.length>=10){
     const k=Core.knnPredict(KIDX,BASE,it,f), rmse=(S.cvRmse||0.8);
     const why=k.nb.filter(n=>Math.abs(n.v)>=0.03).slice(0,5).map(n=>({key:'nb:'+n.item.id, label:'You gave '+n.item.title+' '+fmt(n.y)+'★', v:n.v}));
@@ -785,6 +796,7 @@ function openDetail(it){
       const keepIt=()=>{ if(!S.items[it.id]&&it.kind!=='movie'&&it.kind!=='tv') S.items[it.id]=it; };
       const fav=!!(S.favs||{})[it.id];
       acts.append(el('button',{class:'btn'+(fav?' on':''),'aria-pressed':fav?'true':'false',text:fav?'♥ Favorite':'♡ Add to favorites',onclick:()=>{ S.favs=S.favs||{}; fav?delete S.favs[it.id]:S.favs[it.id]=Date.now(); keepIt(); save(); stremioSoon(); draw(); toast(fav?'Removed from favorites.':'Added to favorites.'); }}));
+      if(fav&&!it.sb) acts.append(el('button',{class:'btn ghost',text:'Send to Second Brain',onclick:()=>sendFavsToBrain(it)}));
       if(!mine&&(it.kind==='movie'||it.kind==='tv'||it.kind==='book')){ const lname=listName(it), on=!!S.watchlist[it.id];
         acts.append(el('button',{class:'btn'+(on?' on':''),'aria-pressed':on?'true':'false',text:on?'On '+lname+' ✓':'Add to '+lname,onclick:()=>{ on?delete S.watchlist[it.id]:S.watchlist[it.id]=Date.now(); keepIt(); save(); draw(); toast(on?'Removed from your '+lname+'.':'Added to your '+lname+'.'); }})); }
       if(!mine) acts.append(el('button',{class:'btn ghost',text:'Not for me',onclick:()=>{ S.skip[it.id]=1; save(); close(); toast('Hidden from picks.'); }}));
@@ -857,12 +869,13 @@ function recommend(kind, n=40, opts={}){
 }
 function viewYou(w){
   const nR=Object.keys(S.ratings).length;
-  w.append(el('div',{class:'seg',role:'tablist'},[['movie','Movies'],['tv','Shows'],['book','Books'],['watch','Watchlist'],['read','Readlist'],['fav','Favorites']].map(([k,l])=>
+  w.append(el('div',{class:'seg',role:'tablist'},[['movie','Movies'],['tv','Shows'],['book','Books'],['dish','Dishes'],['watch','Watchlist'],['read','Readlist'],['fav','Favorites']].map(([k,l])=>
     el('button',{class:'chip','aria-pressed':youCat===k?'true':'false',text:l,onclick:()=>{ youCat=k; render(); }}))));
   if(catStatus==='loading'){ w.append(el('div',{class:'empty',text:'Loading the catalog…'})); return; }
   if(youCat==='watch'){ return viewWatchlist(w,false); }
   if(youCat==='read'){ return viewWatchlist(w,true); }
   if(youCat==='fav'){ return viewFavorites(w); }
+  if(youCat==='dish'){ return viewDishes(w); }
   if(youCat==='book'){ return viewBookRecs(w); }
   if(catStatus==='missing'){
     w.append(el('div',{class:'empty'},el('b',{text:'The movie & TV catalog isn’t built yet.'}),el('br'),
@@ -888,6 +901,76 @@ function viewWatchlist(w, books){
   w.append(el('div',{class:'small muted',text:`${rows.length} ${rows.length===1?'title':'titles'}, ranked by how much Palate thinks you’ll like each one. The order updates as you rate.`}), el('div',{class:'list'},rows.map(([it,p])=>titleRow(it,{pred:p}))));
 }
 let favCat='all';
+// ---------- favorites → Second Brain notes ----------
+// Each favorite becomes a note (title "Name (year)") with your rating, review, why it's you, and links to
+// other favorites that share a director, author, genre or tag; plus a "Palate Favorites" hub note.
+// Delivery: dropped in Second Brain's inbox (it imports on open) and copied for pasting as a fallback.
+const KIND_NAME={movie:'Film',tv:'Series',book:'Book',dish:'Dish',character:'Character',other:'Other'};
+const favTitle=it=>(it.title+(it.year?` (${it.year})`:'')).slice(0,90);
+function favFacets(it){
+  const c=Core.catalog(), f=[];
+  if((it.kind==='movie'||it.kind==='tv')&&c){ (it.m||[]).slice(0,2).forEach(m=>f.push(['maker',c.people[m]])); (it.g||[]).forEach(g=>f.push(['genre',c.genres[g]])); }
+  if(it.kind==='book'){ (it.authors||[]).forEach(a=>f.push(['maker',a])); (it.subjects||[]).slice(0,4).forEach(x=>f.push(['genre',x])); }
+  [...(it.tags||[]),...(S.tags[it.id]||[])].forEach(t=>f.push(['tag',t]));
+  return f.filter(x=>x[1]);
+}
+const slug=t=>String(t).toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30);
+async function favNote(it, all){
+  const r=S.ratings[it.id], p=predict(it), lock=S.locks[it.id], fac=favFacets(it);
+  const tags=['palate','favorite',slug(KIND_NAME[it.kind]||'other'),...fac.filter(x=>x[0]==='genre').map(x=>slug(x[1])).slice(0,4)];
+  const L=[`> From Palate · ${[KIND_NAME[it.kind],it.year,fac.find(x=>x[0]==='maker')?.[1]].filter(Boolean).join(' · ')} · [[Palate Favorites]]`, ''];
+  L.push(r?`**My rating** ${fmt(r.r)}★`:'**My rating** not rated yet');
+  const extra=[p.crowd!=null?`crowd ${fmt(p.crowd)}★`:null, lock?`Palate's locked call ${fmt(lock.p)}★`:null].filter(Boolean);
+  if(extra.length) L.push('*'+extra.join(' · ')+'*');
+  L.push('');
+  let ov=''; if(it.kind==='movie'||it.kind==='tv'){ try{ ov=await overview(it.id); }catch(e){} }
+  if(ov){ L.push('# What it is', ov, ''); }
+  if(S.reviews[it.id]){ L.push('# My review', S.reviews[it.id].replace(/\r/g,'').replace(/(^|\s)#(?=[A-Za-z])/g,'$1'), ''); }
+  const why=(p.why||[]).filter(x=>x.v>0).slice(0,5);
+  if(why.length){ L.push('# Why it’s me (Palate)'); why.forEach(x=>L.push('- '+x.label)); L.push(''); }
+  const mine=new Set(fac.map(x=>x[0]+'|'+x[1]));
+  const rel=all.filter(o=>o.id!==it.id).map(o=>[o, favFacets(o).filter(x=>mine.has(x[0]+'|'+x[1])).map(x=>x[1])]).filter(x=>x[1].length).sort((a,b)=>b[1].length-a[1].length).slice(0,8);
+  if(rel.length){ L.push('# Related favorites'); rel.forEach(([o,sh])=>L.push(`- [[${favTitle(o)}]] (${[...new Set(sh)].slice(0,3).join(', ')})`)); L.push(''); }
+  L.push('# My notes', '- ');
+  return `---\ntitle: ${favTitle(it)}\nsection: Resources\ntags: [${[...new Set(tags)].filter(Boolean).join(', ')}]\npinned: false\n---\n`+L.join('\n')+'\n';
+}
+async function favoritesBundle(only){
+  const all=Object.keys(S.favs||{}).map(getItem).filter(it=>it&&!it.sb);
+  const pick=only?all.filter(it=>it.id===only.id):all;
+  const notes=[]; for(const it of pick) notes.push(await favNote(it, all));
+  const hub=['> Everything I hearted in Palate, grouped by kind. Re-send from Palate to refresh.', ''];
+  for(const k of ['movie','tv','book','dish','character','other']){ const xs=all.filter(it=>it.kind===k).sort((a,b)=>((S.ratings[b.id]||{}).r||0)-((S.ratings[a.id]||{}).r||0)); if(!xs.length) continue;
+    hub.push('# '+({movie:'Films',tv:'Series',book:'Books',dish:'Dishes',character:'Characters',other:'Other'})[k]); xs.forEach(it=>hub.push(`- [[${favTitle(it)}]]${S.ratings[it.id]?' · '+fmt(S.ratings[it.id].r)+'★':''}`)); hub.push(''); }
+  notes.unshift(`---\ntitle: Palate Favorites\nsection: Resources\ntags: [palate, index]\npinned: false\n---\n`+hub.join('\n'));
+  return {text:notes.join('\n'), n:pick.length};
+}
+async function sendFavsToBrain(only){
+  const {text,n}=await favoritesBundle(only);
+  if(!n){ toast('No favorites to send.'); return; }
+  try{ localStorage.setItem('brain.inbox', JSON.stringify({from:'palate', at:Date.now(), text})); }catch(e){}
+  let copied=false; try{ await navigator.clipboard.writeText(text); copied=true; }catch(e){}
+  toast(`Sent ${n} favorite${n===1?'':'s'}. Open Second Brain; if they don’t appear, tap Import and paste${copied?' (already copied)':''}.`);
+}
+
+function viewDishes(w){
+  const dishes=Object.values(S.items).filter(it=>it&&it.kind==='dish');
+  const rated=dishes.filter(it=>S.ratings[it.id]), unrated=dishes.filter(it=>!S.ratings[it.id]);
+  w.append(el('div',{class:'row'},
+    el('button',{class:'btn primary',text:'Grade a dish',onclick:()=>{ go('grade'); setTimeout(()=>{ const c=[...document.querySelectorAll('.card h3')].find(h=>/Grade something else/.test(h.textContent)); if(c) c.scrollIntoView({behavior:'smooth',block:'start'}); },60); }}),
+    el('button',{class:'btn',text:'Sync from Second Brain',onclick:()=>{ const ds=brainDishesLocal(); if(ds&&ds.length){ const r=syncBrain(ds); toast(`Synced ${r.n} recipes: ${r.added} new, ${r.rated} rating${r.rated===1?'':'s'} updated.`); render(); } else toast(ds?'No #recipe notes in Second Brain yet.':'Can’t see Second Brain from here: use Library → Second Brain dishes → Paste.'); }})));
+  if(!dishes.length){ w.append(el('div',{class:'empty',text:'No dishes yet. Grade one off a menu, or sync your Kitchen Codex recipes from Second Brain.'})); return; }
+  if(rated.length<5) w.append(el('div',{class:'note'},el('b',{text:`${rated.length} dish${rated.length===1?'':'es'} rated.`}),' Predictions sharpen once about 10 dishes are rated with tags (cuisine, protein, style).'));
+  if(unrated.length){ const rows=unrated.map(it=>[it,predict(it)]).sort((a,b)=>b[1].p-a[1].p);
+    w.append(el('div',{class:'label',text:'Try next: ranked by how much Palate thinks you’ll like it'}), el('div',{class:'list'},rows.map(([it,p])=>titleRow(it,{pred:p})))); }
+  if(rated.length){ const avg=rated.reduce((s,it)=>s+S.ratings[it.id].r,0)/rated.length;
+    w.append(el('div',{class:'label',text:`Your dishes · ${rated.length} rated · average ${fmt(avg)}★`}), el('div',{class:'list'},rated.sort((a,b)=>S.ratings[b.id].r-S.ratings[a.id].r).map(it=>titleRow(it,{why:false})))); }
+  refit();
+  if(MODEL){ const eff=[...MODEL.W.entries()].filter(([k])=>k.startsWith('t:')&&(MODEL.cnt.get(k)||0)>=2).sort((a,b)=>b[1]-a[1]);
+    const up=eff.filter(x=>x[1]>0.02).slice(0,6), dn=eff.filter(x=>x[1]<-0.02).reverse().slice(0,6);
+    if(up.length||dn.length) w.append(el('div',{class:'card'},el('div',{class:'label',text:'Your food taste so far'}),
+      el('div',{class:'small muted',text:'From the tags on dishes you’ve rated (tags show up in 2+ ratings). Tags are shared with movies and books, so a few may come from there.'}),
+      el('div',{class:'reasons'},[...up,...dn].map(([k,v])=>el('div',{class:'reason'},el('span',{text:'#'+k.slice(2)}),el('span',{class:'v '+(v>0?'up':'down'),text:(v>0?'+':'−')+Math.abs(v).toFixed(2)+'★'})))))); }
+}
 function viewFavorites(w){
   const all=Object.keys(S.favs||{}).map(getItem).filter(Boolean);
   if(!all.length){ w.append(el('div',{class:'empty',text:'No favorites yet. Open anything you love and tap “Add to favorites”. Favorites lead your Stremio favorites row.'})); return; }
@@ -898,7 +981,8 @@ function viewFavorites(w){
     el('button',{class:'chip','aria-pressed':favCat===k?'true':'false',onclick:()=>{ favCat=k; render(); }},l+' ',el('span',{class:'cnt',text:String(k==='all'?all.length:counts[k])})))));
   const rows=(favCat==='all'?all:all.filter(it=>it.kind===favCat)).sort((a,b)=>((S.ratings[b.id]||{}).r||0)-((S.ratings[a.id]||{}).r||0)||(S.favs[b.id]-S.favs[a.id]));
   const name=favCat==='all'?'favorite':({movie:'favorite movie',tv:'favorite show',book:'favorite book',dish:'favorite dish',character:'favorite character',other:'favorite'})[favCat];
-  w.append(el('div',{class:'small muted',text:`${rows.length} ${name}${rows.length===1?'':'s'}, highest rated first`}), el('div',{class:'list'},rows.map(it=>titleRow(it,{why:false}))));
+  w.append(el('div',{class:'row',style:'justify-content:space-between;align-items:center'}, el('div',{class:'small muted',text:`${rows.length} ${name}${rows.length===1?'':'s'}, highest rated first`}),
+    el('button',{class:'btn',text:'Send all to Second Brain',onclick:()=>sendFavsToBrain()})), el('div',{class:'list'},rows.map(it=>titleRow(it,{why:false}))));
 }
 let bookRecCache=null;
 function viewBookRecs(w){
