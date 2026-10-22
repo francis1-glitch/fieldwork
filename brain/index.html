@@ -1026,6 +1026,18 @@ function renderTags(app){
 }
 
 /* ---------- settings ---------- */
+/* ---------- Palate link: recipes (notes tagged #recipe) with a "My rating" line become rated dishes in Palate ---------- */
+function ratingOf(body){
+  const line = (body.split('\n').find(l => /my rating/i.test(l)) || '');
+  const stars = (line.match(/★/g)||[]).length + ((line.match(/½/g)||[]).length ? 0.5 : 0);
+  if (stars) return Math.min(5, stars);
+  const m = line.replace(/\*\*my rating\*\*/i,'').replace(/out of 5|\/\s*5\b/gi,'').match(/(\d(?:\.\d)?)/);
+  if (!m) return null; const r = Math.round(parseFloat(m[1])*2)/2; return r>=0.5 && r<=5 ? r : null;
+}
+function dishesForPalate(){
+  return S.notes.filter(n => n.tags.includes('recipe') && !n.tags.includes('template'))
+    .map(n => ({id:n.id, title:n.title, tags:n.tags, rating:ratingOf(n.body), updated:n.updatedAt}));
+}
 function renderSettings(app){
   app.append(el('header',{class:'top'}, el('h1',{text:'Settings'})));
   const data = JSON.stringify(S);
@@ -1066,6 +1078,11 @@ function renderSettings(app){
   const wipe = el('div',{class:'confirm',hidden:true}, el('span',{text:'Erase every note on this phone? This can’t be undone without a backup.'}),
     el('button',{class:'btn danger',text:'Erase all',onclick:()=>{ S={notes:[], canvases:[]}; save(); toast('Erased.'); tab='notes'; render(); }}),
     el('button',{class:'btn',text:'Cancel',onclick:()=>{ wipe.hidden=true; }}));
+  { const ds = dishesForPalate(), rated = ds.filter(d=>d.rating!=null).length;
+    app.append(el('div',{class:'card'}, el('h2',{text:'Palate'}),
+      el('p',{class:'hint',text:`${ds.length} recipe${ds.length===1?'':'s'} (notes tagged #recipe), ${rated} rated. Write “**My rating** 4.5” in a recipe to rate it. In Palate, Library → Second Brain → Sync pulls them in. If Palate can’t see them on this phone, copy them here and paste them there.`}),
+      el('div',{class:'actions'}, el('button',{class:'btn',text:'Copy dishes for Palate',onclick:async()=>{ const data = JSON.stringify({type:'second-brain-dishes', v:1, at:new Date().toISOString(), dishes:dishesForPalate()});
+        try{ await navigator.clipboard.writeText(data); toast('Copied '+ds.length+' recipes. Paste them in Palate.'); }catch(e){ toast('Couldn’t copy on this device.'); } }})))); }
   app.append(el('div',{class:'card'}, el('h2',{text:'Start over'}), el('p',{class:'hint',text:'Delete all notes and canvases on this phone.'}),
     el('div',{class:'actions'}, el('button',{class:'btn danger',text:'Erase all notes',onclick:()=>{ wipe.hidden=false; }})), wipe));
 
