@@ -89,6 +89,16 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .trow.fold{font-weight:600} .trow.fold .ficon{color:var(--copper)} .trow.file .ficon{color:var(--ink-3)}
 .trow .tn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trow .tc{font-size:12px;color:var(--ink-3);font-weight:500}
+.trow.fold{padding:0 6px 0 0}
+.trow.fold .tbtn{flex:1;min-width:0;display:flex;align-items:center;gap:6px;border:0;background:none;text-align:left;font:inherit;color:inherit;padding:7px 6px 7px calc(10px + var(--d)*18px);min-height:38px}
+.trow .tmap{border:0;background:none;padding:6px 8px;color:var(--ink-3);border-radius:6px;display:inline-flex}
+.trow .tmap:hover,.trow .tmap:active{color:var(--copper);background:var(--paper)}
+.mlist{display:flex;flex-direction:column;gap:8px;max-height:56vh;overflow:auto}
+.mrow{display:flex;gap:8px;align-items:center}
+.mrow > .note,.mrow > .mtext{flex:1;min-width:0}
+.mtext{display:flex;flex-direction:column;gap:3px;font-size:14px}
+.mtext .ex{color:var(--ink-3);font-size:13px;overflow-wrap:anywhere}
+.backlinks.unlinked{margin-top:12px}
 .note{background:var(--page);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;text-align:left;width:100%;display:flex;flex-direction:column;gap:5px}
 .note .t{font-family:var(--serif);font-weight:600;font-size:17px;line-height:1.3}
 .note .ex{color:var(--ink-2);font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
@@ -265,6 +275,42 @@ function findByTitle(t){ const k = norm(t); let best = null; for (const n of S.n
 function linksOf(body){ const out = new Set(); let m; LINK_RE.lastIndex = 0; while ((m = LINK_RE.exec(body))) out.add(m[1].trim()); return [...out]; }
 function backlinksOf(note){ const k = norm(note.title); return S.notes.filter(x => x.id!==note.id && linksOf(x.body).some(t => norm(t)===k)); }
 function contextLine(body, title){ const k = norm(title); for (const line of body.split('\n')){ let m; LINK_RE.lastIndex=0; while ((m = LINK_RE.exec(line))) if (norm(m[1])===k) return line.replace(LINK_RE,(a,t,al)=>al||t).replace(/^[#>\-*\s]+/,'').trim(); } return ''; }
+/* ---------- unlinked mentions: a note's title written in another note without [[ ]] ---------- */
+function maskLinks(body){ return body.replace(/\[\[[^\]\n]*\]\]|https?:\/\/\S+|`[^`\n]*`/g, m => ' '.repeat(m.length)); }
+function unlinkedMentionsOf(note){
+  const title = note.title.trim(); if (title.length < 4) return [];
+  let re; try{ re = new RegExp('(^|[^\\p{L}\\p{N}\\-])('+escRe(title)+')(?=$|[^\\p{L}\\p{N}\\-])','iu'); }catch(e){ return []; }
+  const out = [];
+  for (const x of S.notes){
+    if (x.id===note.id) continue;
+    if (linksOf(x.body).some(t => norm(t)===norm(title))) continue; // already linked from there
+    const m = re.exec(maskLinks(x.body)); if (!m) continue;
+    const idx = m.index + m[1].length, len = m[2].length;
+    const ls = x.body.lastIndexOf('\n', idx)+1, le = x.body.indexOf('\n', idx), line = x.body.slice(ls, le<0 ? undefined : le);
+    out.push({note:x, idx, len, context: line.replace(LINK_RE,(a,t,al)=>al||t).replace(/^[#>\-*\s]+/,'').trim().slice(0,160)});
+  }
+  return out;
+}
+function linkMention(m, target){
+  const b = m.note.body, matched = b.substr(m.idx, m.len);
+  if (norm(matched)!==norm(target.title)) return false; // note changed since we looked
+  const rep = matched===target.title ? '[['+target.title+']]' : '[['+target.title+'|'+matched+']]';
+  m.note.body = b.slice(0, m.idx) + rep + b.slice(m.idx + m.len); m.note.updatedAt = nowIso(); return true;
+}
+function allSuggestions(){ const out = []; for (const n of S.notes) for (const m of unlinkedMentionsOf(n)) out.push({target:n, m}); return out; }
+function suggestionsSheet(){
+  const sh = sheet('short'), sug = allSuggestions();
+  sh.append(el('div',{class:'shead'}, el('h2',{text:'Link suggestions'}), el('button',{class:'btn ghost',text:'Close',onclick:()=>{ closeLayer(); render(); }})));
+  const body = el('div',{class:'sbody'}); sh.append(body);
+  if (!sug.length){ body.append(el('p',{class:'hint',text:'No unlinked mentions. Every note title that appears in another note is already linked.'})); return; }
+  body.append(el('p',{class:'hint',text:`${sug.length} place${sug.length===1?'':'s'} where a note’s title is written without a link. Linking them connects the notes in the graph.`}),
+    el('div',{class:'actions'}, el('button',{class:'btn primary',text:'Link all '+sug.length,onclick:()=>{ let k=0; for (const {target,m} of allSuggestions()) if (linkMention(m,target)) k++; save(); toast('Linked '+k+'.'); suggestionsSheet(); }})));
+  const list = el('div',{class:'mlist'});
+  for (const {target, m} of sug.slice(0,150)) list.append(el('div',{class:'mrow'},
+    el('div',{class:'mtext'}, el('span',{class:'mt'}, el('strong',{text:m.note.title}), ' mentions ', el('strong',{text:target.title})), el('span',{class:'ex',text:m.context})),
+    el('button',{class:'btn',text:'Link',onclick:()=>{ if (linkMention(m,target)){ save(); toast('Linked.'); } suggestionsSheet(); }})));
+  body.append(list);
+}
 function openLink(title){
   const t = findByTitle(title);
   if (t){ openNote(t.id); return; }
@@ -403,6 +449,7 @@ let viewMode = (()=>{ try{ return localStorage.getItem('brain.view')||'list'; }c
 let openFolders = (()=>{ try{ return new Set(JSON.parse(localStorage.getItem('brain.open')||'null') || SECTIONS.map(s=>s.id)); }catch(e){ return new Set(SECTIONS.map(s=>s.id)); } })();
 const saveOpen = () => { try{ localStorage.setItem('brain.open', JSON.stringify([...openFolders])); }catch(e){} };
 const ICON_FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7V17.5A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>';
+const ICON_MAP = '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="6" rx="1"/><rect x="14" y="4" width="7" height="6" rx="1"/><rect x="8.5" y="14" width="7" height="6" rx="1"/><path d="M6.5 10v2h11v-2M12 12v2"/></svg>';
 const ICON_FILE = '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z M14 3v4h4"/></svg>';
 function svgIcon(markup){ const t = document.createElement('span'); t.className='ficon'; t.innerHTML = markup; return t; } // static markup, no user content
 function drawTree(){
@@ -425,8 +472,10 @@ function drawTree(){
   const walk = (nd, depth, parent) => {
     const n = count(nd); if (searching && !n) return;
     const open = searching || openFolders.has(nd.key);
-    const row = el('button',{class:'trow fold',role:'treeitem','aria-expanded':String(open),style:'--d:'+depth,onclick:()=>{ open ? openFolders.delete(nd.key) : openFolders.add(nd.key); saveOpen(); drawTree(); }},
-      el('span',{class:'chev',text: open ? '▾' : '▸'}), svgIcon(ICON_FOLDER), el('span',{class:'tn',text:nd.name}), el('span',{class:'tc',text:String(n)}));
+    const row = el('div',{class:'trow fold',role:'treeitem','aria-expanded':String(open),style:'--d:'+depth},
+      el('button',{class:'tbtn',onclick:()=>{ open ? openFolders.delete(nd.key) : openFolders.add(nd.key); saveOpen(); drawTree(); }},
+        el('span',{class:'chev',text: open ? '▾' : '▸'}), svgIcon(ICON_FOLDER), el('span',{class:'tn',text:nd.name}), el('span',{class:'tc',text:String(n)})),
+      n ? el('button',{class:'tmap',title:'Map this folder on a canvas','aria-label':'Map '+nd.name+' on a canvas',onclick:()=>folderCanvas(nd.key, nd.name)}, svgIcon(ICON_MAP)) : null);
     parent.append(row);
     if (!open) return;
     [...nd.folders.values()].sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>walk(f, depth+1, parent));
@@ -437,6 +486,29 @@ function drawTree(){
   root.forEach(r => { if (!searching || count(r)) walk(r, 0, tree); });
   if (!tree.children.length) tree.append(el('div',{class:'empty',text: q ? 'No notes match “'+query+'”.' : 'No notes yet.'}));
   list.append(tree);
+}
+function folderCanvas(key, name){
+  // every note at or under this folder; columns = its direct subfolders, links between them become edges
+  const inFolder = n => { let k = n.section; if (k===key) return ''; for (const part of folderOf(n)){ k += '/'+part; if (k===key) return null; } return undefined; };
+  const sub = n => { const parts = [n.section, ...folderOf(n)]; const depth = key.split('/').length; const k = parts.slice(0, depth).join('/'); return k===key ? (parts[depth] || '') : undefined; };
+  const notes = S.notes.filter(n => sub(n)!==undefined);
+  if (!notes.length){ toast('No notes in this folder.'); return; }
+  const groups = new Map(); for (const n of notes){ const g = sub(n); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(n); }
+  const cols = [...groups.entries()].sort((a,b)=> (a[0]===''?-1:b[0]===''?1:a[0].localeCompare(b[0])));
+  const nodes = [], edges = [], nid = new Map(), GAP = 70, colors = ['2','5','4','3','6','1'];
+  cols.forEach(([g, list], ci) => {
+    const x = ci*(CW+GAP), color = colors[ci % colors.length];
+    if (g) nodes.push({id:uid(), type:'text', text:g, x, y:-90, width:CW, height:60, color});
+    list.sort((a,b)=>(b.tags.includes('index')?1:0)-(a.tags.includes('index')?1:0) || (b.pinned?1:0)-(a.pinned?1:0) || a.title.localeCompare(b.title))
+      .forEach((n,i) => { const node = {id:uid(), type:'file', noteId:n.id, x, y:i*(CH+30), width:CW, height:CH, color: g ? color : '6'}; nodes.push(node); nid.set(n.id, node.id); });
+  });
+  const seen = new Set();
+  for (const n of notes) for (const t of linksOf(n.body)){ const b = findByTitle(t); if (!b || !nid.has(b.id) || b.id===n.id) continue;
+    const k = [nid.get(n.id), nid.get(b.id)].sort().join('|'); if (seen.has(k)) continue; seen.add(k); edges.push({id:uid(), fromNode:nid.get(n.id), toNode:nid.get(b.id)}); }
+  const title = name+' · folder map', ex = S.canvases.find(c => c.name===title);
+  let c; if (ex){ Object.assign(ex, {nodes, edges, view:null, updatedAt:nowIso()}); save(); c = ex; } else c = createCanvas(title, nodes, edges);
+  $('#layer').replaceChildren(); tab = 'canvas'; render(); openBoard(c.id);
+  toast((ex?'Updated':'Built')+' a map of '+notes.length+' note'+(notes.length===1?'':'s')+' with '+edges.length+' link'+(edges.length===1?'':'s')+'.');
 }
 function moveSheet(n){
   const sh = sheet('short'), cur = n.folder || '';
@@ -499,6 +571,14 @@ function openNote(id){
     }
     view.append(bl);
   } else view.append(el('p',{class:'hint',text:'No other notes link here yet. Write [['+n.title+']] in another note to connect them.'}));
+  const um = unlinkedMentionsOf(n);
+  if (um.length){
+    const ub = el('div',{class:'backlinks unlinked'}, el('div',{class:'row',style:'justify-content:space-between;align-items:center'}, el('span',{class:'label',text:'Unlinked mentions · '+um.length}),
+      el('button',{class:'btn ghost',text:'Link all',onclick:()=>{ let k=0; for (const m of unlinkedMentionsOf(n)) if (linkMention(m,n)) k++; save(); toast('Linked '+k+'.'); openNote(n.id); }})));
+    for (const m of um) ub.append(el('div',{class:'mrow'}, el('button',{class:'note',onclick:()=>openNote(m.note.id)}, el('span',{class:'t',text:m.note.title}), el('span',{class:'ex',text:m.context})),
+      el('button',{class:'btn',text:'Link',onclick:()=>{ if (linkMention(m,n)){ save(); toast('Linked.'); } openNote(n.id); }})));
+    view.append(ub);
+  }
   sh.append(view);
 }
 
@@ -578,7 +658,9 @@ function renderGraph(app){
   const idx = new Map(notes.map((n,i)=>[norm(n.title), i]));
   const edges = [], seen = new Set();
   notes.forEach((n,i) => { for (const t of linksOf(n.body)){ const j = idx.get(norm(t)); if (j==null || j===i) continue; const k = i<j ? i+'-'+j : j+'-'+i; if (!seen.has(k)){ seen.add(k); edges.push([i,j]); } } });
-  app.append(el('header',{class:'top'}, el('h1',{text:'Graph'}), el('span',{class:'count',text: notes.length+' notes · '+edges.length+' link'+(edges.length===1?'':'s')})));
+  const nSug = allSuggestions().length;
+  app.append(el('header',{class:'top'}, el('h1',{text:'Graph'}), el('div',{class:'hright'}, el('span',{class:'count',text: notes.length+' notes · '+edges.length+' link'+(edges.length===1?'':'s')}),
+    nSug ? el('button',{class:'btn ghost imp',text:nSug+' suggestion'+(nSug===1?'':'s'),onclick:suggestionsSheet}) : null)));
   if (!notes.length){ app.append(el('div',{class:'empty',text:'No notes yet. Once you have a few, link them with [[Note title]] and they’ll connect here.'})); return; }
   const wrap = el('div',{class:'graphwrap'}), cv = el('canvas',{class:'graph',role:'img','aria-label':'Map of your notes and the links between them'});
   wrap.append(cv); app.append(wrap);
