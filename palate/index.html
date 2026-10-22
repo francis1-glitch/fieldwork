@@ -975,6 +975,53 @@ function viewGrade(w){
   drawCard(); w.append(card);
 }
 
+// ---------- Second Brain link: recipes there become dishes here ----------
+// Recipes are Second Brain notes tagged #recipe; "**My rating** 4.5" in the note is the rating.
+// Both apps live on the same site, so Palate first reads Second Brain's saved notes directly;
+// if this phone keeps them apart (home-screen apps can have separate storage), paste instead.
+const BRAIN_TAG={'protein-beef':'beef','protein-pork':'pork','protein-chicken':'chicken','protein-seafood':'seafood','protein-fish':'seafood','protein-egg':'breakfast',
+  'technique-fry':'fried','technique-grill':'grilled','technique-sear':'seared','technique-braise':'braised','technique-roast':'roasted','technique-stir-fry':'stir-fried',
+  'technique-emulsion':'creamy','technique-dough':'baked','technique-eggs':'breakfast'};
+function brainRating(body){
+  const line=(String(body||'').split('\n').find(l=>/my rating/i.test(l))||'');
+  const stars=(line.match(/★/g)||[]).length+((line.match(/½/g)||[]).length?0.5:0);
+  if(stars) return Math.min(5,stars);
+  const m=line.replace(/\*\*my rating\*\*/i,'').replace(/out of 5|\/\s*5\b/gi,'').match(/(\d(?:\.\d)?)/);
+  if(!m) return null; const r=Math.round(parseFloat(m[1])*2)/2; return r>=0.5&&r<=5?r:null;
+}
+function brainDishesLocal(){
+  try{ const d=JSON.parse(localStorage.getItem('brain.v1')||'null'); if(!d||!Array.isArray(d.notes)) return null;
+    return d.notes.filter(n=>(n.tags||[]).includes('recipe')&&!(n.tags||[]).includes('template')).map(n=>({id:n.id,title:n.title,tags:n.tags||[],rating:brainRating(n.body),updated:n.updatedAt})); }
+  catch(e){ return null; }
+}
+function syncBrain(dishes){
+  let added=0, rated=0;
+  for(const d of dishes){
+    if(!d||!d.id||!d.title) continue;
+    const id='x:sb-'+d.id, tags=[...new Set((d.tags||[]).map(t=>BRAIN_TAG[t]||(t.startsWith('cuisine-')?t.slice(8).replace(/-/g,' '):t)).filter(t=>t&&!['recipe','kitchen-codex'].includes(t)&&!t.startsWith('technique-')&&!t.startsWith('protein-')))];
+    if(!S.items[id]) added++;
+    S.items[id]=Object.assign(S.items[id]||{}, {id, kind:'dish', title:String(d.title).slice(0,90), where:'Second Brain', tags, sb:true});
+    if(d.rating!=null&&(!S.ratings[id]||S.ratings[id].r!==d.rating)){ rate(id, d.rating, 'sb'); rated++; }
+  }
+  S.sbSync={at:Date.now(), n:dishes.length}; markDirty(); save();
+  return {added, rated, n:dishes.length};
+}
+function brainCard(){
+  const sb=Object.values(S.items).filter(it=>it.sb), unrated=sb.filter(it=>!S.ratings[it.id]);
+  const card=el('div',{class:'card'}, el('h3',{text:'Second Brain dishes'}),
+    el('div',{class:'small muted',text: S.sbSync?`${sb.length} recipes linked, ${sb.length-unrated.length} rated · last sync ${new Date(S.sbSync.at).toLocaleString()}.`:'Pull your Kitchen Codex recipes in as dishes. Rated ones teach Palate your food taste; unrated ones get a predicted score.'}));
+  const ta=el('textarea',{rows:'3',placeholder:'Paste from Second Brain → Settings → Copy dishes for Palate','aria-label':'Paste dishes from Second Brain',hidden:true});
+  const done=r=>{ toast(`Synced ${r.n} recipes: ${r.added} new, ${r.rated} rating${r.rated===1?'':'s'} updated.`); render(); };
+  card.append(el('div',{class:'row'},
+    el('button',{class:'btn primary',text:'Sync from Second Brain',onclick:()=>{ const ds=brainDishesLocal();
+      if(ds&&ds.length) return done(syncBrain(ds));
+      ta.hidden=false; ta.focus(); toast(ds?'No recipes found in Second Brain yet (tag them #recipe).':'Can’t see Second Brain from here. Paste its dishes below.'); }}),
+    el('button',{class:'btn',text:'Paste instead',onclick:()=>{ ta.hidden=false; ta.focus(); }})), ta);
+  ta.addEventListener('input',()=>{ try{ const d=JSON.parse(ta.value.trim()); if(d&&d.type==='second-brain-dishes'&&Array.isArray(d.dishes)){ ta.value=''; ta.hidden=true; done(syncBrain(d.dishes)); } }catch(e){} });
+  if(unrated.length){ card.append(el('div',{class:'label',text:'Not rated yet, predicted for you'}), el('div',{class:'list'},unrated.map(it=>[it,predict(it)]).sort((a,b)=>b[1].p-a[1].p).slice(0,8).map(([it,p])=>titleRow(it,{pred:p})))); }
+  return card;
+}
+
 // ---------- Library ----------
 function viewLib(w){
   const rated=Object.entries(S.ratings).map(([id,r])=>[getItem(id),r]).filter(x=>x[0]);
@@ -992,6 +1039,7 @@ function viewLib(w){
       el('button',{class:'btn',text:'Quick rate',onclick:()=>go('rapid'),disabled:catStatus!=='ok'})),
     pend?el('div',{class:'small muted',text:`${pend} imported rows ${catStatus==='ok'?'didn’t match a title in the catalog':'waiting for the catalog'}.`}):null,
     fileIn));
+  w.append(brainCard());
   if(!rated.length){ w.append(el('div',{class:'empty',text:'Nothing rated yet.'})); return; }
 
   // category (with counts), then sort and filter that adapt to the category
