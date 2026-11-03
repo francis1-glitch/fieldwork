@@ -37,6 +37,9 @@
   .stage canvas{max-width:100%;height:auto;display:block}
   .drop{padding:48px 20px;text-align:center;color:var(--muted);font-size:.95rem}
   .controls{display:flex;gap:10px;padding:14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .modebar{display:flex;gap:8px;padding:12px 14px 0}
+  .seg{flex:1;padding:8px 10px;font:inherit;font-weight:600;font-size:.82rem;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);cursor:pointer}
+  .seg.active{background:var(--accent);color:#06100e;border-color:transparent}
   button,label.btn{font:inherit;font-weight:600;font-size:.9rem;border-radius:10px;padding:10px 16px;
     border:1px solid var(--line);background:var(--panel-2);color:var(--fg);cursor:pointer;flex:1;text-align:center;min-width:120px}
   label.btn{background:var(--accent);color:#06100e;border-color:transparent}
@@ -82,6 +85,10 @@
   </header>
 
   <div class="card">
+    <div class="modebar">
+      <button class="seg active" id="segFront">Front view</button>
+      <button class="seg" id="segProfile">Side profile</button>
+    </div>
     <div class="stage" id="stage">
       <div class="drop" id="drop">Loading analysis engine…</div>
       <canvas id="canvas" class="hide"></canvas>
@@ -107,12 +114,18 @@
   </div>
 
   <div class="card hide" id="results">
-    <div class="section-label">Proportions</div>
-    <div class="metrics" id="m-prop"></div>
-    <div class="section-label">Symmetry</div>
-    <div class="metrics" id="m-sym"></div>
-    <div class="section-label">Skin</div>
-    <div class="metrics" id="m-skin"></div>
+    <div id="frontBlock">
+      <div class="section-label">Proportions</div>
+      <div class="metrics" id="m-prop"></div>
+      <div class="section-label">Symmetry</div>
+      <div class="metrics" id="m-sym"></div>
+      <div class="section-label">Skin</div>
+      <div class="metrics" id="m-skin"></div>
+    </div>
+    <div id="profileBlock" class="hide">
+      <div class="section-label">Profile angles</div>
+      <div class="metrics" id="m-profile"></div>
+    </div>
   </div>
 
   <div class="note hide" id="disclaimer">
@@ -133,12 +146,13 @@ const status=$('status'), results=$('results'), toggleBtn=$('toggle');
 const IDX={ chin:152,forehead:10,noseBottom:2, lBrow:105,rBrow:334,
   lEyeOuter:33,lEyeInner:133,rEyeOuter:263,rEyeInner:362,
   mouthL:61,mouthR:291,upperLip:0,lowerLip:17,
-  lFace:234,rFace:454,lCheek:50,rCheek:280, foreheadMid:151, lCheek2:205,rCheek2:425 };
+  lFace:234,rFace:454,lCheek:50,rCheek:280, foreheadMid:151, lCheek2:205,rCheek2:425,
+  glabella:9,nasion:168,noseTip:1 };
 
 // PROVISIONAL weights — replace with benchmarked output of train_score.py
 const WEIGHTS={ symmetry:0.25, proportion:0.35, skinEven:0.20, skinSmooth:0.20 };
 
-let landmarker=null,lastPts=null,baseImg=null,showOverlay=true;
+let landmarker=null,lastPts=null,baseImg=null,showOverlay=true,mode='front';
 const D=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
 
 /* ---------- sRGB -> Lab (compact) ---------- */
@@ -241,6 +255,7 @@ function compute(L){
 function fmtVal(v,fmt){
   if(fmt==='pct')return(v*100).toFixed(1)+'%';
   if(fmt==='x')return v.toFixed(2)+'×';
+  if(fmt==='deg')return v.toFixed(1)+'°';
   if(fmt==='raw')return v.toFixed(1);
   return v.toFixed(3);
 }
@@ -259,7 +274,33 @@ function rows(boxId,arr){
   }
 }
 
+// angle at vertex b (degrees) formed by a-b-c
+function ang(a,b,c){
+  const v1=[a[0]-b[0],a[1]-b[1]], v2=[c[0]-b[0],c[1]-b[1]];
+  const dot=v1[0]*v2[0]+v1[1]*v2[1], m1=Math.hypot(v1[0],v1[1]), m2=Math.hypot(v2[0],v2[1]);
+  return Math.acos(Math.max(-1,Math.min(1,dot/((m1*m2)||1))))*180/Math.PI;
+}
+function profilePts(L){
+  return {glabella:L[IDX.glabella],nasion:L[IDX.nasion],tip:L[IDX.noseTip],
+    subnasale:L[IDX.noseBottom],lip:L[IDX.upperLip],pogonion:L[IDX.chin]};
+}
+function profileCompute(L){
+  const p=profilePts(L);
+  return {profile:[
+    {name:'Nasofrontal angle',val:ang(p.glabella,p.nasion,p.tip),ideal:122,fmt:'deg',tol:8,help:'115–130° typical'},
+    {name:'Nasolabial angle',val:ang(p.tip,p.subnasale,p.lip),ideal:100,fmt:'deg',tol:10,help:'90–110° typical'},
+    {name:'Nasomental angle',val:ang(p.nasion,p.tip,p.pogonion),ideal:126,fmt:'deg',tol:6,help:'120–132° typical'},
+    {name:'Facial convexity',val:ang(p.glabella,p.subnasale,p.pogonion),ideal:168,fmt:'deg',tol:6,help:'165–175° (glabella–subnasale–pogonion)'},
+  ]};
+}
+function renderProfile(r){
+  rows('m-profile',r.profile);
+  results.classList.remove('hide'); $('disclaimer').classList.remove('hide');
+  $('frontBlock').classList.add('hide'); $('profileBlock').classList.remove('hide');
+  $('scoreCard').classList.add('hide');
+}
 function render(r){
+  $('frontBlock').classList.remove('hide'); $('profileBlock').classList.add('hide');
   rows('m-prop',r.prop); rows('m-sym',r.sym); rows('m-skin',r.skin);
   results.classList.remove('hide'); $('disclaimer').classList.remove('hide');
   const n=Math.round(r.score);
@@ -275,6 +316,15 @@ function draw(){
   const P=lastPts;
   ctx.fillStyle='rgba(70,214,198,0.5)';
   for(const pt of P){ctx.beginPath();ctx.arc(pt[0],pt[1],1.1,0,7);ctx.fill();}
+  if(mode==='profile'){
+    const p=profilePts(P), chain=[p.glabella,p.nasion,p.tip,p.subnasale,p.lip,p.pogonion];
+    ctx.strokeStyle='rgba(232,178,74,0.95)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(chain[0][0],chain[0][1]);
+    for(let i=1;i<chain.length;i++)ctx.lineTo(chain[i][0],chain[i][1]);ctx.stroke();
+    ctx.fillStyle='rgba(232,112,90,0.95)';
+    for(const pt of chain){ctx.beginPath();ctx.arc(pt[0],pt[1],3,0,7);ctx.fill();}
+    return;
+  }
   const browY=(P[IDX.lBrow][1]+P[IDX.rBrow][1])/2;
   ctx.strokeStyle='rgba(232,178,74,0.9)';ctx.lineWidth=1.5;
   for(const y of[P[IDX.forehead][1],browY,P[IDX.noseBottom][1],P[IDX.chin][1]]){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
@@ -296,9 +346,13 @@ function handleImage(file){
         status.textContent='No face found. Try a clearer, front-facing photo.';status.classList.add('err');lastPts=null;draw();return;
       }
       lastPts=res.faceLandmarks[0].map(l=>[l.x*canvas.width,l.y*canvas.height]);
-      const r=compute(lastPts);
-      draw(); render(r); toggleBtn.disabled=false;
-      status.textContent='Done. Yellow = thirds, red = midline, dots = 468 landmarks.';
+      const r = mode==='profile'? profileCompute(lastPts) : compute(lastPts);
+      draw();
+      if(mode==='profile') renderProfile(r); else render(r);
+      toggleBtn.disabled=false;
+      status.textContent = mode==='profile'
+        ? 'Done. Line traces glabella → nasion → tip → subnasale → lip → chin.'
+        : 'Done. Yellow = thirds, red = midline, dots = 468 landmarks.';
     }catch(e){status.textContent='Analysis error: '+e.message;status.classList.add('err');}
     URL.revokeObjectURL(img.src);
   };
@@ -306,6 +360,23 @@ function handleImage(file){
   img.src=URL.createObjectURL(file);
 }
 
+function setMode(m){
+  mode=m;
+  $('segFront').classList.toggle('active',m==='front');
+  $('segProfile').classList.toggle('active',m==='profile');
+  status.classList.remove('err');
+  status.textContent = m==='profile'
+    ? 'Upload a true side profile — head level, looking straight ahead, one ear visible.'
+    : 'Use a straight-on photo, face level, even lighting, hair off the forehead.';
+  if(baseImg && lastPts){
+    ctx.drawImage(baseImg,0,0,canvas.width,canvas.height); // clean frame for skin sampling
+    const r = m==='profile'? profileCompute(lastPts) : compute(lastPts);
+    draw();
+    if(m==='profile') renderProfile(r); else render(r);
+  }
+}
+$('segFront').addEventListener('click',()=>setMode('front'));
+$('segProfile').addEventListener('click',()=>setMode('profile'));
 $('file').addEventListener('change',e=>{if(e.target.files[0])handleImage(e.target.files[0]);});
 toggleBtn.addEventListener('click',()=>{showOverlay=!showOverlay;draw();toggleBtn.textContent=showOverlay?'Hide overlay':'Show overlay';});
 
