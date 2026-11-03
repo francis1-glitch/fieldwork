@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1113">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mirror">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Mirror</title>
+<style>
+  /* Layout: single-column instrument. Photo + overlay, then score, then metric groups. */
+  :root{
+    --bg:#0e1113; --panel:#171b1e; --panel-2:#1f2429; --line:#2b3238;
+    --fg:#e8edf0; --muted:#8b979f; --accent:#46d6c6;
+    --good:#4fcf8a; --warn:#e8b24a; --off:#e8705a;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:light){
+    :root{ --bg:#eef1f2; --panel:#ffffff; --panel-2:#f4f6f7; --line:#dde2e5;
+      --fg:#16191c; --muted:#5d686f; --accent:#15a596; color-scheme:light; }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:max(16px,env(safe-area-inset-left)) max(16px,env(safe-area-inset-right));
+    padding-block:24px env(safe-area-inset-bottom)}
+  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+  header h1{font-size:1.5rem;margin:0;letter-spacing:-.02em}
+  header p{margin:.25rem 0 0;color:var(--muted);font-size:.9rem}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .stage{position:relative;background:var(--panel-2);min-height:200px;display:flex;align-items:center;justify-content:center}
+  .stage canvas{max-width:100%;height:auto;display:block}
+  .drop{padding:48px 20px;text-align:center;color:var(--muted);font-size:.95rem}
+  .controls{display:flex;gap:10px;padding:14px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button,label.btn{font:inherit;font-weight:600;font-size:.9rem;border-radius:10px;padding:10px 16px;
+    border:1px solid var(--line);background:var(--panel-2);color:var(--fg);cursor:pointer;flex:1;text-align:center;min-width:120px}
+  label.btn{background:var(--accent);color:#06100e;border-color:transparent}
+  button:disabled{opacity:.4;cursor:default}
+  input[type=file]{display:none}
+  .status{font-size:.85rem;color:var(--muted);padding:0 2px}
+  .status.err{color:var(--off)}
+
+  /* Score block */
+  .score{display:flex;align-items:center;gap:18px;padding:18px}
+  .scoreDial{--v:0;flex:0 0 auto;width:92px;height:92px;border-radius:50%;
+    background:conic-gradient(var(--accent) calc(var(--v)*1%), var(--panel-2) 0);
+    display:flex;align-items:center;justify-content:center;position:relative}
+  .scoreDial::before{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--panel)}
+  .scoreDial b{position:relative;font-family:var(--mono);font-size:1.7rem;font-weight:700}
+  .scoreMeta{min-width:0}
+  .scoreMeta h2{margin:0;font-size:1rem}
+  .scoreMeta p{margin:.2rem 0 0;color:var(--muted);font-size:.78rem}
+  .prov{margin:0 14px 14px;font-size:.74rem;color:var(--warn);font-family:var(--mono);
+    border:1px dashed var(--line);border-radius:8px;padding:8px 10px}
+
+  .section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;padding:14px 14px 2px}
+  .metrics{display:flex;flex-direction:column}
+  .metric{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px;align-items:baseline}
+  .metric+.metric{border-top:1px solid var(--line)}
+  .metric .name{font-weight:600;font-size:.95rem}
+  .metric .ideal{grid-column:1;color:var(--muted);font-size:.78rem;font-family:var(--mono)}
+  .metric .val{grid-column:2;grid-row:1;font-family:var(--mono);font-size:1.05rem;font-variant-numeric:tabular-nums;font-weight:600}
+  .metric .bar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--panel-2);position:relative;margin-top:6px;overflow:hidden}
+  .metric .bar>i{position:absolute;top:0;bottom:0;border-radius:3px}
+  .tag{grid-column:2;grid-row:2;justify-self:end;font-size:.72rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+  .tag.good{color:var(--good)} .tag.warn{color:var(--warn)} .tag.off{color:var(--off)}
+  .note{color:var(--muted);font-size:.8rem;padding:0 2px}
+  footer{color:var(--muted);font-size:.78rem;text-align:center;padding-top:4px}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Mirror</h1>
+    <p>Objective facial metrics from a front-facing photo. Everything runs on your device — the image never leaves it.</p>
+  </header>
+
+  <div class="card">
+    <div class="stage" id="stage">
+      <div class="drop" id="drop">Loading analysis engine…</div>
+      <canvas id="canvas" class="hide"></canvas>
+    </div>
+    <div class="controls">
+      <label class="btn" for="file">Choose photo</label>
+      <input type="file" id="file" accept="image/*">
+      <button id="toggle" disabled>Hide overlay</button>
+    </div>
+  </div>
+
+  <div class="status" id="status">Use a straight-on photo, face level, even lighting, hair off the forehead. Angle and shadows move every number.</div>
+
+  <div class="card hide" id="scoreCard">
+    <div class="score">
+      <div class="scoreDial" id="dial"><b id="scoreNum">–</b></div>
+      <div class="scoreMeta">
+        <h2>Composite index</h2>
+        <p id="scoreBreak"></p>
+      </div>
+    </div>
+    <div class="prov" id="prov">Weights provisional — equal-weighted, not yet fit to human ratings. Run train_score.py against SCUT-FBP5500 to replace them with benchmarked weights.</div>
+  </div>
+
+  <div class="card hide" id="results">
+    <div class="section-label">Proportions</div>
+    <div class="metrics" id="m-prop"></div>
+    <div class="section-label">Symmetry</div>
+    <div class="metrics" id="m-sym"></div>
+    <div class="section-label">Skin</div>
+    <div class="metrics" id="m-skin"></div>
+  </div>
+
+  <div class="note hide" id="disclaimer">
+    These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The composite index is a transparent sum of the markers below; it means something only once its weights are benchmarked. Lighting, angle and expression all move the numbers.
+  </div>
+
+  <footer>Mirror · landmarks: MediaPipe FaceLandmarker · skin + geometry computed locally</footer>
+</div>
+
+<script type="module">
+import { FilesetResolver, FaceLandmarker }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.20";
+
+const $ = id => document.getElementById(id);
+const drop=$('drop'), canvas=$('canvas'), ctx=canvas.getContext('2d',{willReadFrequently:true});
+const status=$('status'), results=$('results'), toggleBtn=$('toggle');
+
+const IDX={ chin:152,forehead:10,noseBottom:2, lBrow:105,rBrow:334,
+  lEyeOuter:33,lEyeInner:133,rEyeOuter:263,rEyeInner:362,
+  mouthL:61,mouthR:291,upperLip:0,lowerLip:17,
+  lFace:234,rFace:454,lCheek:50,rCheek:280, foreheadMid:151, lCheek2:205,rCheek2:425 };
+
+// PROVISIONAL weights — replace with benchmarked output of train_score.py
+const WEIGHTS={ symmetry:0.25, proportion:0.35, skinEven:0.20, skinSmooth:0.20 };
+
+let landmarker=null,lastPts=null,baseImg=null,showOverlay=true;
+const D=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+
+/* ---------- sRGB -> Lab (compact) ---------- */
+function rgb2lab(r,g,b){
+  r/=255;g/=255;b/=255;
+  r=r>0.04045?((r+0.055)/1.055)**2.4:r/12.92;
+  g=g>0.04045?((g+0.055)/1.055)**2.4:g/12.92;
+  b=b>0.04045?((b+0.055)/1.055)**2.4:b/12.92;
+  let x=(r*0.4124+g*0.3576+b*0.1805)/0.95047;
+  let y=(r*0.2126+g*0.7152+b*0.0722);
+  let z=(r*0.0193+g*0.1192+b*0.9505)/1.08883;
+  const f=t=>t>0.008856?Math.cbrt(t):7.787*t+16/116;
+  x=f(x);y=f(y);z=f(z);
+  return [116*y-16, 500*(x-y), 200*(y-z)]; // L,a,b
+}
+
+/* sample a square patch of pixels centered on a landmark */
+function patch(img,cx,cy,r){
+  const x0=Math.max(0,cx-r),y0=Math.max(0,cy-r);
+  const w=Math.min(img.width-x0,r*2),h=Math.min(img.height-y0,r*2);
+  if(w<=0||h<=0) return null;
+  return ctx.getImageData(x0,y0,w,h);
+}
+
+function skinMetrics(P){
+  const r=Math.max(6,Math.round(canvas.width*0.03));
+  const spots=[P[IDX.foreheadMid],P[IDX.lCheek],P[IDX.rCheek],P[IDX.lCheek2],P[IDX.rCheek2]];
+  const Ls=[],As=[],lumAll=[];
+  let texSum=0,texN=0;
+  for(const s of spots){
+    const d=patch(canvas,Math.round(s[0]),Math.round(s[1]),r);
+    if(!d) continue;
+    const {data,width,height}=d;
+    for(let i=0;i<data.length;i+=4){
+      const lab=rgb2lab(data[i],data[i+1],data[i+2]);
+      Ls.push(lab[0]);As.push(lab[1]);lumAll.push(lab[0]);
+    }
+    // local texture: mean abs horizontal luminance gradient inside patch
+    for(let y=0;y<height;y++) for(let x=1;x<width;x++){
+      const i=(y*width+x)*4, j=(y*width+x-1)*4;
+      const l1=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+      const l0=0.299*data[j]+0.587*data[j+1]+0.114*data[j+2];
+      texSum+=Math.abs(l1-l0);texN++;
+    }
+  }
+  if(!Ls.length) return null;
+  const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+  const std=a=>{const m=mean(a);return Math.sqrt(mean(a.map(v=>(v-m)**2)));};
+  const evenStd=std(lumAll);          // lower = more even tone
+  const redA=mean(As);                // Lab a*, higher = redder
+  const tex=texSum/texN;              // lower = smoother
+  const even01=Math.max(0,Math.min(1,1-evenStd/25));
+  const smooth01=Math.max(0,Math.min(1,1-tex/30));
+  return {evenStd,redA,tex,even01,smooth01};
+}
+
+function geometry(L){
+  const p={}; for(const k in IDX) p[k]=L[IDX[k]];
+  const browY=(p.lBrow[1]+p.rBrow[1])/2;
+  const upper=Math.abs(browY-p.forehead[1]), mid=Math.abs(p.noseBottom[1]-browY), low=Math.abs(p.chin[1]-p.noseBottom[1]);
+  const tot=upper+mid+low;
+  const eyeW=D(p.lEyeOuter,p.lEyeInner), faceW=D(p.lFace,p.rFace), inter=D(p.lEyeInner,p.rEyeInner);
+  const noseLip=Math.abs(p.upperLip[1]-p.noseBottom[1]), lipChin=Math.abs(p.chin[1]-p.lowerLip[1]);
+  const midX=(p.forehead[0]+p.chin[0])/2;
+  const pairs=[['lEyeOuter','rEyeOuter'],['mouthL','mouthR'],['lFace','rFace'],['lBrow','rBrow'],['lCheek','rCheek']];
+  let asym=0; for(const [l,r] of pairs){const dl=Math.abs(p[l][0]-midX),dr=Math.abs(p[r][0]-midX);asym+=Math.abs(dl-dr)/((dl+dr)/2||1);}
+  const sym=Math.max(0,1-asym/pairs.length);
+  return {
+    thirds:[upper/tot,mid/tot,low/tot], faceW:faceW/eyeW, eyeSpace:inter/eyeW,
+    lip:noseLip/lipChin, sym
+  };
+}
+
+function closeness(val,ideal,tol){ return Math.max(0,1-Math.abs(val-ideal)/(tol*3)); } // 1 at ideal → 0 at 3*tol
+
+function compute(L){
+  const g=geometry(L), s=skinMetrics(L);
+  const prop=[
+    {name:'Upper third',val:g.thirds[0],ideal:0.333,fmt:'ratio',tol:0.04,help:'0.333 ideal'},
+    {name:'Middle third',val:g.thirds[1],ideal:0.333,fmt:'ratio',tol:0.04,help:'0.333 ideal'},
+    {name:'Lower third',val:g.thirds[2],ideal:0.333,fmt:'ratio',tol:0.04,help:'0.333 ideal'},
+    {name:'Face width',val:g.faceW,ideal:5.0,fmt:'x',tol:0.5,help:'5.0 eye-widths ideal'},
+    {name:'Eye spacing',val:g.eyeSpace,ideal:1.0,fmt:'x',tol:0.15,help:'1.0 eye-width ideal'},
+    {name:'Lip position',val:g.lip,ideal:0.5,fmt:'x',tol:0.12,help:'0.5 ideal'},
+  ];
+  const sym=[{name:'Overall symmetry',val:g.sym,ideal:1.0,fmt:'pct',tol:0.05,help:'1.00 = perfect',oneSided:true}];
+  const skin = s?[
+    {name:'Tone evenness',val:s.even01,ideal:1.0,fmt:'pct',tol:0.15,help:'higher = more even (ΔL '+s.evenStd.toFixed(1)+')',oneSided:true},
+    {name:'Smoothness',val:s.smooth01,ideal:1.0,fmt:'pct',tol:0.15,help:'higher = less texture',oneSided:true},
+    {name:'Redness (Lab a*)',val:s.redA,ideal:12,fmt:'raw',tol:6,help:'~12 typical; higher = redder'},
+  ]:[];
+  // component sub-scores 0..1
+  const propScore=(closeness(g.thirds[0],.333,.04)+closeness(g.thirds[1],.333,.04)+closeness(g.thirds[2],.333,.04)
+    +closeness(g.faceW,5,.5)+closeness(g.eyeSpace,1,.15)+closeness(g.lip,.5,.12))/6;
+  const comps={symmetry:g.sym,proportion:propScore,skinEven:s?s.even01:0.5,skinSmooth:s?s.smooth01:0.5};
+  let score=0; for(const k in WEIGHTS) score+=WEIGHTS[k]*comps[k];
+  return {prop,sym,skin,score:score*100,comps};
+}
+
+function fmtVal(v,fmt){
+  if(fmt==='pct')return(v*100).toFixed(1)+'%';
+  if(fmt==='x')return v.toFixed(2)+'×';
+  if(fmt==='raw')return v.toFixed(1);
+  return v.toFixed(3);
+}
+function grade(m){const d=Math.abs(m.val-m.ideal);if(m.oneSided&&m.val>=m.ideal)return'good';if(d<=m.tol)return'good';if(d<=m.tol*2)return'warn';return'off';}
+
+function rows(boxId,arr){
+  const box=$(boxId);box.innerHTML='';
+  for(const m of arr){
+    const g=grade(m), dev=g==='good'?'in range':g==='warn'?'close':'off';
+    const span=m.tol*3; let pos=0.5+(m.val-m.ideal)/(2*span); pos=Math.max(.02,Math.min(.98,pos));
+    const el=document.createElement('div');el.className='metric';
+    el.innerHTML=`<span class="name">${m.name}</span><span class="val">${fmtVal(m.val,m.fmt)}</span>
+      <span class="ideal">${m.help}</span><span class="tag ${g}">${dev}</span>
+      <span class="bar"><i style="left:${(pos*100).toFixed(1)}%;width:6px;transform:translateX(-50%);background:var(--${g})"></i></span>`;
+    box.appendChild(el);
+  }
+}
+
+function render(r){
+  rows('m-prop',r.prop); rows('m-sym',r.sym); rows('m-skin',r.skin);
+  results.classList.remove('hide'); $('disclaimer').classList.remove('hide');
+  const n=Math.round(r.score);
+  $('dial').style.setProperty('--v',n); $('scoreNum').textContent=n;
+  $('scoreBreak').textContent=`sym ${Math.round(r.comps.symmetry*100)} · prop ${Math.round(r.comps.proportion*100)} · even ${Math.round(r.comps.skinEven*100)} · smooth ${Math.round(r.comps.skinSmooth*100)}`;
+  $('scoreCard').classList.remove('hide');
+}
+
+function draw(){
+  if(!baseImg)return;
+  ctx.drawImage(baseImg,0,0,canvas.width,canvas.height);
+  if(!showOverlay||!lastPts)return;
+  const P=lastPts;
+  ctx.fillStyle='rgba(70,214,198,0.5)';
+  for(const pt of P){ctx.beginPath();ctx.arc(pt[0],pt[1],1.1,0,7);ctx.fill();}
+  const browY=(P[IDX.lBrow][1]+P[IDX.rBrow][1])/2;
+  ctx.strokeStyle='rgba(232,178,74,0.9)';ctx.lineWidth=1.5;
+  for(const y of[P[IDX.forehead][1],browY,P[IDX.noseBottom][1],P[IDX.chin][1]]){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
+  const midX=(P[IDX.forehead][0]+P[IDX.chin][0])/2;
+  ctx.strokeStyle='rgba(232,112,90,0.9)';ctx.beginPath();ctx.moveTo(midX,0);ctx.lineTo(midX,canvas.height);ctx.stroke();
+}
+
+function handleImage(file){
+  status.textContent='Analyzing…';status.classList.remove('err');
+  const img=new Image();
+  img.onload=()=>{
+    const scale=Math.min(1,520/img.width);
+    canvas.width=img.width*scale;canvas.height=img.height*scale;
+    baseImg=img;drop.classList.add('hide');canvas.classList.remove('hide');
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    try{
+      const res=landmarker.detect(canvas);
+      if(!res.faceLandmarks||!res.faceLandmarks.length){
+        status.textContent='No face found. Try a clearer, front-facing photo.';status.classList.add('err');lastPts=null;draw();return;
+      }
+      lastPts=res.faceLandmarks[0].map(l=>[l.x*canvas.width,l.y*canvas.height]);
+      const r=compute(lastPts);
+      draw(); render(r); toggleBtn.disabled=false;
+      status.textContent='Done. Yellow = thirds, red = midline, dots = 468 landmarks.';
+    }catch(e){status.textContent='Analysis error: '+e.message;status.classList.add('err');}
+    URL.revokeObjectURL(img.src);
+  };
+  img.onerror=()=>{status.textContent='Could not read that image.';status.classList.add('err');};
+  img.src=URL.createObjectURL(file);
+}
+
+$('file').addEventListener('change',e=>{if(e.target.files[0])handleImage(e.target.files[0]);});
+toggleBtn.addEventListener('click',()=>{showOverlay=!showOverlay;draw();toggleBtn.textContent=showOverlay?'Hide overlay':'Show overlay';});
+
+(async()=>{
+  try{
+    const fileset=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.20/wasm");
+    landmarker=await FaceLandmarker.createFromOptions(fileset,{
+      baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"},
+      runningMode:"IMAGE",numFaces:1});
+    drop.textContent='Choose a front-facing photo to begin.';
+  }catch(e){drop.textContent='Engine failed to load. Needs internet on first run. ('+e.message+')';}
+})();
+</script>
+
+<script>
+try{ if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{try{r.update();}catch(e){}}).catch(()=>{});
+}}catch(e){}
+</script>
+</body>
+</html>
