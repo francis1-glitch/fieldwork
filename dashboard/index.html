@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#edecea">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Center">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Command Center</title>
+<style>
+  /* Shared suite identity: porcelain ground, graphite ink, serif display. Tile grid of live app state. */
+  :root{
+    --bg:#edecea; --surface:#fcfcfb; --surface-2:#e5e4e1; --line:#dad9d4;
+    --ink:#19191b; --muted:#84847e; --accent:#19191b; --accent-ink:#fcfcfb;
+    --display:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+    --sans:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#161618; --surface:#1f1f22; --surface-2:#282829; --line:#34343a;
+      --ink:#efefe9; --muted:#9a9a92; --accent:#efefe9; --accent-ink:#161618; color-scheme:dark; }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding:max(18px,env(safe-area-inset-left)) max(18px,env(safe-area-inset-right));
+    padding-block:34px calc(env(safe-area-inset-bottom) + 24px)}
+  .wrap{max-width:600px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+  header{padding:0 2px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+  .title .eyebrow{font-size:.66rem;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .title h1{font-family:var(--display);font-weight:600;font-size:2.7rem;line-height:.95;letter-spacing:-.01em;margin:.3rem 0 0}
+  .today{font-size:.78rem;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  a.tile{display:flex;flex-direction:column;justify-content:space-between;gap:14px;min-height:148px;
+    text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);
+    border-radius:18px;padding:18px;box-shadow:0 1px 2px rgba(20,16,10,.03),0 18px 40px -30px rgba(20,16,10,.3);
+    transition:border-color .15s,transform .12s}
+  a.tile:hover{border-color:var(--ink)}
+  a.tile:active{transform:scale(.99)}
+  .tile .name{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .tile .val{font-family:var(--display);font-weight:600;font-size:2.6rem;line-height:.9;color:var(--ink);
+    font-variant-numeric:tabular-nums}
+  .tile .val.soft{color:var(--muted)}
+  .tile .sub{font-size:.82rem;color:var(--muted);margin-top:2px}
+  .foot{color:var(--muted);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;text-align:center;padding-top:4px}
+  .foot a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">
+      <div class="eyebrow">Fieldwork</div>
+      <h1>Command Center</h1>
+    </div>
+    <div class="today" id="today"></div>
+  </header>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="foot">Live from this device · <a href="../">Open Fieldwork</a> · Center v1.0</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+
+// Reads another app's saved state from shared same-origin storage. Null if never opened here.
+function load(key){ try{ return JSON.parse(localStorage.getItem(key) || "null"); }catch(e){ return null; } }
+const len = v => Array.isArray(v) ? v.length : (v && typeof v === "object" ? Object.keys(v).length : 0);
+const plural = (n,w) => n + " " + w + (n === 1 ? "" : "s");
+
+// Each tile reads one app's real stored state and returns {value, sub}, or null if no data yet.
+const TILES = [
+  { name:"Nemesis", href:"../nemesis/", read(){
+      const s = load("nemesis.v1"); if(!s) return null;
+      const wks = len(s.shows || s.weeks);
+      return { value: wks, sub: wks === 1 ? "week in" : "weeks in" };
+  }},
+  { name:"Palate", href:"../palate/", read(){
+      const s = load("palate.v1"); if(!s) return null;
+      const n = len(s.ratings);
+      return { value: n, sub: plural(n,"rating") };
+  }},
+  { name:"Dry Run", href:"../dryrun/", read(){
+      const s = load("dryrun.v1"); if(!s) return null;
+      const n = len(s.scenes);
+      return { value: n, sub: plural(n,"rehearsal") };
+  }},
+  { name:"Second Brain", href:"../brain/", read(){
+      const s = load("brain.v1"); if(!s) return null;
+      const n = len(s.notes);
+      return { value: n, sub: plural(n,"note") };
+  }},
+  { name:"Mirror", href:"../mirror/", read(){
+      const s = load("mirror.v1");
+      if(s && s.lastScore != null) return { value: Math.round(s.lastScore), sub:"last score" };
+      return { value:"—", sub:"tap to analyze", soft:true };
+  }},
+];
+
+function render(){
+  const grid = $("#grid");
+  grid.innerHTML = "";
+  for(const t of TILES){
+    let r;
+    try { r = t.read(); } catch(e){ r = null; }
+    const soft = !r || r.soft;
+    const value = r ? r.value : "—";
+    const sub = r ? r.sub : "open to sync";
+    const a = document.createElement("a");
+    a.className = "tile";
+    a.href = t.href;
+    a.innerHTML =
+      '<div class="name">' + t.name + '</div>' +
+      '<div><div class="val' + (soft ? " soft" : "") + '">' + value + '</div>' +
+      '<div class="sub">' + sub + '</div></div>';
+    grid.appendChild(a);
+  }
+}
+
+function setToday(){
+  try{
+    $("#today").textContent = new Date().toLocaleDateString(undefined,
+      { weekday:"long", month:"short", day:"numeric" });
+  }catch(e){}
+}
+
+setToday();
+render();
+// refresh when returning to the tab (another app may have updated its state)
+document.addEventListener("visibilitychange", () => { if(!document.hidden) render(); });
+
+try{ if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(r=>{try{r.update();}catch(e){}}).catch(()=>{});
+}}catch(e){}
+</script>
+</body>
+</html>
