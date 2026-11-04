@@ -1386,17 +1386,42 @@ const ghToken=()=>{ try{ return localStorage.getItem(GHKEY)||''; }catch(e){ retu
 const setGhToken=t=>{ try{ t?localStorage.setItem(GHKEY,t):localStorage.removeItem(GHKEY); }catch(e){} };
 const b64=str=>{ const b=new TextEncoder().encode(str); let s=''; for(let i=0;i<b.length;i+=0x8000) s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000)); return btoa(s); };
 const unb64=s=>{ const bin=atob(s.replace(/\s/g,'')); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new TextDecoder().decode(u); };
-async function ghPut(path, text, message){
-  const url=`https://api.github.com/repos/${REPO.owner}/${REPO.repo}/contents/${path}`;
-  const H={Authorization:'Bearer '+ghToken(), Accept:'application/vnd.github+json'};
-  let sha=null;
-  const g=await fetch(url+'?ref=main',{headers:H,cache:'no-store'});
-  if(g.status===401||g.status===403) throw new Error('GitHub refused the token. Check it can write to '+REPO.repo+'.');
-  if(g.ok){ const j=await g.json(); sha=j.sha; if(j.content&&unb64(j.content)===text) return false; }
-  const p=await fetch(url,{method:'PUT',headers:H,body:JSON.stringify({message,content:b64(text),sha:sha||undefined,branch:'main'})});
-  if(!p.ok){ const j=await p.json().catch(()=>({})); throw new Error(j.message||('GitHub error '+p.status)); }
-  return true;
+async function ghReq(method, path, body){
+  const r=await fetch(`https://api.github.com/repos/${REPO.owner}/${REPO.repo}${path}`,{method,cache:'no-store',
+    headers:Object.assign({Authorization:'Bearer '+ghToken(), Accept:'application/vnd.github+json'}, body?{'Content-Type':'application/json'}:{}),
+    body:body?JSON.stringify(body):undefined});
+  if(r.status===401||r.status===403) throw Object.assign(new Error('GitHub refused the token. Check it can write to '+REPO.repo+'.'),{fatal:true});
+  if(!r.ok){ const j=await r.json().catch(()=>({})); throw Object.assign(new Error(j.message||('GitHub error '+r.status)),{status:r.status}); }
+  return r.json();
 }
+// Git's own fingerprint for a file, so unchanged files are skipped without downloading them.
+async function blobSha(text){
+  const b=new TextEncoder().encode(text), h=new TextEncoder().encode('blob '+b.length+'\0'), all=new Uint8Array(h.length+b.length);
+  all.set(h); all.set(b,h.length);
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-1',all))].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+// Writes several files as ONE commit (one site rebuild, not four). Skips unchanged files.
+// Retries when GitHub hiccups (5xx), the connection drops, or another commit landed first (409/422).
+async function ghCommitFiles(files, message){
+  for(let attempt=1;;attempt++){
+    try{
+      const head=(await ghReq('GET','/git/ref/heads/main')).object.sha;
+      const baseTree=(await ghReq('GET','/git/commits/'+head)).tree.sha;
+      const have=new Map((await ghReq('GET','/git/trees/'+baseTree+'?recursive=1')).tree.filter(e=>e.type==='blob').map(e=>[e.path,e.sha]));
+      const changed=[]; for(const f of files) if(have.get(f.path)!==await blobSha(f.text)) changed.push(f);
+      if(!changed.length) return 0;
+      const tree=await ghReq('POST','/git/trees',{base_tree:baseTree, tree:changed.map(f=>({path:f.path, mode:'100644', type:'blob', content:f.text}))});
+      const commit=await ghReq('POST','/git/commits',{message, tree:tree.sha, parents:[head]});
+      await ghReq('PATCH','/git/refs/heads/main',{sha:commit.sha, force:false});
+      return changed.length;
+    }catch(e){
+      const transient=!e.fatal&&(!e.status||e.status>=500||e.status===409||e.status===422);
+      if(!transient||attempt>=4) throw e;
+      await new Promise(r=>setTimeout(r,1500*attempt*attempt));
+    }
+  }
+}
+const ghFriendly=e=>e.fatal?e.message:!e.status?'no connection to GitHub':e.status>=500?'GitHub server error '+e.status:e.message;
 function stremioMetas(kind){
   const {top}=recommend(kind,40,{anyService:true});
   return top.filter(([it])=>it.imdb).slice(0,30).map(([it,p])=>{
@@ -1421,15 +1446,16 @@ async function sendToStremio(quiet){
   try{
     const base=[REPO.dir,'stremio','catalog'].filter(Boolean).join('/');
     if(!Core.catalog().items.some(it=>it.imdb)){ if(!quiet) toast('Your catalog copy is out of date. Close and reopen Palate, then send again.'); return; }
-    const m=stremioMetas('movie'), t=stremioMetas('tv');
-    const a=await ghPut(base+'/movie/palate-movies.json', JSON.stringify({metas:m}), 'Palate picks for Stremio (movies)');
-    const b=await ghPut(base+'/series/palate-shows.json', JSON.stringify({metas:t}), 'Palate picks for Stremio (shows)');
-    const fm=stremioFavorites('movie'), ft=stremioFavorites('tv');
-    const c=await ghPut(base+'/movie/palate-favorites-movies.json', JSON.stringify({metas:fm}), 'Palate favorites for Stremio (movies)');
-    const d=await ghPut(base+'/series/palate-favorites-shows.json', JSON.stringify({metas:ft}), 'Palate favorites for Stremio (shows)');
-    S.stremio={at:Date.now(), movies:m.length, shows:t.length, favs:fm.length+ft.length}; save();
-    if(!quiet) toast(a||b||c||d?`Sent ${m.length+t.length} picks and ${fm.length+ft.length} favorites. Stremio shows them in a minute or two.`:'Stremio already has your latest picks.');
-  }catch(e){ if(!quiet) toast(e.message); else S.stremioErr=e.message; }
+    const m=stremioMetas('movie'), t=stremioMetas('tv'), fm=stremioFavorites('movie'), ft=stremioFavorites('tv');
+    const n=await ghCommitFiles([
+      {path:base+'/movie/palate-movies.json', text:JSON.stringify({metas:m})},
+      {path:base+'/series/palate-shows.json', text:JSON.stringify({metas:t})},
+      {path:base+'/movie/palate-favorites-movies.json', text:JSON.stringify({metas:fm})},
+      {path:base+'/series/palate-favorites-shows.json', text:JSON.stringify({metas:ft})},
+    ], 'Palate: update Stremio picks and favorites');
+    S.stremio={at:Date.now(), movies:m.length, shows:t.length, favs:fm.length+ft.length}; delete S.stremioErr; save();
+    if(!quiet) toast(n?`Sent ${m.length+t.length} picks and ${fm.length+ft.length} favorites. Stremio shows them in a minute or two.`:'Stremio already has your latest picks.');
+  }catch(e){ const msg=ghFriendly(e); if(!quiet) toast(msg); else { S.stremioErr={msg, at:Date.now()}; save(); } }
   finally{ stremioBusy=false; if(view==='settings'&&!document.querySelector('.scrim')) render(); }
 }
 let stremioTimer=null;
@@ -1451,7 +1477,9 @@ function stremioCard(){
   const st=S.stremio;
   card.append(...[
     el('div',{class:'small muted',text: st?`Last sent ${new Date(st.at).toLocaleString()} · ${st.movies} movie and ${st.shows} show picks, ${st.favs??0} favorites (hearted first, then your 4★+ titles). Stremio gets titles only, not your star ratings.`:'Not sent yet.'}),
-    S.stremioErr?el('div',{class:'small',style:'color:var(--bad)',text:S.stremioErr}):null,
+    S.stremioErr?el('div',{class:'small',style:'color:var(--bad)',text:
+      typeof S.stremioErr==='string' ? 'An earlier automatic send failed ('+S.stremioErr+'). Tap Send picks now to retry.'
+      : 'Automatic send failed '+new Date(S.stremioErr.at).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+' ('+S.stremioErr.msg+'). Tap Send picks now to retry; it clears once a send works.'}):null,
     el('div',{class:'label',text:'Add-on link (paste in Stremio → Add-ons → search box)'}),
     el('div',{class:'small',style:'word-break:break-all;font-weight:600',text:ADDON_URL}),
     el('div',{class:'row'},
@@ -1507,6 +1535,7 @@ function viewSettings(w){
     'Movie & TV data and images from ',el('a',{href:'https://www.themoviedb.org',target:'_blank',rel:'noopener',text:'TMDB'}),
     '. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming info via JustWatch. Taste vectors derived from MovieLens (GroupLens Research). Books from ',
     el('a',{href:'https://openlibrary.org',target:'_blank',rel:'noopener',text:'Open Library'}),'.'));
+  w.append(el('div',{class:'tiny muted',style:'text-align:center;letter-spacing:.12em;text-transform:uppercase;padding:4px 0 8px',text:'Palate v1.14'}));
 }
 
 render();
