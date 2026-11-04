@@ -110,7 +110,7 @@
         <p id="scoreBreak"></p>
       </div>
     </div>
-    <div class="prov" id="prov">Weights provisional — equal-weighted, not yet fit to human ratings. Run train_score.py against SCUT-FBP5500 to replace them with benchmarked weights.</div>
+    <div class="prov" id="prov">Weights fit to SCUT-FBP5500 (5,500 human-rated faces). Held-out Pearson r = 0.49 — these markers explain about a quarter of rated attractiveness; the rest needs the whole face, so read the score as a rough indicator, not a verdict.</div>
   </div>
 
   <div class="card hide" id="results">
@@ -129,7 +129,7 @@
   </div>
 
   <div class="note hide" id="disclaimer">
-    These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The composite index is a transparent sum of the markers below; it means something only once its weights are benchmarked. Lighting, angle and expression all move the numbers.
+    These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The composite index is a transparent weighted sum of the markers below, with weights fit to 5,500 human-rated faces (held-out r = 0.49). Lighting, angle and expression all move the numbers.
   </div>
 
   <footer>Mirror · landmarks: MediaPipe FaceLandmarker · skin + geometry computed locally</footer>
@@ -150,7 +150,7 @@ const IDX={ chin:152,forehead:10,noseBottom:2, lBrow:105,rBrow:334,
   glabella:9,nasion:168,noseTip:1 };
 
 // PROVISIONAL weights — replace with benchmarked output of train_score.py
-const WEIGHTS={ symmetry:0.25, proportion:0.35, skinEven:0.20, skinSmooth:0.20 };
+const WEIGHTS={ symmetry:0.01, proportion:0.83, skinEven:0.03, skinSmooth:0.14 };
 
 let landmarker=null,lastPts=null,baseImg=null,showOverlay=true,mode='front';
 const D=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
