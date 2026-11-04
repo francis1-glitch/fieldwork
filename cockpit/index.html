@@ -106,7 +106,7 @@
     <div id="brief"></div>
   </div>
 
-  <footer>Cockpit v1.1 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Cockpit v1.2 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -114,6 +114,18 @@ const $ = s => document.querySelector(s);
 const todayKey = () => new Date().toISOString().slice(0,10);
 function load(key){ try{ return JSON.parse(localStorage.getItem(key) || "null"); }catch(e){ return null; } }
 function save(key,v){ try{ localStorage.setItem(key, JSON.stringify(v)); }catch(e){} }
+
+// Raw GitHub serves committed files instantly (no Pages build). Owner/repo derived from the URL.
+const RAW = (()=>{ const parts = location.pathname.split("/").filter(Boolean).filter(p=>!/\.html$/.test(p));
+  const owner = location.hostname.split(".")[0], repo = parts[0] || "";
+  return p => "https://raw.githubusercontent.com/"+owner+"/"+repo+"/main/"+p+"?ts="+Date.now(); })();
+async function fetchData(path){
+  // raw first (instant), then the Pages-served copy as a fallback
+  for(const url of [RAW(path), "../"+path+"?ts="+Date.now()]){
+    try{ const r = await fetch(url, { cache:"no-store" }); if(r.ok) return await r.json(); }catch(e){}
+  }
+  return null;
+}
 
 /* ---------- header ---------- */
 (function(){
@@ -157,8 +169,7 @@ function fmtLeft(ms){
 async function renderNemesis(){
   const box = $("#nem");
   // repo file first (works on any device), then same-device localStorage
-  let s = null;
-  try{ const r = await fetch("../data/nemesis.json?ts=" + Date.now(), { cache:"no-store" }); if(r.ok) s = await r.json(); }catch(e){}
+  let s = await fetchData("data/nemesis.json");
   if(!s) s = load("nemesis.summary");
   if(!s){
     box.className=""; box.innerHTML =
@@ -184,9 +195,8 @@ async function renderNemesis(){
 async function renderBrief(){
   const box = $("#brief");
   try{
-    const res = await fetch("../data/brief.json?ts=" + Date.now(), { cache:"no-store" });
-    if(!res.ok) throw 0;
-    const b = await res.json();
+    const b = await fetchData("data/brief.json");
+    if(!b) throw 0;
     const fresh = b.date === todayKey();
     const events = Array.isArray(b.events) ? b.events : [];
     const pris = Array.isArray(b.priorities) ? b.priorities : [];
