@@ -648,7 +648,11 @@ function publishSummary(cur, si, you, nl, live){
     youWins: live.w, nemWins: live.l, closeMs: Math.max(0, closeTime(cur) - now()), tracks };
   const payload = JSON.stringify(summary);
   try{ localStorage.setItem('nemesis.summary', payload); }catch(e){}
-  _syncJSON = payload; scheduleSync();
+  _syncPayload = payload;
+  // signature of only the meaningful standing (no timestamp/countdown), so we push on real change, not every render
+  _syncSig = JSON.stringify({ s:si.season, w:si.week, p:!!si.pre, yw:live.w, nw:live.l,
+    t: tracks.map(x => x.id+':'+x.state+':'+x.you+':'+x.nem) });
+  scheduleSync();
 }
 /* Cross-device sync: publish the standing to the repo (token stays on this device, same pattern as Palate)
    so the Morning Cockpit reads it on any device without a backup restore. */
@@ -667,12 +671,12 @@ async function ghPut(path, text, message){
   const p = await fetch(url, { method:'PUT', headers:H, body: JSON.stringify({ message, content:_b64(text), sha: sha||undefined, branch:'main' }) });
   if (!p.ok) throw new Error('GitHub '+p.status);
 }
-let _syncJSON=null, _syncedJSON=null, _syncTimer=null;
+let _syncPayload=null, _syncSig=null, _syncedSig=null, _syncTimer=null;
 function scheduleSync(){
-  if (!ghToken() || _syncJSON === _syncedJSON) return;
+  if (!ghToken() || _syncSig === _syncedSig) return;   // only when the standing actually changed
   clearTimeout(_syncTimer);
-  _syncTimer = setTimeout(async ()=>{ const pl=_syncJSON;
-    try{ await ghPut('data/nemesis.json', pl, 'nemesis: update standing'); _syncedJSON=pl; }catch(e){} }, 2500);
+  _syncTimer = setTimeout(async ()=>{ const pl=_syncPayload, sg=_syncSig;
+    try{ await ghPut('data/nemesis.json', pl, 'nemesis: update standing'); _syncedSig=sg; }catch(e){} }, 4000);
 }
 function tickCountdown(){
   const ms = closeTime(wkKey(now())) - now();
