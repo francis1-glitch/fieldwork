@@ -3,85 +3,108 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0e1113">
+<meta name="theme-color" content="#f3efe9">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Mirror">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>Mirror</title>
 <style>
-  /* Layout: single-column instrument. Photo + overlay, then score, then metric groups. */
+  /* Chic clinical-editorial identity: porcelain ground, graphite ink, one apothecary-green accent.
+     Serif display (Cormorant) against a clean grotesque (Hanken); generous air, hairline rules. */
   :root{
-    --bg:#0e1113; --panel:#171b1e; --panel-2:#1f2429; --line:#2b3238;
-    --fg:#e8edf0; --muted:#8b979f; --accent:#46d6c6;
-    --good:#4fcf8a; --warn:#e8b24a; --off:#e8705a;
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --sans:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --bg:#f3efe9; --surface:#fbfaf7; --surface-2:#ece7dd; --line:#e4ddd0;
+    --ink:#1c1812; --muted:#8c8477; --accent:#3d5a4d; --accent-ink:#f8f6f1;
+    --good:#3d5a4d; --warn:#9a7430; --off:#a7533d;
+    --display:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+    --sans:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+    color-scheme:light;
   }
-  @media (prefers-color-scheme:light){
-    :root{ --bg:#eef1f2; --panel:#ffffff; --panel-2:#f4f6f7; --line:#dde2e5;
-      --fg:#16191c; --muted:#5d686f; --accent:#15a596; color-scheme:light; }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#15130e; --surface:#1e1b15; --surface-2:#27231a; --line:#332e24;
+      --ink:#efe9dd; --muted:#9c9484; --accent:#9dbcab; --accent-ink:#15130e;
+      --good:#9dbcab; --warn:#d2a65f; --off:#d28b70; color-scheme:dark; }
   }
   *{box-sizing:border-box}
   html,body{margin:0}
-  body{background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.5;
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;
     -webkit-font-smoothing:antialiased;
-    padding:max(16px,env(safe-area-inset-left)) max(16px,env(safe-area-inset-right));
-    padding-block:24px env(safe-area-inset-bottom)}
-  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
-  header h1{font-size:1.5rem;margin:0;letter-spacing:-.02em}
-  header p{margin:.25rem 0 0;color:var(--muted);font-size:.9rem}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-  .stage{position:relative;background:var(--panel-2);min-height:200px;display:flex;align-items:center;justify-content:center}
+    padding:max(18px,env(safe-area-inset-left)) max(18px,env(safe-area-inset-right));
+    padding-block:34px env(safe-area-inset-bottom)}
+  .wrap{max-width:540px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+
+  header{padding:0 2px}
+  .eyebrow{font-size:.66rem;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  header h1{font-family:var(--display);font-weight:600;font-size:3.1rem;line-height:.95;
+    letter-spacing:-.01em;margin:.3rem 0 0;color:var(--ink)}
+  header p{margin:.7rem 0 0;color:var(--muted);font-size:.92rem;max-width:44ch}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(20,16,10,.03),0 18px 40px -28px rgba(20,16,10,.28)}
+  .stage{position:relative;background:var(--surface-2);min-height:220px;display:flex;align-items:center;justify-content:center}
   .stage canvas{max-width:100%;height:auto;display:block}
-  .drop{padding:48px 20px;text-align:center;color:var(--muted);font-size:.95rem}
-  .controls{display:flex;gap:10px;padding:14px;border-top:1px solid var(--line);flex-wrap:wrap}
-  .modebar{display:flex;gap:8px;padding:12px 14px 0}
-  .seg{flex:1;padding:8px 10px;font:inherit;font-weight:600;font-size:.82rem;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);cursor:pointer}
-  .seg.active{background:var(--accent);color:#06100e;border-color:transparent}
-  button,label.btn{font:inherit;font-weight:600;font-size:.9rem;border-radius:10px;padding:10px 16px;
-    border:1px solid var(--line);background:var(--panel-2);color:var(--fg);cursor:pointer;flex:1;text-align:center;min-width:120px}
-  label.btn{background:var(--accent);color:#06100e;border-color:transparent}
-  button:disabled{opacity:.4;cursor:default}
+  .drop{padding:56px 22px;text-align:center;color:var(--muted);font-size:.95rem}
+
+  .modebar{display:flex;gap:6px;padding:16px 16px 0}
+  .seg{flex:1;padding:10px;font-family:var(--sans);font-weight:600;font-size:.72rem;letter-spacing:.1em;
+    text-transform:uppercase;border-radius:999px;border:1px solid var(--line);background:transparent;
+    color:var(--muted);cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+  .seg.active{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+
+  .controls{display:flex;gap:10px;padding:16px;border-top:1px solid var(--line);flex-wrap:wrap}
+  button,label.btn{font-family:var(--sans);font-weight:600;font-size:.72rem;letter-spacing:.1em;
+    text-transform:uppercase;border-radius:999px;padding:13px 18px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);cursor:pointer;flex:1;text-align:center;min-width:130px;
+    transition:border-color .15s,opacity .15s}
+  label.btn{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+  button:hover:not(:disabled){border-color:var(--ink)}
+  button:disabled{opacity:.35;cursor:default}
   input[type=file]{display:none}
-  .status{font-size:.85rem;color:var(--muted);padding:0 2px}
+  .status{font-size:.84rem;color:var(--muted);padding:0 4px;line-height:1.5}
   .status.err{color:var(--off)}
 
   /* Score block */
-  .score{display:flex;align-items:center;gap:18px;padding:18px}
-  .scoreDial{--v:0;flex:0 0 auto;width:92px;height:92px;border-radius:50%;
-    background:conic-gradient(var(--accent) calc(var(--v)*1%), var(--panel-2) 0);
+  .score{display:flex;align-items:center;gap:22px;padding:24px 22px 18px}
+  .scoreDial{--v:0;flex:0 0 auto;width:108px;height:108px;border-radius:50%;
+    background:conic-gradient(var(--accent) calc(var(--v)*1%), var(--surface-2) 0);
     display:flex;align-items:center;justify-content:center;position:relative}
-  .scoreDial::before{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--panel)}
-  .scoreDial b{position:relative;font-family:var(--mono);font-size:1.7rem;font-weight:700}
+  .scoreDial::before{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--surface)}
+  .scoreDial b{position:relative;font-family:var(--display);font-size:2.4rem;font-weight:600;color:var(--ink)}
   .scoreMeta{min-width:0}
-  .scoreMeta h2{margin:0;font-size:1rem}
-  .scoreMeta p{margin:.2rem 0 0;color:var(--muted);font-size:.78rem}
-  .prov{margin:0 14px 14px;font-size:.74rem;color:var(--warn);font-family:var(--mono);
-    border:1px dashed var(--line);border-radius:8px;padding:8px 10px}
+  .scoreMeta h2{margin:0;font-family:var(--display);font-weight:600;font-size:1.55rem;line-height:1.05}
+  .scoreMeta p{margin:.35rem 0 0;color:var(--muted);font-size:.78rem;font-variant-numeric:tabular-nums}
+  .prov{margin:0 22px 22px;font-size:.78rem;color:var(--muted);line-height:1.55;
+    border-left:2px solid var(--accent);padding:3px 0 3px 14px}
 
-  .section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;padding:14px 14px 2px}
+  .section-label{font-size:.66rem;text-transform:uppercase;letter-spacing:.2em;color:var(--muted);
+    font-weight:600;padding:20px 22px 8px}
   .metrics{display:flex;flex-direction:column}
-  .metric{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 14px;align-items:baseline}
+  .metric{display:grid;grid-template-columns:1fr auto;gap:4px 14px;padding:14px 22px;align-items:baseline}
   .metric+.metric{border-top:1px solid var(--line)}
-  .metric .name{font-weight:600;font-size:.95rem}
-  .metric .ideal{grid-column:1;color:var(--muted);font-size:.78rem;font-family:var(--mono)}
-  .metric .val{grid-column:2;grid-row:1;font-family:var(--mono);font-size:1.05rem;font-variant-numeric:tabular-nums;font-weight:600}
-  .metric .bar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--panel-2);position:relative;margin-top:6px;overflow:hidden}
+  .metric .name{font-weight:500;font-size:.98rem;color:var(--ink)}
+  .metric .ideal{grid-column:1;color:var(--muted);font-size:.76rem}
+  .metric .val{grid-column:2;grid-row:1;font-family:var(--display);font-size:1.5rem;line-height:1;
+    font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink)}
+  .metric .bar{grid-column:1/-1;height:4px;border-radius:3px;background:var(--surface-2);position:relative;margin-top:8px;overflow:hidden}
   .metric .bar>i{position:absolute;top:0;bottom:0;border-radius:3px}
-  .tag{grid-column:2;grid-row:2;justify-self:end;font-size:.72rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+  .tag{grid-column:2;grid-row:2;justify-self:end;font-size:.64rem;text-transform:uppercase;
+    letter-spacing:.12em;font-weight:600}
   .tag.good{color:var(--good)} .tag.warn{color:var(--warn)} .tag.off{color:var(--off)}
-  .note{color:var(--muted);font-size:.8rem;padding:0 2px}
-  footer{color:var(--muted);font-size:.78rem;text-align:center;padding-top:4px}
+  .note{color:var(--muted);font-size:.82rem;line-height:1.6;padding:0 4px;font-style:italic}
+  footer{color:var(--muted);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;text-align:center;padding-top:6px}
   .hide{display:none!important}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
+    <div class="eyebrow">Facial analysis</div>
     <h1>Mirror</h1>
-    <p>Objective facial metrics from a front-facing photo. Everything runs on your device — the image never leaves it.</p>
+    <p>Objective facial metrics from a single photo — proportion, symmetry, skin, and profile geometry. Everything runs on your device; the image never leaves it.</p>
   </header>
 
   <div class="card">
