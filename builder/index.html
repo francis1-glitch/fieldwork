@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <title>Builder Board</title>
 <style>
   /* Suite identity. Every project in one of four states; tap a project to see what it does and what lives inside it. */
@@ -92,6 +92,39 @@
     border:none;background:var(--accent);color:var(--accent-ink);cursor:pointer}
   .empty{color:var(--muted);font-size:.84rem;font-style:italic;padding:4px 2px}
 
+  /* Mission Control: a dark ops inset, deliberately identical in both themes */
+  :root{ --mc-bg:#111214; --mc-line:#26282c; --mc-ink:#dfe3dc; --mc-dim:#80868d;
+    --ok:#46d37f; --warn:#f2b24c; --bad:#ff5f56; --info:#5fa8ff; --off:#5d636b;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+  .mc{background-color:var(--mc-bg);color:var(--mc-ink);border:1px solid var(--mc-line);border-radius:18px;
+    padding:14px 16px 12px;font-family:var(--mono);box-shadow:0 18px 40px -28px rgba(0,0,0,.6);
+    background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px);background-size:100% 26px}
+  .mc-head{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--mc-line)}
+  .mc-title{font-size:.66rem;letter-spacing:.24em;text-transform:uppercase;color:var(--mc-dim);font-weight:600}
+  .mc-sum{margin-left:auto;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mc-dim)}
+  .mc-sum.ok{color:var(--ok)} .mc-sum.warn{color:var(--warn)} .mc-sum.bad{color:var(--bad)}
+  .mc-ref{background:none;border:1px solid var(--mc-line);color:var(--mc-dim);border-radius:8px;width:30px;height:28px;
+    cursor:pointer;font-family:var(--mono);font-size:.85rem;line-height:1}
+  .mc-ref:hover{color:var(--mc-ink);border-color:var(--mc-dim)}
+  .mc-ref:focus-visible{outline:2px solid var(--mc-ink);outline-offset:2px}
+  .mc-rows{display:flex;flex-direction:column}
+  .mc-row{display:grid;grid-template-columns:auto 1fr;column-gap:11px;row-gap:1px;padding:9px 0;border-bottom:1px dashed var(--mc-line)}
+  .mc-row .lt{grid-row:1 / 3;align-self:center}
+  .mc-name{font-size:.8rem;font-weight:500;color:var(--mc-ink)}
+  .mc-read{font-size:.72rem;color:var(--mc-dim);overflow-wrap:anywhere}
+  .mc-foot{font-size:.62rem;color:var(--mc-dim);letter-spacing:.03em;padding-top:9px;font-variant-numeric:tabular-nums}
+  .lt{display:inline-block;width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .lt.green{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .lt.amber{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+  .lt.red{background:var(--bad);box-shadow:0 0 10px var(--bad);animation:mcpulse 1.6s ease-in-out infinite}
+  .lt.info{background:var(--info);box-shadow:0 0 8px var(--info)}
+  .lt.grey{background:var(--off)}
+  @keyframes mcpulse{50%{opacity:.4}}
+  @media (prefers-reduced-motion:reduce){ .lt.red{animation:none} }
+  .hdot{flex:0 0 auto;width:7px;height:7px;border-radius:50%}
+  .hdot.green{background:var(--ok)} .hdot.amber{background:var(--warn)} .hdot.red{background:var(--bad)} .hdot.info{background:var(--info)}
+  .st-row{display:flex;gap:9px;align-items:center;font-size:.8rem;color:var(--muted);line-height:1.4}
+
   footer{color:var(--muted);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;text-align:center;padding-top:6px}
   footer a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
 </style>
@@ -103,6 +136,8 @@
     <h1>Builder Board</h1>
     <div class="sub" id="sub"></div>
   </header>
+
+  <section class="mc" id="mc" aria-label="Mission Control"></section>
 
   <div class="add">
     <input id="newTitle" type="text" placeholder="New project…" maxlength="60">
@@ -117,7 +152,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.1 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.2 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -308,6 +343,7 @@ function cardFor(it){
   card.innerHTML =
     '<div class="head">' +
       '<button class="toggle" aria-expanded="'+isOpen+'"><span class="chev"></span><span class="ttl">'+esc(it.title)+'</span>' +
+        (health[it.key] && health[it.key] !== "grey" ? '<span class="hdot '+health[it.key]+'" title="Mission Control: '+health[it.key]+'"></span>' : '') +
         (kids.length ? '<span class="inside">'+kids.length+' inside</span>' : '') + '</button>' +
       '<div class="ctl"><select aria-label="Move '+esc(it.title)+'">'+opts+'</select>' +
       '<button class="del" aria-label="Delete '+esc(it.title)+'">×</button></div>' +
@@ -331,6 +367,11 @@ function panelFor(it, kids){
   } else {
     const sm = document.createElement("p"); sm.className = "summary"; sm.textContent = it.summary; p.append(sm);
   }
+  const mine = checks.filter(c => c.keys.includes(it.key));
+  if(mine.length){
+    p.insertAdjacentHTML("beforeend", '<div class="subhead">Status</div>' +
+      mine.map(c => '<div class="st-row"><span class="lt '+c.state+'"></span><span>'+esc(c.name)+' · '+esc(c.text)+'</span></div>').join(""));
+  }
   const links = document.createElement("div"); links.className = "links";
   if(it.url) links.insertAdjacentHTML("beforeend", '<a class="open-link" href="'+esc(it.url)+'">Open '+esc(it.title)+' →</a>');
   if(!isEditing){
@@ -351,6 +392,124 @@ function panelFor(it, kids){
   return p;
 }
 
+/* ---------- Mission Control: is the machinery behind each project actually running? ---------- */
+const GH = (() => {
+  const parts = location.pathname.split("/").filter(Boolean).filter(p => !/\.html$/.test(p));
+  return /\.github\.io$/.test(location.hostname)
+    ? { owner: location.hostname.split(".")[0], repo: parts[0] || "" }
+    : { owner: "francis1-glitch", repo: "fieldwork" };   // local preview
+})();
+const API = "https://api.github.com/repos/" + GH.owner + "/" + GH.repo;
+const RAWURL = p => "https://raw.githubusercontent.com/" + GH.owner + "/" + GH.repo + "/main/" + p + "?ts=" + Date.now();
+const RANK = { red:4, amber:3, info:2, green:1, grey:0 };
+let checks = [], health = {}, checkedAt = null, scanning = false;
+
+async function ghJSON(path){
+  const ck = "mc:" + path;
+  try{ const c = JSON.parse(sessionStorage.getItem(ck) || "null"); if(c && Date.now() - c.t < 120000) return c.d; }catch(e){}
+  const r = await fetch(API + path, { headers:{ Accept:"application/vnd.github+json" } });
+  if(r.status === 403 || r.status === 429) throw new Error("rate");
+  if(!r.ok) throw new Error("http");
+  const d = await r.json();
+  try{ sessionStorage.setItem(ck, JSON.stringify({ t:Date.now(), d })); }catch(e){}
+  return d;
+}
+async function rawJSON(path){
+  try{ const r = await fetch(RAWURL(path), { cache:"no-store" });
+    if(r.status === 404) return { missing:true }; if(!r.ok) return null; return await r.json(); }catch(e){ return null; }
+}
+function ago(ts){
+  const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
+  if(s < 90) return "just now"; const m = s / 60; if(m < 60) return Math.round(m) + "m ago";
+  const h = m / 60; if(h < 36) return Math.round(h) + "h ago"; return Math.round(h / 24) + "d ago";
+}
+function etNow(){
+  const f = new Intl.DateTimeFormat("en-CA", { timeZone:"America/New_York", year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false });
+  const p = Object.fromEntries(f.formatToParts(new Date()).map(x => [x.type, x.value]));
+  return { date: p.year + "-" + p.month + "-" + p.day, mins: (Number(p.hour) % 24) * 60 + Number(p.minute) };
+}
+
+async function checkDeploys(){
+  const d = await ghJSON("/actions/runs?per_page=10");
+  const runs = (d.workflow_runs || []).filter(r => r.name === "pages build and deployment");
+  if(!runs.length) return { state:"grey", text:"no deploys found" };
+  const r = runs[0], mins = (Date.now() - new Date(r.created_at)) / 60000;
+  if(r.status !== "completed") return mins > 15
+    ? { state:"amber", text:"deploy stuck · queued " + Math.round(mins) + "m" }
+    : { state:"info", text:"deploying now" };
+  if(r.conclusion === "success") return { state:"green", text:"live · deployed " + ago(r.updated_at || r.created_at) };
+  if(r.conclusion === "cancelled"){
+    const ok = runs.find(x => x.conclusion === "success");
+    return { state:"amber", text:"last deploy cancelled" + (ok ? " · last good " + ago(ok.updated_at) : "") };
+  }
+  return { state:"red", text:"deploy failed · " + ago(r.created_at) };
+}
+async function checkWorkflow(file, weekly){
+  const d = await ghJSON("/actions/workflows/" + file + "/runs?per_page=1");
+  const r = (d.workflow_runs || [])[0];
+  if(!r) return { state:"grey", text:"never run" };
+  if(r.status !== "completed") return { state:"info", text:"running now" };
+  if(r.conclusion !== "success") return { state: weekly ? "red" : "amber", text:"last run " + r.conclusion + " · " + ago(r.created_at) };
+  if(weekly && (Date.now() - new Date(r.created_at)) / 864e5 > 8) return { state:"amber", text:"overdue · last ran " + ago(r.created_at) };
+  return { state: weekly ? "green" : "grey", text: (weekly ? "ok · ran " : "idle · last run ") + ago(r.created_at) };
+}
+async function checkBrief(){
+  const b = await rawJSON("data/brief.json");
+  if(b === null) return { state:"grey", text:"couldn't check" };
+  if(b.missing) return { state:"amber", text:"not published yet · runs daily 6:17 AM ET" };
+  const et = etNow(), n = Array.isArray(b.events) ? b.events.length : 0;
+  if(b.date === et.date) return { state:"green", text:"today's brief live · " + n + (n === 1 ? " event" : " events") };
+  if(et.mins < 7 * 60 + 15) return { state:"grey", text:"waiting on the 6:17 AM run · last " + b.date };
+  return { state:"red", text:"today's brief missing · last " + b.date };
+}
+async function checkNemesis(){
+  const s = await rawJSON("data/nemesis.json");
+  if(s === null) return { state:"grey", text:"couldn't check" };
+  if(s.missing) return { state:"amber", text:"not syncing yet · turn on sync in Nemesis" };
+  const stale = (Date.now() - s.updatedAt) / 864e5 > 8;
+  const st = s.pre ? "preseason" : "S" + s.season + " W" + s.week + " · you " + s.youWins + "–" + s.nemWins;
+  return { state: stale ? "amber" : "green", text: (stale ? "stale · " : "synced ") + ago(s.updatedAt) + " · " + st };
+}
+const CHECKS = [
+  { keys:["fieldwork"],        name:"Site deploys",       run: checkDeploys },
+  { keys:["cockpit","agents"], name:"Morning Brief feed", run: checkBrief },
+  { keys:["nemesis"],          name:"Nemesis sync",       run: checkNemesis },
+  { keys:["palate"],           name:"Palate catalog",     run: () => checkWorkflow("palate-catalog.yml", true) },
+  { keys:["palate"],           name:"Palate lab",         run: () => checkWorkflow("palate-lab.yml", false) },
+];
+
+async function runChecks(force){
+  if(scanning) return; scanning = true;
+  if(force){ try{ Object.keys(sessionStorage).filter(k => k.startsWith("mc:")).forEach(k => sessionStorage.removeItem(k)); }catch(e){} }
+  renderMC();
+  checks = await Promise.all(CHECKS.map(async c => {
+    try{ return Object.assign({}, c, await c.run()); }
+    catch(e){ return Object.assign({}, c, { state:"grey", text: e.message === "rate" ? "GitHub rate limit · try again later" : "couldn't check" }); }
+  }));
+  health = {};
+  for(const c of checks) for(const k of c.keys) if(!(k in health) || RANK[c.state] > RANK[health[k]]) health[k] = c.state;
+  checkedAt = new Date(); scanning = false;
+  renderMC(); render();
+}
+function renderMC(){
+  const el = $("#mc");
+  const bad = checks.filter(c => c.state === "red").length, warn = checks.filter(c => c.state === "amber").length;
+  const issues = bad + warn;
+  const sum = scanning && !checks.length ? '<span class="mc-sum">scanning…</span>'
+    : issues ? '<span class="mc-sum ' + (bad ? "bad" : "warn") + '">' + issues + (issues === 1 ? " issue" : " issues") + '</span>'
+    : '<span class="mc-sum ok">all systems nominal</span>';
+  const rows = checks.length
+    ? checks.map(c => '<div class="mc-row"><span class="lt ' + c.state + '"></span><span class="mc-name">' + esc(c.name) + '</span><span class="mc-read">' + esc(c.text) + '</span></div>').join("")
+    : '<div class="mc-row"><span class="lt grey"></span><span class="mc-name">Running checks</span><span class="mc-read">…</span></div>';
+  const t = checkedAt ? checkedAt.toLocaleTimeString([], { hour:"numeric", minute:"2-digit" }) : "—";
+  el.innerHTML =
+    '<div class="mc-head"><span class="mc-title">Mission Control</span>' + sum +
+    '<button class="mc-ref" id="mcRef" aria-label="Run checks again">' + (scanning ? "…" : "↻") + '</button></div>' +
+    '<div class="mc-rows">' + rows + '</div>' +
+    '<div class="mc-foot">checked ' + t + ' · scheduled tasks + NBA model not monitored yet</div>';
+  $("#mcRef").onclick = () => runChecks(true);
+}
+
 function add(){
   const t = $("#newTitle").value.trim(); if(!t) return;
   const it = { id:uid(), title:t, summary:"", url:"", status:$("#newStatus").value, children:[] };
@@ -362,6 +521,8 @@ $("#addBtn").onclick = add;
 $("#newTitle").addEventListener("keydown", e => { if(e.key === "Enter") add(); });
 
 render();
+runChecks(false);
+document.addEventListener("visibilitychange", () => { if(!document.hidden) runChecks(false); });
 
 try{ if("serviceWorker" in navigator){
   navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(r=>{try{r.update();}catch(e){}}).catch(()=>{});
