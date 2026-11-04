@@ -1,0 +1,11 @@
+{
+ "note": "Public keys for Cockpit's sealed brief. Private keys never leave the devices.",
+ "keys": [
+  {
+   "kid": "b28370fcfe74",
+   "label": "iPhone",
+   "added": "2026-11-04",
+   "spki": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtmiKUtWMe9NIh2o9cU4XwNrlAthOXKX8hUYbhB8ImrhnLQ5k/iTD1+SKRT5NIvZTx8ce3nx6OgSCKkdWZu8YO7GxmmwF2Lt+tkSH+LH5wP9pxrRfpSrRsFzbtv6GtucGeLuBPf8/l+1N3Hs9XDkwUzox+g7PfhB08Zx61k5QZdRU0//UBt3BlI97kdz5VusaE3dJ534VVLHBQ8Qo7432iNCE/5lBUXORgIRE3j9YBevTQ9CtYPIZ1AgBpVEvYK87q120oPO/RmNs1xJNOEoyOMvz6W7VObTXJQyC1P9Ah1bXu5wFvUdUUO1kGEs1DMRAQWfZUQFQcl99ITeO3JyYHQIDAQAB"
+  }
+ ]
+}
