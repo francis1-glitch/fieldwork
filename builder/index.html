@@ -152,7 +152,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.2 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.3 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -457,8 +457,9 @@ async function checkBrief(){
   const b = await rawJSON("data/brief.json");
   if(b === null) return { state:"grey", text:"couldn't check" };
   if(b.missing) return { state:"amber", text:"not published yet · runs daily 6:17 AM ET" };
-  const et = etNow(), n = Array.isArray(b.events) ? b.events.length : 0;
-  if(b.date === et.date) return { state:"green", text:"today's brief live · " + n + (n === 1 ? " event" : " events") };
+  const et = etNow(), n = b.n != null ? b.n : Array.isArray(b.events) ? b.events.length : 0;
+  if(b.locked === "no-devices" && b.date === et.date) return { state:"amber", text:"published, but no device can read it · turn on a device in Cockpit" };
+  if(b.date === et.date) return { state:"green", text:"today's brief live" + (b.v === 2 ? " (sealed)" : "") + " · " + n + (n === 1 ? " event" : " events") };
   if(et.mins < 7 * 60 + 15) return { state:"grey", text:"waiting on the 6:17 AM run · last " + b.date };
   return { state:"red", text:"today's brief missing · last " + b.date };
 }

@@ -75,6 +75,25 @@
   .ev .ttl{min-width:0}
   .pri{font-size:.9rem;padding:4px 0}
 
+  /* next up + urgency + private brief */
+  .urg{display:inline-flex;align-items:center;gap:8px;margin-top:12px;font-size:.74rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .urg b{font-family:var(--display);font-size:1.5rem;letter-spacing:0;color:var(--ink);line-height:1}
+  .urg.hot b{color:var(--behind)}
+  .next{display:flex;align-items:center;gap:16px;background:var(--ink);color:var(--bg);border-radius:18px;padding:16px 20px}
+  .next .l{flex:1;min-width:0}
+  .next .k{font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;opacity:.6;font-weight:600}
+  .next .w{font-size:1.02rem;font-weight:600;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .next .w span{opacity:.6;font-weight:500;margin-right:8px;font-variant-numeric:tabular-nums}
+  .next .in{flex:0 0 auto;font-family:var(--display);font-size:1.7rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .next.clear{background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+  .lock{padding:16px 20px 20px;display:flex;flex-direction:column;gap:12px;font-size:.88rem;color:var(--muted);line-height:1.55}
+  .lock b{color:var(--ink);font-weight:600}
+  .btn{align-self:flex-start;font:inherit;font-size:.86rem;font-weight:600;padding:10px 16px;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--bg);cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+  .btn:disabled{opacity:.5}
+  .lock input{font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+  .devline{font-size:.72rem;color:var(--muted);padding:0 20px 16px;display:flex;justify-content:space-between;gap:10px}
+  .devline button{font:inherit;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0}
   footer{color:var(--muted);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;text-align:center;padding-top:2px}
   footer a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
 </style>
@@ -85,12 +104,15 @@
     <div class="eyebrow">Fieldwork</div>
     <h1 id="greeting">Good morning</h1>
     <div class="date" id="date"></div>
+    <div class="urg" id="urg" hidden></div>
   </header>
+
+  <div class="next" id="next" hidden></div>
 
   <!-- TOP 3 -->
   <div class="card">
     <h2>Today's three</h2>
-    <div class="hint">The three that matter. They carry over until you finish them.</div>
+    <div class="hint" id="t3hint">The three that matter. They carry over until you finish them.</div>
     <div class="todo" id="todo"></div>
   </div>
 
@@ -106,12 +128,13 @@
     <div id="brief"></div>
   </div>
 
-  <footer>Cockpit v1.2 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Cockpit v1.3 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
-const todayKey = () => new Date().toISOString().slice(0,10);
+// local date (not UTC, which flips to "tomorrow" around 7–8 PM Eastern)
+const todayKey = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 function load(key){ try{ return JSON.parse(localStorage.getItem(key) || "null"); }catch(e){ return null; } }
 function save(key,v){ try{ localStorage.setItem(key, JSON.stringify(v)); }catch(e){} }
 
@@ -143,7 +166,7 @@ function getTop3(){
     // new day: keep unfinished, clear finished, roll the date
     const keep = s.items.filter(i => i.t.trim() && !i.d).map(i => ({t:i.t,d:false}));
     while(keep.length < 3) keep.push({t:"",d:false});
-    s = { date: todayKey(), items: keep.slice(0,3) };
+    s = { date: todayKey(), items: keep.slice(0,3) };   // prefilled marker resets with the day
     save(TKEY,s);
   }
   return s;
@@ -191,32 +214,132 @@ async function renderNemesis(){
     '</div>';
 }
 
-/* ---------- Today's brief (reads a file the Morning Brief agent publishes) ---------- */
-async function renderBrief(){
-  const box = $("#brief");
-  try{
-    const b = await fetchData("data/brief.json");
-    if(!b) throw 0;
-    const fresh = b.date === todayKey();
-    const events = Array.isArray(b.events) ? b.events : [];
-    const pris = Array.isArray(b.priorities) ? b.priorities : [];
-    if(!events.length && !pris.length) throw 0;
-    let html = '<div class="brief">';
-    if(!fresh) html += '<div class="hint" style="padding:0">Latest brief · '+(b.date||"")+'</div>';
-    for(const e of events) html += '<div class="ev"><div class="t">'+(e.time||"")+'</div><div class="ttl">'+e.title+'</div></div>';
-    for(const p of pris) html += '<div class="pri">• '+p+'</div>';
-    html += '</div>';
-    box.innerHTML = html;
-  }catch(e){
-    box.innerHTML =
-      '<div class="empty">No brief published yet. Your Morning Brief agent will write today’s calendar and priorities to <code>data/brief.json</code> in the repo, and they’ll appear here automatically.</div>';
+/* ---------- Today's brief: sealed so only your devices can read it ----------
+   The repo is public, so the Morning Brief encrypts brief.json to each device you turn on here.
+   Each device makes its own key pair; only the PUBLIC half is published (data/cockpit-keys.json).
+   The private half never leaves this device. Old plaintext briefs (v1) still display. */
+const KEYSTORE = "cockpit.key";
+const b64 = u => { let s=""; const a=new Uint8Array(u); for(let i=0;i<a.length;i+=0x8000) s+=String.fromCharCode.apply(null,a.subarray(i,i+0x8000)); return btoa(s); };
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const REPO = (()=>{ const parts = location.pathname.split("/").filter(Boolean).filter(p=>!/\.html$/.test(p));
+  return { owner: location.hostname.split(".")[0], repo: parts[0] || "" }; })();
+const ghToken = () => { try{ return localStorage.getItem("cockpit.gh") || localStorage.getItem("nemesis.gh") || localStorage.getItem("palate.gh") || ""; }catch(e){ return ""; } };
+const devLabel = () => { const u=navigator.userAgent; return /iPhone/.test(u)?"iPhone":/iPad/.test(u)?"iPad":/Android/.test(u)?"Android":/Windows/.test(u)?"Windows PC":/Mac/.test(u)?"Mac":"This device"; };
+
+async function ghKeys(method, body, sha){
+  const url = `https://api.github.com/repos/${REPO.owner}/${REPO.repo}/contents/data/cockpit-keys.json`;
+  const r = await fetch(url + (method==="GET" ? "?ref=main&ts="+Date.now() : ""), { method, cache:"no-store",
+    headers: { Authorization:"Bearer "+ghToken(), Accept:"application/vnd.github+json" },
+    body: method==="PUT" ? JSON.stringify({ message: body.msg, content: btoa(unescape(encodeURIComponent(JSON.stringify(body.data, null, 1)+"\n"))), sha, branch:"main" }) : undefined });
+  if(r.status===401||r.status===403) throw Object.assign(new Error("GitHub refused the token"),{fatal:true});
+  if(method==="GET" && r.status===404) return { keys:[], sha:null };
+  if(!r.ok) throw Object.assign(new Error("GitHub error "+r.status),{status:r.status});
+  const j = await r.json();
+  if(method==="GET") return { keys:(JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\s/g,""))))).keys||[]), sha:j.sha };
+  return j;
+}
+async function editKeys(change, msg){
+  for(let a=1;;a++){
+    try{ const cur = await ghKeys("GET"); await ghKeys("PUT", { msg, data:{ note:"Public keys for Cockpit's sealed brief. Private keys never leave the devices.", keys: change(cur.keys) } }, cur.sha); return; }
+    catch(e){ if(e.fatal || a>=3 || !(e.status===409||e.status===422||e.status>=500||!e.status)) throw e; await new Promise(r=>setTimeout(r,1200*a)); }
   }
 }
+async function enableDevice(){
+  const kp = await crypto.subtle.generateKey({ name:"RSA-OAEP", modulusLength:2048, publicExponent:new Uint8Array([1,0,1]), hash:"SHA-256" }, true, ["encrypt","decrypt"]);
+  const spki = b64(await crypto.subtle.exportKey("spki", kp.publicKey)), pkcs8 = b64(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
+  const kid = [...new Uint8Array(await crypto.subtle.digest("SHA-256", unb64(spki)))].slice(0,6).map(x=>x.toString(16).padStart(2,"0")).join("");
+  const label = devLabel(), added = new Date().toISOString().slice(0,10);
+  await editKeys(keys => keys.filter(k=>k.kid!==kid).concat([{ kid, label, added, spki }]), "cockpit: add a device key ("+label+")");
+  save(KEYSTORE, { kid, label, added, pkcs8 });
+}
+async function forgetDevice(){
+  const k = load(KEYSTORE); if(!k) return;
+  await editKeys(keys => keys.filter(x=>x.kid!==k.kid), "cockpit: remove a device key ("+k.label+")");
+  try{ localStorage.removeItem(KEYSTORE); }catch(e){}
+}
+async function unseal(b){
+  const k = load(KEYSTORE); if(!k) return { state:"nokey" };
+  const mine = (b.keys||[]).find(x=>x.kid===k.kid); if(!mine) return { state:"notyet" };
+  const priv = await crypto.subtle.importKey("pkcs8", unb64(k.pkcs8), { name:"RSA-OAEP", hash:"SHA-256" }, false, ["decrypt"]);
+  const raw = await crypto.subtle.decrypt({ name:"RSA-OAEP" }, priv, unb64(mine.wk));
+  const aes = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({ name:"AES-GCM", iv:unb64(b.iv) }, aes, unb64(b.ct));
+  return { state:"open", brief: JSON.parse(new TextDecoder().decode(pt)) };
+}
+
+// "9:00 AM" -> minutes after midnight
+function mins(t){ const m=/^(\d{1,2}):(\d{2})\s*([AP]M)$/i.exec(String(t||"").trim()); if(!m) return null; let h=+m[1]%12; if(/p/i.test(m[3])) h+=12; return h*60+ +m[2]; }
+function renderNext(br){
+  const el = $("#next"), now = new Date(), nm = now.getHours()*60+now.getMinutes();
+  if(!br || br.date !== todayKey()){ el.hidden = true; return; }
+  const timed = (br.events||[]).map(e=>({e, m:mins(e.time)})).filter(x=>x.m!=null).sort((a,b)=>a.m-b.m);
+  const nx = timed.find(x=>x.m >= nm-5);
+  el.hidden = false;
+  if(!nx){ el.className="next clear"; el.innerHTML='<div class="l"><div class="k">Next up</div><div class="w">'+(timed.length?"Nothing else on the calendar today.":"No timed events today.")+'</div></div>'; return; }
+  const d = nx.m - nm, inTxt = d<=0 ? "now" : d<60 ? d+"m" : Math.floor(d/60)+"h"+(d%60?" "+d%60+"m":"");
+  el.className="next"; el.innerHTML='<div class="l"><div class="k">Next up</div><div class="w"><span>'+esc(nx.e.time)+'</span>'+esc(nx.e.title)+'</div></div><div class="in">'+(d<=0?"now":"in "+inTxt)+'</div>';
+}
+function renderUrgency(br){
+  const el = $("#urg");
+  if(!br || br.date !== todayKey() || !br.urgency){ el.hidden = true; return; }
+  el.hidden = false; el.className = "urg" + (br.urgency.score>=7 ? " hot" : "");
+  el.innerHTML = 'Urgency <b>'+esc(br.urgency.score)+'</b>'+esc(br.urgency.label||"");
+}
+// Today's three: if you haven't written any yet today, start from the brief's priorities
+function prefillTop3(br){
+  if(!br || br.date !== todayKey() || !(br.priorities||[]).length) return;
+  const s = getTop3();
+  if(s.prefilled === todayKey() || s.items.some(i=>i.t.trim())) return;
+  br.priorities.slice(0,3).forEach((p,i)=>{ s.items[i] = { t:String(p).slice(0,90), d:false }; });
+  s.prefilled = todayKey(); save(TKEY, s); renderTop3();
+  $("#t3hint").textContent = "Started from your brief’s priorities. Edit freely; unfinished ones carry over.";
+}
+function briefHTML(br){
+  const fresh = br.date === todayKey(), events = Array.isArray(br.events)?br.events:[], pris = Array.isArray(br.priorities)?br.priorities:[];
+  if(!events.length && !pris.length) return '<div class="empty">'+(fresh?"Nothing on the calendar today.":"Latest brief ("+esc(br.date)+") was empty.")+'</div>';
+  let h = '<div class="brief">';
+  if(!fresh) h += '<div class="hint" style="padding:0">Latest brief · '+esc(br.date)+'</div>';
+  for(const e of events) h += '<div class="ev"><div class="t">'+esc(e.time)+'</div><div class="ttl">'+esc(e.title)+'</div></div>';
+  for(const p of pris) h += '<div class="pri">• '+esc(p)+'</div>';
+  return h + '</div>';
+}
+let busy = false;
+async function renderBrief(){
+  const box = $("#brief"), k = load(KEYSTORE);
+  const b = await fetchData("data/brief.json");
+  const devLine = k ? '<div class="devline"><span>Private brief on · '+esc(k.label)+'</span><button id="forget">Turn off on this device</button></div>' : "";
+  let br = null;
+  if(!b){ box.innerHTML = '<div class="empty">No brief published yet. The Morning Brief runs at 6:17 AM and lands here sealed.</div>' + devLine; }
+  else if(b.v !== 2){ br = b; box.innerHTML = briefHTML(b) + devLine; }          // legacy plaintext
+  else {
+    let r; try{ r = b.locked ? { state: k ? "notyet" : "nokey" } : await unseal(b); }catch(e){ r = { state:"bad" }; }
+    if(r.state === "open"){ br = r.brief; box.innerHTML = briefHTML(br) + devLine; }
+    else if(r.state === "nokey"){
+      const tok = ghToken();
+      box.innerHTML = '<div class="lock"><div><b>Your brief is sealed.</b> The repo is public, so it’s encrypted and only devices you turn on can read it'+(b.date?' (latest: '+esc(b.date)+(b.n!=null?', '+b.n+' events':'')+')':'')+'.</div>'+
+        (tok?'':'<input id="tok" type="password" autocomplete="off" placeholder="Paste your GitHub token (stays on this device)">')+
+        '<button class="btn" id="enable">Turn on this device</button><div style="font-size:.78rem">Creates a key on this device and publishes only its public half. Briefs sealed after this unlock here.</div></div>';
+      $("#enable").onclick = async () => {
+        if(busy) return; const t = $("#tok"); if(t){ const v=t.value.trim(); if(!/^(github_pat_|ghp_)/.test(v)){ t.focus(); return; } try{ localStorage.setItem("cockpit.gh", v); }catch(e){} }
+        busy = true; $("#enable").disabled = true; $("#enable").textContent = "Turning on…";
+        try{ await enableDevice(); busy=false; renderBrief(); }
+        catch(e){ busy=false; $("#enable").disabled=false; $("#enable").textContent = e.fatal ? "GitHub refused the token · retry" : "Couldn’t reach GitHub · retry"; }
+      };
+    }
+    else if(r.state === "notyet") box.innerHTML = '<div class="lock"><div><b>This device is on.</b> The latest brief ('+esc(b.date)+') was sealed before it was added, so it unlocks with the next one (6:17 AM).</div></div>' + devLine;
+    else box.innerHTML = '<div class="lock"><div><b>Couldn’t unlock this brief.</b> If you reset this device’s key, turn it off and on again; the next brief will unlock.</div></div>' + devLine;
+  }
+  const f = $("#forget"); if(f) f.onclick = async () => { if(!confirm("Turn off the private brief on this device? Its key is deleted and future briefs won’t be sealed for it.")) return; try{ await forgetDevice(); }catch(e){ alert("Couldn’t reach GitHub. Try again."); return; } renderBrief(); };
+  lastBrief = br; renderNext(br); renderUrgency(br); prefillTop3(br);
+}
+let lastBrief = null;
 
 renderTop3();
 renderNemesis();
 renderBrief();
 document.addEventListener("visibilitychange", () => { if(!document.hidden){ renderNemesis(); renderBrief(); } });
+setInterval(() => { if(!document.hidden && lastBrief) renderNext(lastBrief); }, 60000);
 
 try{ if("serviceWorker" in navigator){
   navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(r=>{try{r.update();}catch(e){}}).catch(()=>{});
