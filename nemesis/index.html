@@ -646,7 +646,33 @@ function publishSummary(cur, si, you, nl, live){
   }));
   const summary = { updatedAt: Date.now(), pre: !!si.pre, season: si.season, week: si.week, len: SEASON_LEN,
     youWins: live.w, nemWins: live.l, closeMs: Math.max(0, closeTime(cur) - now()), tracks };
-  try{ localStorage.setItem('nemesis.summary', JSON.stringify(summary)); }catch(e){}
+  const payload = JSON.stringify(summary);
+  try{ localStorage.setItem('nemesis.summary', payload); }catch(e){}
+  _syncJSON = payload; scheduleSync();
+}
+/* Cross-device sync: publish the standing to the repo (token stays on this device, same pattern as Palate)
+   so the Morning Cockpit reads it on any device without a backup restore. */
+const GHKEY_N = 'nemesis.gh';
+const GHREPO = (()=>{ const parts=location.pathname.split('/').filter(Boolean).filter(p=>!/\.html$/.test(p));
+  return { owner: location.hostname.split('.')[0], repo: parts[0]||'' }; })();
+const ghToken = ()=>{ try{ return localStorage.getItem(GHKEY_N) || localStorage.getItem('palate.gh') || ''; }catch(e){ return ''; } };
+const setGhToken = t=>{ try{ t ? localStorage.setItem(GHKEY_N,t) : localStorage.removeItem(GHKEY_N); }catch(e){} };
+const _b64 = s=>btoa(unescape(encodeURIComponent(s)));
+async function ghPut(path, text, message){
+  const url = 'https://api.github.com/repos/'+GHREPO.owner+'/'+GHREPO.repo+'/contents/'+path;
+  const H = { Authorization:'Bearer '+ghToken(), Accept:'application/vnd.github+json' };
+  let sha = null;
+  const g = await fetch(url+'?ref=main', { headers:H, cache:'no-store' });
+  if (g.ok) sha = (await g.json()).sha; else if (g.status !== 404) throw new Error('GitHub '+g.status);
+  const p = await fetch(url, { method:'PUT', headers:H, body: JSON.stringify({ message, content:_b64(text), sha: sha||undefined, branch:'main' }) });
+  if (!p.ok) throw new Error('GitHub '+p.status);
+}
+let _syncJSON=null, _syncedJSON=null, _syncTimer=null;
+function scheduleSync(){
+  if (!ghToken() || _syncJSON === _syncedJSON) return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(async ()=>{ const pl=_syncJSON;
+    try{ await ghPut('data/nemesis.json', pl, 'nemesis: update standing'); _syncedJSON=pl; }catch(e){} }, 2500);
 }
 function tickCountdown(){
   const ms = closeTime(wkKey(now())) - now();
@@ -863,6 +889,15 @@ function renderSettings(v){
   if (key) kc.append(el('div',{class:'actions'}, el('button',{class:'btn',text:'Remove key',onclick:()=>{ setKey(''); toast('Key removed.'); render(); }})));
   else kc.append(el('div',{class:'field'}, el('label',{for:'apikey',text:'API key (from console.anthropic.com)'}), inp), el('button',{class:'btn solid',text:'Save key',onclick:()=>{ const k=inp.value.trim(); if(!k.startsWith('sk-')){ toast('That doesn’t look like an Anthropic key.'); return; } setKey(k); toast('Key saved on this phone.'); render(); }}));
   v.append(kc);
+
+  const gtok = (()=>{ try{ return localStorage.getItem(GHKEY_N)||''; }catch(e){ return ''; } })();
+  const hasShared = !gtok && (()=>{ try{ return !!localStorage.getItem('palate.gh'); }catch(e){ return false; } })();
+  const sc = el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Cross-device sync'}),
+    el('p',{class:'hint',text: gtok ? 'On. Nemesis publishes your weekly standing to your repo, so the Morning Cockpit shows it on any device — no backup restore.' : hasShared ? 'Using your existing GitHub token. Your weekly standing is published to your repo automatically, so the Cockpit reads it on any device.' : 'Add a GitHub token with write access and Nemesis publishes your weekly standing to your repo, so the Morning Cockpit shows it on any device without restoring a backup. The token stays on this phone.'}));
+  const gi = el('input',{id:'ghtok',type:'password',autocomplete:'off',placeholder:'github_pat_… or ghp_…','aria-label':'GitHub token'});
+  if (gtok) sc.append(el('div',{class:'actions'}, el('button',{class:'btn',text:'Remove token',onclick:()=>{ setGhToken(''); toast('Token removed.'); render(); }})));
+  else sc.append(el('div',{class:'field'}, el('label',{for:'ghtok',text:'GitHub token (fine-grained, Contents: write)'}), gi), el('button',{class:'btn solid',text:'Save token',onclick:()=>{ const t=gi.value.trim(); if(!t){ toast('Paste a token first.'); return; } setGhToken(t); _syncedJSON=null; scheduleSync(); toast('Token saved. Syncing…'); render(); }}));
+  v.append(sc);
 
   const bc = el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Backup'}), el('p',{class:'hint',text:'Your log lives only on this phone. Copy a backup now and then, and restore it if you switch phones or clear your browser.'}));
   const data = JSON.stringify(S);

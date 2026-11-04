@@ -106,7 +106,7 @@
     <div id="brief"></div>
   </div>
 
-  <footer>Cockpit v1.0 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Cockpit v1.1 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -154,11 +154,15 @@ function fmtLeft(ms){
   const d=Math.floor(ms/864e5), h=Math.floor(ms%864e5/36e5);
   return (d? d+"d ":"") + h + "h left this week";
 }
-function renderNemesis(){
-  const box = $("#nem"), s = load("nemesis.summary");
+async function renderNemesis(){
+  const box = $("#nem");
+  // repo file first (works on any device), then same-device localStorage
+  let s = null;
+  try{ const r = await fetch("../data/nemesis.json?ts=" + Date.now(), { cache:"no-store" }); if(r.ok) s = await r.json(); }catch(e){}
+  if(!s) s = load("nemesis.summary");
   if(!s){
     box.className=""; box.innerHTML =
-      '<div class="empty">Open <a href="../nemesis/">Nemesis</a> once on this device to sync the week, then your standing and what you still owe show up here.</div>';
+      '<div class="empty">Open <a href="../nemesis/">Nemesis</a> and turn on Cross-device sync in its settings, and your standing — plus what you still owe this week — shows up here on any device.</div>';
     return;
   }
   const behind = (s.tracks||[]).filter(t => t.state === "behind");
