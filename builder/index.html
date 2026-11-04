@@ -14,7 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>Builder Board</title>
 <style>
-  /* Suite identity. A build tracker: every project in one of four states, hands-on. */
+  /* Suite identity. Every project in one of four states; tap a project to see what it does and what lives inside it. */
   :root{
     --bg:#edecea; --surface:#fcfcfb; --surface-2:#e5e4e1; --line:#dad9d4;
     --ink:#19191b; --muted:#84847e; --accent:#19191b; --accent-ink:#fcfcfb;
@@ -48,6 +48,7 @@
   .add button{background:var(--accent);color:var(--accent-ink);border-color:transparent;letter-spacing:.04em}
 
   .col{display:flex;flex-direction:column;gap:10px}
+  .col + .col{margin-top:12px}
   .col-head{display:flex;align-items:baseline;gap:10px;padding:0 2px}
   .col-head .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
   .col-head h2{font-family:var(--display);font-weight:600;font-size:1.45rem;margin:0}
@@ -55,17 +56,40 @@
   .dot.building{background:var(--building)} .dot.live{background:var(--live)}
   .dot.idea{background:var(--idea)} .dot.parked{background:var(--parked)}
 
-  .card{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);
-    border-radius:14px;padding:13px 15px;box-shadow:0 1px 2px rgba(20,16,10,.03)}
-  .card .main{flex:1;min-width:0}
-  .card .title{font-weight:600;font-size:1rem;color:var(--ink);text-decoration:none;display:inline-block}
-  a.title:hover{border-bottom:1px solid var(--line)}
-  .card .note{color:var(--muted);font-size:.82rem;margin-top:2px;word-wrap:break-word}
-  .card .ctl{display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex:0 0 auto}
-  .card select{font:inherit;font-size:.72rem;font-weight:600;border-radius:999px;padding:5px 9px;border:1px solid var(--line);
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 15px;
+    box-shadow:0 1px 2px rgba(20,16,10,.03)}
+  .card.open{border-color:color-mix(in srgb,var(--ink) 25%,var(--line))}
+  .head{display:flex;gap:10px;align-items:center}
+  .toggle{flex:1;min-width:0;display:flex;align-items:center;gap:9px;background:none;border:none;padding:4px 0;
+    margin:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+  .toggle:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:6px}
+  .chev{flex:0 0 auto;width:8px;height:8px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);
+    transform:rotate(-45deg);transition:transform .15s}
+  .open .chev{transform:rotate(45deg)}
+  .ttl{font-weight:600;font-size:1rem;min-width:0;overflow-wrap:anywhere}
+  .inside{flex:0 0 auto;font-size:.7rem;color:var(--muted);font-weight:500;white-space:nowrap}
+  .ctl{display:flex;gap:4px;align-items:center;flex:0 0 auto}
+  .ctl select{font:inherit;font-size:.68rem;font-weight:600;border-radius:999px;padding:5px 8px;border:1px solid var(--line);
     background:var(--surface-2);color:var(--ink);cursor:pointer;text-transform:uppercase;letter-spacing:.04em}
-  .card .del{border:none;background:none;color:var(--muted);font-size:1.1rem;line-height:1;cursor:pointer;padding:2px 4px}
-  .card .del:hover{color:var(--ink)}
+  .del{border:none;background:none;color:var(--muted);font-size:1.15rem;line-height:1;cursor:pointer;padding:2px 4px}
+  .del:hover{color:var(--ink)}
+
+  .panel{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+  .summary{margin:0;font-size:.9rem;line-height:1.6;color:var(--ink)}
+  .summary.none{color:var(--muted);font-style:italic}
+  .links{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .open-link{font-size:.76rem;font-weight:600;color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
+  .edit{background:none;border:none;color:var(--muted);font:inherit;font-size:.74rem;cursor:pointer;padding:0;border-bottom:1px dotted var(--muted)}
+  .subhead{font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:4px}
+  .subs{display:flex;flex-direction:column;gap:10px;padding-left:12px;border-left:2px solid var(--surface-2)}
+  .subitem .t{font-weight:600;font-size:.88rem;color:var(--ink);text-decoration:none}
+  a.t{border-bottom:1px solid var(--line)}
+  .subitem .f{font-size:.8rem;color:var(--muted);line-height:1.5;margin-top:1px}
+  textarea{width:100%;font:inherit;font-size:.88rem;line-height:1.5;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    background:var(--surface);color:var(--ink);min-height:84px;resize:vertical;outline:none}
+  textarea:focus{border-color:var(--ink)}
+  .save{align-self:flex-start;font:inherit;font-weight:600;font-size:.74rem;letter-spacing:.04em;border-radius:10px;padding:8px 14px;
+    border:none;background:var(--accent);color:var(--accent-ink);cursor:pointer}
   .empty{color:var(--muted);font-size:.84rem;font-style:italic;padding:4px 2px}
 
   footer{color:var(--muted);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;text-align:center;padding-top:6px}
@@ -93,41 +117,173 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.0 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.1 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
 const KEY = "builder.v1";
+const SEED_VERSION = 2;
 const COLS = [
-  {id:"building", name:"Building"},
-  {id:"live",     name:"Live"},
-  {id:"idea",     name:"Ideas"},
-  {id:"parked",   name:"Parked"},
+  // name = section heading (a place); label = the state you set on a card
+  {id:"building", name:"Building",  label:"Building"},
+  {id:"live",     name:"Live",      label:"Live"},
+  {id:"idea",     name:"Ideas",     label:"Idea"},
+  {id:"parked",   name:"Graveyard", label:"Parked"},
 ];
 const uid = () => Math.random().toString(36).slice(2,9);
 
-// Seed with real current projects; the user edits freely from here.
-const SEED = { items: [
-  {id:uid(), title:"Mirror", note:"facial analysis — benchmarked, adding features", url:"../mirror/", status:"building"},
-  {id:uid(), title:"Command Center", note:"needs workshop — make it actually command", url:"../dashboard/", status:"building"},
-  {id:uid(), title:"Morning Cockpit", note:"daily driver", url:"../cockpit/", status:"live"},
-  {id:uid(), title:"Nemesis", note:"weekly AI rival", url:"../nemesis/", status:"live"},
-  {id:uid(), title:"Palate", note:"taste model → Stremio", url:"../palate/", status:"live"},
-  {id:uid(), title:"Dry Run", note:"conversation rehearsal", url:"../dryrun/", status:"live"},
-  {id:uid(), title:"Second Brain", note:"personal knowledge base", url:"../brain/", status:"live"},
-  {id:uid(), title:"NBA Fair Lines", note:"model + hourly dashboard", url:"", status:"live"},
-  {id:uid(), title:"GreekPath", note:"Greek-life compliance app", url:"", status:"live"},
-  {id:uid(), title:"Skill Lab", note:"self-improving skill library", url:"", status:"live"},
-  {id:uid(), title:"Jarvis", note:"phone assistant over your apps", url:"", status:"idea"},
-  {id:uid(), title:"Recall", note:"elite-memory trainer", url:"", status:"idea"},
-  {id:uid(), title:"Negotiator", note:"negotiation trainer", url:"", status:"parked"},
-  {id:uid(), title:"Red Flag Radar", note:"SEC misstatement-risk scanner", url:"", status:"parked"},
-] };
+/* Seeded projects. Summaries and sub-projects refresh from here on each load;
+   status, deletions and any summary you edit yourself are kept. */
+const SEED = [
+  {key:"mirror", title:"Mirror", status:"building", url:"../mirror/",
+   summary:"On-device facial analysis. Maps 468 landmarks from one photo and measures proportions, symmetry, skin, and side-profile angles. The composite score is fit to 5,500 human-rated faces (cross-validated r ≈ 0.51), so it reads as a real but rough indicator, not a verdict.",
+   children:[
+     {title:"Front analysis", summary:"Facial thirds, face width, eye spacing, lip position, symmetry, and skin tone, smoothness and redness from the photo's pixels."},
+     {title:"Side-profile mode", summary:"Nasofrontal, nasolabial and nasomental angles plus facial convexity, traced on a true side photo."},
+     {title:"Benchmark tooling", summary:"mirror/tools: run_benchmark.py fits the score's weights to SCUT-FBP5500 on your laptop; the backcheck script cross-validates the fit and runs a permutation test."},
+   ]},
+  {key:"dashboard", title:"Command Center", status:"building", url:"../dashboard/",
+   summary:"One screen that reads every app's saved data and shows a live tile per app. It works, but it only shows counts, so it needs a rethink to surface what to act on.",
+   children:[]},
 
-function load(){ try{ const s = JSON.parse(localStorage.getItem(KEY)||"null"); if(s && Array.isArray(s.items)) return s; }catch(e){} return SEED; }
+  {key:"fieldwork", title:"Fieldwork", status:"live", url:"../",
+   summary:"The home-screen app suite and its root app, Experiment Lab + Side Quests, which turns self-improvement into structured personal experiments and real-world side quests. Every app below lives in the same repo and shares one origin, so they can read each other's data.",
+   children:[
+     {title:"Experiment Lab + Side Quests", url:"../", summary:"The root app: design personal experiments and get real-world side quests."},
+     {title:"data/ folder", summary:"Cross-device files apps publish to the repo, like nemesis.json and brief.json, read instantly through raw GitHub."},
+     {title:"fieldwork-app skill", summary:"The saved build spec: repo layout, house style, sync pattern, cache rules, and the build-test loop."},
+   ]},
+  {key:"cockpit", title:"Morning Cockpit", status:"live", url:"../cockpit/",
+   summary:"The screen you open each morning: your three priorities (they carry over until done), where you stand against Nemesis this week with the tracks you're behind on, and today's calendar brief.",
+   children:[
+     {title:"Morning Brief task", summary:"Scheduled daily at 6:17 AM ET. Reads Google Calendar, triages P1–P4 with an urgency score, writes the brief Doc, and publishes today's calendar to the Cockpit."},
+     {title:"Nemesis feed", summary:"Reads your weekly standing from data/nemesis.json, so it shows on any device."},
+   ]},
+  {key:"nemesis", title:"Nemesis", status:"live", url:"../nemesis/",
+   summary:"An AI rival that competes with you every week on gym, cardio, CPA hours, chess, cold opens and teach-back. It reacts to each log, locks Sunday at 9 PM, and settles the week in a showdown.",
+   children:[
+     {title:"Teach-back", summary:"Explain a FAR topic in 60 seconds; graded against the key points."},
+     {title:"Strength board", summary:"Estimated one-rep maxes on bench, squat and deadlift against Nemesis's."},
+     {title:"Cross-device sync", summary:"Publishes your weekly standing to the repo whenever it changes, using your GitHub token."},
+     {title:"Sunday showdown ping", summary:"Scheduled reminder Sundays at 9:05 PM ET to reveal the week."},
+   ]},
+  {key:"palate", title:"Palate", status:"live", url:"../palate/",
+   summary:"A taste model built on your own ratings (Letterboxd, Serializd and manual entries). It predicts how you'd rate any movie, show, book, character or dish and surfaces its top picks.",
+   children:[
+     {title:"Stremio add-on", summary:"palate/stremio: your top picks show up as a row inside Stremio."},
+     {title:"Catalog pipeline", summary:"palate/pipeline plus a Monday GitHub Action that builds the movie and TV catalog, taste vectors and streaming availability."},
+     {title:"Palate lab", summary:"One-off MovieLens and TMDB test data for \"fans of X also liked Y.\""},
+     {title:"Second Brain link", summary:"Recipe ratings flow in as dishes; only your favorites go back to Second Brain as notes."},
+   ]},
+  {key:"dryrun", title:"Dry Run", status:"live", url:"../dryrun/",
+   summary:"Rehearse a real upcoming conversation against Claude playing the actual people, live and in character, then get a director's-notes debrief. It's for rehearsal, not prediction.",
+   children:[
+     {title:"Replay", summary:"The artifact version that runs on your Claude plan with no API key, pinned to your sidebar."},
+   ]},
+  {key:"brain", title:"Second Brain", status:"live", url:"../brain/",
+   summary:"Your personal knowledge base as a home-screen app. Notes live on your phone and open instantly.",
+   children:[
+     {title:"Esoteric journal", summary:"Lesser-known remedies and supplements with benefits and uses, organized by searchable tags."},
+     {title:"Kitchen codex", summary:"A linked note ecosystem for cooking techniques and recipes."},
+     {title:"Palate link", summary:"Recipe ratings feed Palate; its favorites come back as notes."},
+   ]},
+  {key:"nba", title:"NBA Fair Lines", status:"live", url:"",
+   summary:"A model that computes fair lines and real picks, compares them to live odds across sportsbooks, and tracks every hit and miss so it has to prove itself against the market.",
+   children:[
+     {title:"Model repo", summary:"Private francis1-glitch/nba-model. GitHub Actions run the model and commit the data."},
+     {title:"Hourly publish task", summary:"Scheduled at :24 every hour to republish the dashboard from the latest data."},
+     {title:"Dashboard", summary:"A private Claude artifact showing fair lines, picks, and the edge at each book."},
+   ]},
+  {key:"greekpath", title:"GreekPath", status:"live", url:"",
+   summary:"A full-stack Greek-life compliance platform built to replace Penn State's general-purpose tool for officers tracking 60+ chapters: rosters, incidents, event approvals, documents, analytics, and role-based access.",
+   children:[
+     {title:"Stack", summary:"React, Node/Express, PostgreSQL on Neon, JWT auth, deployed on Render."},
+   ]},
+  {key:"skills", title:"Accounting skills library", status:"live", url:"",
+   summary:"Your \"every-accounting calculator\": 20+ accounting skills saved to your Claude account so any function is one ask away, from leases and revenue to tax provisions, consolidations and audit sampling.",
+   children:[
+     {title:"Calculation-heavy", summary:"ASC 842 lessee, ASC 606, ASC 740, bonds and debt, EPS, stock comp, equity method, consolidations, cash flow, business combinations, impairment."},
+     {title:"Partly calculated", summary:"Close schedules, bank reconciliation, audit sampling, governmental, nonprofit."},
+     {title:"Judgment-heavy", summary:"Accounting memo, journal-entry review, flux analysis, QuickBooks cleanup, Excel workpaper."},
+   ]},
+  {key:"skilllab", title:"Skill Lab", status:"live", url:"",
+   summary:"Your \"dreaming\" loop. A weekly run blind-tests your skills, turns logged corrections into test cases, and proposes one edit only if it scores higher with no regressions. The pilot is ASC 842 lessee.",
+   children:[
+     {title:"ASC 842 test suite", summary:"21 lease cases with an answer key computed in code; the blind test-taker never sees the key."},
+     {title:"skill-feedback (\"log it\")", summary:"Say \"log it\" when an answer is off and the correction goes into the feedback log."},
+     {title:"skill-improver", summary:"Runs the loop: feedback to tests, blind baseline, one edit, re-test for regressions."},
+     {title:"Weekly improver task", summary:"Scheduled Sundays at 7:37 PM ET."},
+     {title:"Skill Lab doc", summary:"Where the feedback log, test suites and run history live."},
+   ]},
+  {key:"agents", title:"Briefing agents", status:"live", url:"",
+   summary:"Scheduled Claude runs that work unattended and leave finished docs for you.",
+   children:[
+     {title:"Morning Brief", summary:"Daily at 6:17 AM ET: calendar triage with an urgency score; also feeds the Cockpit."},
+     {title:"CPA Exam Section Tracker", summary:"Mondays: score release dates, credit-window countdown, and your next section."},
+     {title:"CPA & Accounting News Roundup", summary:"Mondays: standard setters, IRS, licensure, and Big 4 news from the past week."},
+     {title:"Big 4 Job Tracker", summary:"Mondays: openings that fit your background, plus recruiting events."},
+   ]},
+  {key:"builder", title:"Builder Board", status:"live", url:"./",
+   summary:"This board: every project you're building, its state, what it does, and what lives inside it.",
+   children:[]},
+
+  {key:"jarvis", title:"Jarvis", status:"idea", url:"",
+   summary:"A phone assistant layered over your own apps (Fieldwork, Nemesis, the NBA model) with Claude as the brain.",
+   children:[]},
+  {key:"recall", title:"Recall", status:"idea", url:"",
+   summary:"An elite-memory trainer: memory palaces, the major system, faces and names, timed drills, applied to FAR formulas and networking names.",
+   children:[]},
+
+  {key:"negotiator", title:"Negotiator", status:"parked", url:"",
+   summary:"A negotiation trainer. An AI counterpart with a hidden bottom line, scoring on value captured, plus prep for real negotiations like a Big 4 offer.",
+   children:[]},
+  {key:"redflag", title:"Red Flag Radar", status:"parked", url:"",
+   summary:"A misstatement-risk scanner over SEC filings on EDGAR, framed as risk flags rather than fraud calls. Public data only.",
+   children:[]},
+];
+const V1_KEYS = ["mirror","dashboard","cockpit","nemesis","palate","dryrun","brain","nba","greekpath","skilllab","jarvis","recall","negotiator","redflag"];
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function freshSeed(){
+  return { v:SEED_VERSION, seeded:SEED.map(s=>s.key), items:SEED.map(s => Object.assign(clone(s), {id:uid()})) };
+}
+function load(){
+  let s = null;
+  try{ s = JSON.parse(localStorage.getItem(KEY) || "null"); }catch(e){}
+  if(!s || !Array.isArray(s.items)) { s = freshSeed(); save(s); return s; }
+  if((s.v || 1) < SEED_VERSION){
+    // first version had no keys: match seeded projects by title, and treat all of them as already seeded
+    s.seeded = Array.isArray(s.seeded) ? s.seeded : V1_KEYS.slice();
+    for(const it of s.items){
+      if(!it.key){ const m = SEED.find(x => x.title.toLowerCase() === String(it.title).toLowerCase()); if(m) it.key = m.key; }
+    }
+    s.v = SEED_VERSION;
+  }
+  if(!Array.isArray(s.seeded)) s.seeded = [];
+  // add seed projects that were never seeded before (deleted ones stay deleted)
+  for(const sd of SEED){
+    if(!s.seeded.includes(sd.key)){ s.items.push(Object.assign(clone(sd), {id:uid()})); s.seeded.push(sd.key); }
+  }
+  // refresh seeded descriptions; keep status and anything you edited
+  for(const it of s.items){
+    const sd = it.key && SEED.find(x => x.key === it.key);
+    if(sd){
+      if(!it.summaryEdited) it.summary = sd.summary;
+      it.children = clone(sd.children || []);
+      if(!it.url) it.url = sd.url || "";
+    } else if(!it.summary && it.note){ it.summary = it.note; }
+    delete it.note;
+  }
+  save(s);
+  return s;
+}
 function save(s){ try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){} }
 let state = load();
+const openIds = new Set();
+const editing = new Set();
+
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function render(){
   const board = $("#board"); board.innerHTML = "";
@@ -136,37 +292,71 @@ function render(){
     const items = state.items.filter(i => i.status === col.id);
     total += items.length;
     const wrap = document.createElement("div"); wrap.className = "col";
-    const head = document.createElement("div"); head.className = "col-head";
-    head.innerHTML = '<span class="dot '+col.id+'"></span><h2>'+col.name+'</h2><span class="n">'+items.length+'</span>';
-    wrap.append(head);
-    if(!items.length){
-      const e = document.createElement("div"); e.className = "empty"; e.textContent = "—"; wrap.append(e);
-    }
-    for(const it of items){
-      const card = document.createElement("div"); card.className = "card";
-      const titleHtml = it.url
-        ? '<a class="title" href="'+it.url+'">'+esc(it.title)+'</a>'
-        : '<span class="title">'+esc(it.title)+'</span>';
-      const opts = COLS.map(c => '<option value="'+c.id+'"'+(c.id===it.status?' selected':'')+'>'+c.name+'</option>').join("");
-      card.innerHTML =
-        '<div class="main">'+titleHtml+(it.note?'<div class="note">'+esc(it.note)+'</div>':'')+'</div>' +
-        '<div class="ctl"><select aria-label="Move">'+opts+'</select><button class="del" aria-label="Delete">×</button></div>';
-      card.querySelector("select").onchange = e => { it.status = e.target.value; save(state); render(); };
-      card.querySelector(".del").onclick = () => { state.items = state.items.filter(x => x.id !== it.id); save(state); render(); };
-      wrap.append(card);
-    }
+    wrap.innerHTML = '<div class="col-head"><span class="dot '+col.id+'"></span><h2>'+col.name+'</h2><span class="n">'+items.length+'</span></div>';
+    if(!items.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "—"; wrap.append(e); }
+    for(const it of items) wrap.append(cardFor(it));
     board.append(wrap);
-    if(col !== COLS[COLS.length-1]) board.append(spacer());
   }
-  $("#sub").textContent = total + (total===1?" project":" projects") + " across the board";
+  $("#sub").textContent = total + (total === 1 ? " project" : " projects") + " · tap one to see what it does";
 }
-function spacer(){ const s = document.createElement("div"); s.style.height = "10px"; return s; }
-function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function cardFor(it){
+  const isOpen = openIds.has(it.id);
+  const kids = Array.isArray(it.children) ? it.children : [];
+  const card = document.createElement("div"); card.className = "card" + (isOpen ? " open" : "");
+  const opts = COLS.map(c => '<option value="'+c.id+'"'+(c.id === it.status ? " selected" : "")+'>'+c.label+'</option>').join("");
+  card.innerHTML =
+    '<div class="head">' +
+      '<button class="toggle" aria-expanded="'+isOpen+'"><span class="chev"></span><span class="ttl">'+esc(it.title)+'</span>' +
+        (kids.length ? '<span class="inside">'+kids.length+' inside</span>' : '') + '</button>' +
+      '<div class="ctl"><select aria-label="Move '+esc(it.title)+'">'+opts+'</select>' +
+      '<button class="del" aria-label="Delete '+esc(it.title)+'">×</button></div>' +
+    '</div>';
+  card.querySelector(".toggle").onclick = () => { isOpen ? openIds.delete(it.id) : openIds.add(it.id); render(); };
+  card.querySelector("select").onchange = e => { it.status = e.target.value; save(state); render(); };
+  card.querySelector(".del").onclick = () => { state.items = state.items.filter(x => x.id !== it.id); save(state); render(); };
+  if(isOpen) card.append(panelFor(it, kids));
+  return card;
+}
+
+function panelFor(it, kids){
+  const p = document.createElement("div"); p.className = "panel";
+  const isEditing = editing.has(it.id) || !it.summary;
+  if(isEditing){
+    const ta = document.createElement("textarea");
+    ta.id = "sum-" + it.id; ta.value = it.summary || ""; ta.placeholder = "What does this project do?";
+    const sv = document.createElement("button"); sv.className = "save"; sv.textContent = "Save";
+    sv.onclick = () => { it.summary = ta.value.trim(); it.summaryEdited = true; editing.delete(it.id); save(state); render(); };
+    p.append(ta, sv);
+  } else {
+    const sm = document.createElement("p"); sm.className = "summary"; sm.textContent = it.summary; p.append(sm);
+  }
+  const links = document.createElement("div"); links.className = "links";
+  if(it.url) links.insertAdjacentHTML("beforeend", '<a class="open-link" href="'+esc(it.url)+'">Open '+esc(it.title)+' →</a>');
+  if(!isEditing){
+    const ed = document.createElement("button"); ed.className = "edit"; ed.textContent = "Edit summary";
+    ed.onclick = () => { editing.add(it.id); render(); };
+    links.append(ed);
+  }
+  if(links.childNodes.length) p.append(links);
+  if(kids.length){
+    p.insertAdjacentHTML("beforeend", '<div class="subhead">Inside</div>');
+    const subs = document.createElement("div"); subs.className = "subs";
+    for(const k of kids){
+      const t = k.url ? '<a class="t" href="'+esc(k.url)+'">'+esc(k.title)+'</a>' : '<span class="t">'+esc(k.title)+'</span>';
+      subs.insertAdjacentHTML("beforeend", '<div class="subitem">'+t+'<div class="f">'+esc(k.summary)+'</div></div>');
+    }
+    p.append(subs);
+  }
+  return p;
+}
 
 function add(){
   const t = $("#newTitle").value.trim(); if(!t) return;
-  state.items.unshift({ id:uid(), title:t, note:"", url:"", status:$("#newStatus").value });
+  const it = { id:uid(), title:t, summary:"", url:"", status:$("#newStatus").value, children:[] };
+  state.items.unshift(it); openIds.add(it.id);
   save(state); $("#newTitle").value = ""; render();
+  const ta = document.getElementById("sum-" + it.id); if(ta) ta.focus();
 }
 $("#addBtn").onclick = add;
 $("#newTitle").addEventListener("keydown", e => { if(e.key === "Enter") add(); });
