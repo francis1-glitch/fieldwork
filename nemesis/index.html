@@ -635,6 +635,18 @@ function render(){
   else if (tab==='teach') renderTeach(v, cur);
   else if (tab==='hist') renderHist(v);
   else renderSettings(v);
+  try{ publishSummary(cur, si, you, nl, live); }catch(e){}
+}
+// Publishes this week's standing to shared storage so the Command Center / Morning Cockpit can read it.
+function publishSummary(cur, si, you, nl, live){
+  const tracks = TRACKS.map(t => ({
+    id:t.id, name:t.name,
+    you: you[t.id], nem: nl[t.id],
+    state: nl[t.id]==null ? 'sealed' : (live.res[t.id]==='W' ? 'leading' : live.res[t.id]==='L' ? 'behind' : 'even')
+  }));
+  const summary = { updatedAt: Date.now(), pre: !!si.pre, season: si.season, week: si.week, len: SEASON_LEN,
+    youWins: live.w, nemWins: live.l, closeMs: Math.max(0, closeTime(cur) - now()), tracks };
+  try{ localStorage.setItem('nemesis.summary', JSON.stringify(summary)); }catch(e){}
 }
 function tickCountdown(){
   const ms = closeTime(wkKey(now())) - now();
