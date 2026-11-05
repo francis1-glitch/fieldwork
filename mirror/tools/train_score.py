@@ -194,19 +194,23 @@ def main():
     print(f"{len(pairs)} labeled faces")
 
     cache = "features_v2.npz"          # v2 = trichion + roll-corrected features
+    names = None
     if os.path.exists(cache):
         d = np.load(cache); X, y = d["X"], d["y"]; print(f"loaded cached features: {X.shape}")
+        if "names" in d.files: names = [str(n) for n in d["names"]]
+        elif len(X) == len(pairs) and np.allclose(y, [s for _, s in pairs]):
+            names = [fn for fn, _ in pairs]          # nothing was skipped, so rows line up with the label file
     else:
         lm, seg = build_tasks()
-        X, y, miss = [], [], 0
+        X, y, names, miss = [], [], [], 0
         for i, (fn, score) in enumerate(pairs):
             img = cv2.imread(os.path.join(args.root, args.images, fn))
             feat = None if img is None else extract(img, lm, seg)
             if feat is None: miss += 1; continue
-            X.append(feat); y.append(score)
+            X.append(feat); y.append(score); names.append(fn)
             if (i+1) % 250 == 0: print(f"  {i+1}/{len(pairs)}")
         X, y = np.array(X), np.array(y)
-        np.savez(cache, X=X, y=y)
+        np.savez(cache, X=X, y=y, names=np.array(names))
         print(f"extracted {len(X)} usable, skipped {miss}")
 
     found = float(np.mean(~np.isnan(X[:, 0])))
@@ -226,11 +230,23 @@ def main():
 
     # refit on everything for the shipped model; percentiles from its predictions on all faces
     final = RidgeCV(alphas=[reg.alpha_]).fit(Z, y)
-    cdf = np.quantile(final.predict(Z), np.linspace(0, 1, 201)).round(4).tolist()
+    allpred = final.predict(Z)
+    qs = np.linspace(0, 1, 201)
+    cdf = np.quantile(allpred, qs).round(4).tolist()
+    # SCUT filenames encode group + sex: AF/AM (Asian), CF/CM (Caucasian) — used only for the "vs men / vs women" comparison
+    sex_cdfs = {}
+    if names is not None:
+        sex = np.array([n[1:2].upper() for n in names])
+        for key, code in (("cdf_male", "M"), ("cdf_female", "F")):
+            m = sex == code
+            if m.sum() >= 200: sex_cdfs[key] = np.quantile(allpred[m], qs).round(4).tolist()
+        print(f"per-sex comparison: men {int((sex=='M').sum())}, women {int((sex=='F').sum())}")
+    else:
+        print("per-sex comparison skipped: cache can't be matched to filenames (delete features_v2.npz and rerun to enable)")
     model = dict(version=2, dataset="SCUT-FBP5500", n=int(len(y)), features=FEATURES,
                  mean=mean.round(6).tolist(), std=std.round(6).tolist(),
                  coef=final.coef_.round(6).tolist(), intercept=round(float(final.intercept_), 6),
-                 cdf=cdf, r_test=round(r, 4), r2_test=round(r2, 4), hairline_found=round(found, 4),
+                 cdf=cdf, **sex_cdfs, r_test=round(r, 4), r2_test=round(r2, 4), hairline_found=round(found, 4),
                  rating_mean=round(float(y.mean()), 4), rating_sd=round(float(y.std()), 4))
     with open(args.out, "w") as f: json.dump(model, f)
     print(f"\nwrote {os.path.abspath(args.out)}  — commit it (mirror/score_model.json) and Mirror switches to percentiles")
