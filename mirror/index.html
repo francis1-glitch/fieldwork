@@ -156,7 +156,7 @@
     These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The score is either a percentile against 5,500 human-rated faces (once the benchmark model is published) or, until then, an uncalibrated blend of the markers below. Facial thirds run hairline → brows → nose base → chin; the hairline comes from a hair/skin segmenter because the landmark mesh stops mid-forehead. Lighting, angle and expression all move the numbers.
   </div>
 
-  <footer>Mirror v1.6 · on-device · MediaPipe FaceLandmarker</footer>
+  <footer>Mirror v1.6.1 · on-device · MediaPipe FaceLandmarker</footer>
 </div>
 
 <script type="module">
@@ -393,7 +393,7 @@ function render(r){
     $('scoreTitle').textContent='Percentile';
     $('scoreBreak').textContent=`Predicted rating ${r.fit.rating.toFixed(2)} / 5 · higher than ${r.fit.pct}% of the ${MODEL.n.toLocaleString()} rated faces`
       + (r.fit.missing? ` · ${r.fit.missing} marker${r.fit.missing>1?'s':''} missing, held at average`:'');
-    $('prov').textContent=`Ridge model fit to SCUT-FBP5500 human ratings. Held-out r = ${MODEL.r_test.toFixed(2)} (R² ${MODEL.r2_test.toFixed(2)}): these markers explain about ${Math.round(MODEL.r2_test*100)}% of rated attractiveness. A rough indicator, not a verdict.`;
+    $('prov').textContent=`Ridge model fit to SCUT-FBP5500 human ratings. Held-out r = ${MODEL.r_test.toFixed(2)} (R² ${MODEL.r2_test.toFixed(2)}): these markers explain about ${Math.round(MODEL.r2_test*100)}% of rated attractiveness. Reference group: mostly East Asian and white faces aged about 15–60, rated by volunteers in China; no Black, South Asian, Hispanic or Middle Eastern faces. The percentile says where you'd land among those faces, as those raters judged them: less reliable outside that group, and a rough indicator, not a verdict.`;
   } else {
     $('scoreTitle').textContent='Marker index (uncalibrated)';
     $('scoreBreak').textContent=`sym ${Math.round(r.comps.symmetry*100)} · prop ${Math.round(r.comps.proportion*100)} · even ${Math.round(r.comps.skinEven*100)} · smooth ${Math.round(r.comps.skinSmooth*100)}`;
