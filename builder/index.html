@@ -152,7 +152,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.3 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.4 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -172,11 +172,13 @@ const uid = () => Math.random().toString(36).slice(2,9);
    status, deletions and any summary you edit yourself are kept. */
 const SEED = [
   {key:"mirror", title:"Mirror", status:"building", url:"../mirror/",
-   summary:"On-device facial analysis. Maps 468 landmarks from one photo and measures proportions, symmetry, skin, and side-profile angles. The composite score is fit to 5,500 human-rated faces (cross-validated r ≈ 0.51), so it reads as a real but rough indicator, not a verdict.",
+   summary:"On-device facial analysis (v2.0). Maps 478 landmarks plus a hair/skin segmenter for the real hairline, measures proportions, symmetry, skin and profile angles, and ranks you against your own sex in a 5,500-face rated dataset. The percentile explains about a third of rated attractiveness and is calibrated on mostly East Asian and white faces rated in China, so it's a rough indicator, not a verdict. Parked: the next real gain needs better-balanced data.",
    children:[
-     {title:"Front analysis", summary:"Facial thirds, face width, eye spacing, lip position, symmetry, and skin tone, smoothness and redness from the photo's pixels."},
+     {title:"Front analysis", summary:"Facial thirds from the detected hairline, face width, eye spacing, lip position, symmetry, skin, plus canthal tilt, eye openness, width-to-height, jaw width and lip ratio. Head tilt is corrected and the overlay follows your face."},
+     {title:"Photos & cropping", summary:"Pick up to 8 photos to average out angle and lighting; auto-zoom on small faces; crop any single photo from its thumbnail."},
+     {title:"Score", summary:"Separate men's and women's models (once the per-sex refit is committed), a percentile within your sex, and 'what's moving it' per marker."},
      {title:"Side-profile mode", summary:"Nasofrontal, nasolabial and nasomental angles plus facial convexity, traced on a true side photo."},
-     {title:"Benchmark tooling", summary:"mirror/tools: run_benchmark.py fits the score's weights to SCUT-FBP5500 on your laptop; the backcheck script cross-validates the fit and runs a permutation test."},
+     {title:"Benchmark tooling", summary:"mirror/tools: run_benchmark.py downloads SCUT-FBP5500 and the models; train_score.py extracts the exact markers Mirror uses and writes mirror/score_model.json."},
    ]},
   {key:"dashboard", title:"Command Center", status:"building", url:"../dashboard/",
    summary:"One screen that reads every app's saved data and shows a live tile per app. It works, but it only shows counts, so it needs a rethink to surface what to act on.",
@@ -192,7 +194,7 @@ const SEED = [
   {key:"cockpit", title:"Morning Cockpit", status:"live", url:"../cockpit/",
    summary:"The screen you open each morning: your three priorities (they carry over until done), where you stand against Nemesis this week with the tracks you're behind on, and today's calendar brief.",
    children:[
-     {title:"Morning Brief task", summary:"Scheduled daily at 6:17 AM ET. Reads Google Calendar, triages P1–P4 with an urgency score, writes the brief Doc, and publishes today's calendar to the Cockpit."},
+     {title:"Morning Brief task", summary:"Scheduled daily at 6:17 AM ET. Reads Google Calendar, triages P1–P4 with an urgency score, writes the brief Doc, and publishes today's calendar to the Cockpit, encrypted so only your turned-on devices can read it."},
      {title:"Nemesis feed", summary:"Reads your weekly standing from data/nemesis.json, so it shows on any device."},
    ]},
   {key:"nemesis", title:"Nemesis", status:"live", url:"../nemesis/",
@@ -224,10 +226,11 @@ const SEED = [
      {title:"Palate link", summary:"Recipe ratings feed Palate; its favorites come back as notes."},
    ]},
   {key:"nba", title:"NBA Fair Lines", status:"live", url:"",
-   summary:"A model that computes fair lines and real picks, compares them to live odds across sportsbooks, and tracks every hit and miss so it has to prove itself against the market.",
+   summary:"A model that computes fair lines and picks, compares them to live odds across sportsbooks, and tracks every hit and miss. Audited Nov 4: no edge yet (191 calls, −16% ROI, beats the close 41%); the line-shopping module is the promising part. Hourly publishing is paused until the rebuild.",
    children:[
      {title:"Model repo", summary:"Private francis1-glitch/nba-model. GitHub Actions run the model and commit the data."},
-     {title:"Hourly publish task", summary:"Scheduled at :24 every hour to republish the dashboard from the latest data."},
+     {title:"Hourly publish task", summary:"Paused Nov 4 to save Claude usage; turn it back on (or set it to game hours) when the model work resumes."},
+     {title:"Model audit", summary:"The Nov 4 audit doc: live record, closing-line value, backtest, what breaks, and the ranked revise-and-enhance plan."},
      {title:"Dashboard", summary:"A private Claude artifact showing fair lines, picks, and the edge at each book."},
    ]},
   {key:"greekpath", title:"GreekPath", status:"live", url:"",
@@ -463,6 +466,13 @@ async function checkBrief(){
   if(et.mins < 7 * 60 + 15) return { state:"grey", text:"waiting on the 6:17 AM run · last " + b.date };
   return { state:"red", text:"today's brief missing · last " + b.date };
 }
+async function checkMirror(){
+  const m = await rawJSON("mirror/score_model.json");
+  if(m === null) return { state:"grey", text:"couldn't check" };
+  if(m.missing) return { state:"amber", text:"no score model · run mirror/tools/run_benchmark.py" };
+  if(m.by_sex) return { state:"green", text:`per-sex models · men r ${m.by_sex.m.r_test.toFixed(2)} · women r ${m.by_sex.f.r_test.toFixed(2)}` };
+  return { state:"info", text:`shared model · r ${Number(m.r_test).toFixed(2)} · per-sex refit not committed yet` };
+}
 async function checkNemesis(){
   const s = await rawJSON("data/nemesis.json");
   if(s === null) return { state:"grey", text:"couldn't check" };
@@ -475,6 +485,7 @@ const CHECKS = [
   { keys:["fieldwork"],        name:"Site deploys",       run: checkDeploys },
   { keys:["cockpit","agents"], name:"Morning Brief feed", run: checkBrief },
   { keys:["nemesis"],          name:"Nemesis sync",       run: checkNemesis },
+  { keys:["mirror"],           name:"Mirror score model", run: checkMirror },
   { keys:["palate"],           name:"Palate catalog",     run: () => checkWorkflow("palate-catalog.yml", true) },
   { keys:["palate"],           name:"Palate lab",         run: () => checkWorkflow("palate-lab.yml", false) },
 ];
