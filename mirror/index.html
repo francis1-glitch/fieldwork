@@ -56,6 +56,17 @@
   .seg.active{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 
   .controls{display:flex;gap:10px;padding:16px;border-top:1px solid var(--line);flex-wrap:wrap}
+  /* crop editor */
+  .cropper{position:absolute;inset:0;background:var(--surface-2);display:flex;align-items:center;justify-content:center;touch-action:none;z-index:2;overflow:hidden}
+  .cropper .wrapc{position:relative;line-height:0}
+  .cropper img{max-width:100%;max-height:70vh;display:block;user-select:none;-webkit-user-drag:none}
+  .cropbox{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(10,10,12,.55);cursor:move;touch-action:none}
+  .cropbox .h{position:absolute;width:22px;height:22px;background:#fff;border-radius:50%;border:2px solid #19191b;touch-action:none}
+  .cropbox .h.tl{left:-12px;top:-12px;cursor:nwse-resize} .cropbox .h.tr{right:-12px;top:-12px;cursor:nesw-resize}
+  .cropbox .h.bl{left:-12px;bottom:-12px;cursor:nesw-resize} .cropbox .h.br{right:-12px;bottom:-12px;cursor:nwse-resize}
+  .cropbox .g{position:absolute;inset:0;background:
+    linear-gradient(to right,transparent 33.2%,rgba(255,255,255,.35) 33.3%,transparent 33.5%,transparent 66.5%,rgba(255,255,255,.35) 66.6%,transparent 66.8%),
+    linear-gradient(to bottom,transparent 33.2%,rgba(255,255,255,.35) 33.3%,transparent 33.5%,transparent 66.5%,rgba(255,255,255,.35) 66.6%,transparent 66.8%);pointer-events:none}
   button,label.btn{font-family:var(--sans);font-weight:600;font-size:.72rem;letter-spacing:.1em;
     text-transform:uppercase;border-radius:999px;padding:13px 18px;border:1px solid var(--line);
     background:var(--surface);color:var(--ink);cursor:pointer;flex:1;text-align:center;min-width:130px;
@@ -130,6 +141,12 @@
       <label class="btn" for="file">Choose photo</label>
       <input type="file" id="file" accept="image/*" multiple>
       <button id="toggle" disabled>Hide overlay</button>
+      <button id="cropBtn" disabled>Crop</button>
+    </div>
+    <div class="controls hide" id="cropControls">
+      <button id="cropAuto">Auto</button>
+      <button id="cropCancel">Cancel</button>
+      <label class="btn" id="cropApply" style="cursor:pointer">Apply crop</label>
     </div>
   </div>
 
@@ -174,7 +191,7 @@
     These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The score is a percentile against the SCUT-FBP5500 reference faces (see its card for who they are). Picking several photos at once averages them, which steadies every number. Facial thirds run hairline → brows → nose base → chin; the hairline comes from a hair/skin segmenter because the landmark mesh stops mid-forehead. Lighting, angle and expression all move the numbers.
   </div>
 
-  <footer>Mirror v1.7 · on-device · MediaPipe FaceLandmarker</footer>
+  <footer>Mirror v1.8 · on-device · MediaPipe FaceLandmarker</footer>
 </div>
 
 <script type="module">
@@ -520,7 +537,8 @@ function mergeResults(list){
 
 function draw(){
   if(!baseImg)return;
-  ctx.drawImage(baseImg,0,0,canvas.width,canvas.height);
+  const R=baseRect||{x:0,y:0,w:baseImg.width,h:baseImg.height};
+  ctx.drawImage(baseImg,R.x,R.y,R.w,R.h,0,0,canvas.width,canvas.height);
   if(!showOverlay||!lastPts)return;
   const P=lastPts;
   ctx.fillStyle='rgba(70,214,198,0.5)';
@@ -561,38 +579,94 @@ function segment(){
 }
 
 const loadImg=file=>new Promise((ok,bad)=>{const img=new Image();img.onload=()=>ok(img);img.onerror=()=>bad(new Error('Could not read '+file.name));img.src=URL.createObjectURL(file);});
-let lastFiles=[];
-async function analyzeOne(img){
-  const scale=Math.min(1,520/img.width);
-  canvas.width=img.width*scale;canvas.height=img.height*scale;
-  ctx.drawImage(img,0,0,canvas.width,canvas.height);
+let lastFiles=[], cropOverride=null, baseRect=null;
+/* Draw a region of the original photo onto the canvas (never upscaled, so skin texture stays honest) and detect. */
+function detectIn(img,R){
+  const scale=Math.min(1,520/R.w);
+  canvas.width=Math.round(R.w*scale);canvas.height=Math.round(R.h*scale);
+  ctx.drawImage(img,R.x,R.y,R.w,R.h,0,0,canvas.width,canvas.height);
   const res=landmarker.detect(canvas);
   if(!res.faceLandmarks||!res.faceLandmarks.length) return null;
-  const pts=res.faceLandmarks[0].map(l=>[l.x*canvas.width,l.y*canvas.height]);
-  const trich=findTrichion(pts,segment());
-  return {img,pts,trich,r: mode==='profile'? profileCompute(pts) : compute(pts,trich)};
+  return res.faceLandmarks[0].map(l=>[l.x*canvas.width,l.y*canvas.height]);
 }
-async function handleFiles(files){
-  files=[...files].slice(0,8); lastFiles=files;
+/* Auto-zoom: frame the face (with room above for the hairline) using the photo's full-resolution pixels. */
+function autoRect(img,pts){
+  const k=Math.max(1,img.width/520);   // canvas px -> original px
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const p of pts){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1]);}
+  x0*=k;x1*=k;y0*=k;y1*=k; const fw=x1-x0, fh=y1-y0;
+  let w=fw*1.9, h=fh*1.95, cx=(x0+x1)/2, top=y0-fh*0.6;            // mesh stops mid-forehead: leave room for hair
+  w=Math.max(w,h*0.8); h=Math.max(h,w*1.0);
+  const R={x:Math.max(0,cx-w/2),y:Math.max(0,top),w:0,h:0};
+  R.w=Math.min(img.width-R.x,w); R.h=Math.min(img.height-R.y,h);
+  return (R.w<img.width*0.8||R.h<img.height*0.8)? R : null;        // only zoom when it actually helps
+}
+async function analyzeOne(img,override){
+  const full={x:0,y:0,w:img.width,h:img.height};
+  let R=override||full, pts=detectIn(img,R);
+  if(!pts) return null;
+  if(!override){ const A=autoRect(img,pts); if(A){ const p2=detectIn(img,A); if(p2){R=A;pts=p2;} else detectIn(img,full); } }
+  const trich=findTrichion(pts,segment());
+  return {img,R,zoomed:R!==full,pts,trich,r: mode==='profile'? profileCompute(pts) : compute(pts,trich)};
+}
+async function handleFiles(files,keepCrop){
+  files=[...files].slice(0,8); if(!keepCrop) cropOverride=null; lastFiles=files;
   status.textContent=files.length>1?`Analyzing ${files.length} photos…`:'Analyzing…';status.classList.remove('err');
   drop.classList.add('hide');canvas.classList.remove('hide');
   const done=[]; let noFace=0;
   try{
-    for(const f of files){ const img=await loadImg(f); const a=await analyzeOne(img); URL.revokeObjectURL(img.src); if(a) done.push(a); else noFace++; }
+    for(let i=0;i<files.length;i++){ const img=await loadImg(files[i]); const a=await analyzeOne(img,i===0?cropOverride:null); if(a) done.push(a); else { noFace++; if(i===0) baseImg=img; } }
   }catch(e){status.textContent='Analysis error: '+e.message;status.classList.add('err');return;}
-  if(!done.length){status.textContent='No face found. Try a clearer, front-facing photo.';status.classList.add('err');lastPts=null;baseImg=null;return;}
+  $('cropBtn').disabled=false;
+  if(!done.length){status.textContent='No face found. Use Crop to frame the face, or try a clearer, front-facing photo.';status.classList.add('err');lastPts=null;baseRect=null;
+    if(baseImg){canvas.width=Math.min(520,baseImg.width);canvas.height=baseImg.height*canvas.width/baseImg.width;ctx.drawImage(baseImg,0,0,canvas.width,canvas.height);} return;}
   // show the first photo with its overlay
-  const first=done[0]; baseImg=first.img; lastPts=first.pts; lastTrich=first.trich;
-  const scale=Math.min(1,520/baseImg.width); canvas.width=baseImg.width*scale; canvas.height=baseImg.height*scale;
+  const first=done[0]; baseImg=first.img; baseRect=first.R; lastPts=first.pts; lastTrich=first.trich;
+  const scale=Math.min(1,520/baseRect.w); canvas.width=Math.round(baseRect.w*scale); canvas.height=Math.round(baseRect.h*scale);
   draw();
   const r=mergeResults(done.map(d=>d.r));
   if(mode==='profile') renderProfile(r); else render(r);
   toggleBtn.disabled=false;
   const skip=noFace?` (${noFace} photo${noFace>1?'s':''} had no detectable face)`:'';
-  if(mode==='profile'){ if(r.n===1) status.textContent='Done. Line traces glabella → nasion → tip → subnasale → lip → chin.'+skip; else status.textContent+=skip; }
-  else status.textContent = (r.n>1?`Averaged over ${r.n} photos; ± is the spread between them. Showing the first. `:'Done. ')
+  const zoom=cropOverride?'Using your crop. ':(done.some(d=>d.zoomed)?'Zoomed in on the face automatically. ':'');
+  if(mode==='profile'){ if(r.n===1) status.textContent=zoom+'Done. Line traces glabella → nasion → tip → subnasale → lip → chin.'+skip; else status.textContent=zoom+status.textContent+skip; }
+  else status.textContent = zoom+(r.n>1?`Averaged over ${r.n} photos; ± is the spread between them. Showing the first. `:'Done. ')
     +'Yellow = thirds (solid top line = detected hairline), red = face axis, dots = 478 landmarks.'+skip;
 }
+
+/* ---------- manual crop: drag the box, drag a corner to resize; applies to the first photo ---------- */
+let cropUI=null;
+function openCrop(){
+  if(!baseImg) return;
+  const stage=$('stage'), wrap=document.createElement('div'); wrap.className='cropper';
+  const inner=document.createElement('div'); inner.className='wrapc';
+  const im=document.createElement('img'); im.src=baseImg.src; im.alt='Crop';
+  const box=document.createElement('div'); box.className='cropbox'; box.innerHTML='<div class="g"></div><i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i>';
+  inner.append(im,box); wrap.append(inner); stage.append(wrap);
+  $('cropControls').classList.remove('hide'); document.querySelector('.controls').classList.add('hide');
+  const start=baseRect||{x:0,y:0,w:baseImg.width,h:baseImg.height};
+  let B=null;                                  // box in displayed px
+  const place=()=>{ box.style.left=B.x+'px';box.style.top=B.y+'px';box.style.width=B.w+'px';box.style.height=B.h+'px'; };
+  const init=()=>{ const s=im.clientWidth/baseImg.width; B={x:start.x*s,y:start.y*s,w:start.w*s,h:start.h*s}; place(); };
+  if(im.complete) requestAnimationFrame(init); else im.onload=init;
+  let drag=null;
+  box.addEventListener('pointerdown',e=>{ e.preventDefault(); box.setPointerCapture(e.pointerId);
+    drag={mode:e.target.classList.contains('h')?[...e.target.classList].find(c=>c!=='h'):'move', x:e.clientX,y:e.clientY,b:{...B}}; });
+  box.addEventListener('pointermove',e=>{ if(!drag) return;
+    const W=im.clientWidth,H=im.clientHeight,dx=e.clientX-drag.x,dy=e.clientY-drag.y,b=drag.b,min=40; let {x,y,w,h}=b;
+    if(drag.mode==='move'){ x=Math.min(Math.max(0,b.x+dx),W-b.w); y=Math.min(Math.max(0,b.y+dy),H-b.h); }
+    else{ if(drag.mode.includes('l')){ x=Math.min(Math.max(0,b.x+dx),b.x+b.w-min); w=b.x+b.w-x; }
+          if(drag.mode.includes('r')){ w=Math.min(Math.max(min,b.w+dx),W-b.x); }
+          if(drag.mode.includes('t')){ y=Math.min(Math.max(0,b.y+dy),b.y+b.h-min); h=b.y+b.h-y; }
+          if(drag.mode.includes('b')){ h=Math.min(Math.max(min,b.h+dy),H-b.y); } }
+    B={x,y,w,h}; place(); });
+  box.addEventListener('pointerup',()=>{drag=null;});
+  cropUI={wrap,im,get:()=>{ const s=baseImg.width/im.clientWidth; return {x:B.x*s,y:B.y*s,w:B.w*s,h:B.h*s}; }};
+}
+function closeCrop(){ if(cropUI){cropUI.wrap.remove();cropUI=null;} $('cropControls').classList.add('hide'); document.querySelector('.controls').classList.remove('hide'); }
+$('cropBtn').addEventListener('click',openCrop);
+$('cropCancel').addEventListener('click',closeCrop);
+$('cropAuto').addEventListener('click',()=>{ closeCrop(); cropOverride=null; if(lastFiles.length) handleFiles(lastFiles,true); });
+$('cropApply').addEventListener('click',()=>{ if(!cropUI) return; cropOverride=cropUI.get(); closeCrop(); handleFiles(lastFiles,true); });
 
 function setMode(m){
   mode=m;
@@ -602,7 +676,7 @@ function setMode(m){
   status.textContent = m==='profile'
     ? 'Upload a true side profile — head level, looking straight ahead, one ear visible.'
     : 'Use a straight-on photo, face level, even lighting, hair off the forehead. Pick 2–5 photos at once to average out angle and lighting.';
-  if(lastFiles.length) handleFiles(lastFiles);   // re-measure the same photos in the new mode
+  if(lastFiles.length) handleFiles(lastFiles,true);   // re-measure the same photos in the new mode
 }
 $('segFront').addEventListener('click',()=>setMode('front'));
 $('segProfile').addEventListener('click',()=>setMode('profile'));
