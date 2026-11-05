@@ -159,7 +159,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.5 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.5.1 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -270,8 +270,12 @@ const SEED = [
      {title:"Big 4 Job Tracker", summary:"Mondays: openings that fit your background, plus recruiting events."},
    ]},
   {key:"builder", title:"Builder Board", status:"live", url:"./",
-   summary:"This board: every project you're building, its state, what it does, and what lives inside it.",
-   children:[]},
+   summary:"This board (v1.5): every project, its state, what it does and what lives inside it, with Mission Control on top running live health checks. Categories fold to keep the page short. Next: monitor the scheduled tasks and the NBA model, which Mission Control can't see yet.",
+   children:[
+     {title:"Mission Control", summary:"Live checks for site deploys, the Morning Brief feed, Nemesis sync, Mirror's score model and the Palate workflows."},
+     {title:"Collapsible categories", summary:"Building, Live, Ideas and Graveyard fold open or shut, showing a one-line peek of project names when folded; remembered per device."},
+     {title:"builder-sync skill", summary:"When you say you're done with a project for the moment, Claude rewrites its card here from what changed that session."},
+   ]},
 
   {key:"jarvis", title:"Jarvis", status:"idea", url:"",
    summary:"A phone assistant layered over your own apps (Fieldwork, Nemesis, the NBA model) with Claude as the brain.",
