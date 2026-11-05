@@ -159,7 +159,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.5.2 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.5.3 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -284,6 +284,12 @@ const SEED = [
      {title:"Engagement letter", summary:"Scope, fee, deposit, and what's excluded (tax, audit, legal advice)."},
      {title:"Intake checklist", summary:"Statements, logins and prior returns to collect before starting."},
      {title:"Lead replies", summary:"First response, quote and follow-up templates so leads get a fast answer."},
+   ]},
+  {key:"wifiradar", title:"Wi-Fi Radar", status:"idea", url:"",
+   summary:"Presence and motion sensing in your own space from Wi-Fi signal disturbances, using 2–3 cheap ESP32 boards running open-source CSI tools. Realistic goal: which room has someone in it and when they move, not silhouettes. Your router alone can't do it: consumer routers don't expose the signal data.",
+   children:[
+     {title:"Hardware", summary:"ESP32 boards (about $10 each) flashed with CSI capture firmware, placed around one room first."},
+     {title:"Ground rules", summary:"Own space only; never used to sense people who don't know about it."},
    ]},
   {key:"jarvis", title:"Jarvis", status:"idea", url:"",
    summary:"A phone assistant layered over your own apps (Fieldwork, Nemesis, the NBA model) with Claude as the brain.",
