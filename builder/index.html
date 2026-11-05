@@ -159,7 +159,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.5.4 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.5.5 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -233,8 +233,11 @@ const SEED = [
      {title:"Replay", summary:"The artifact version that runs on your Claude plan with no API key, pinned to your sidebar."},
    ]},
   {key:"brain", title:"Second Brain", status:"live", url:"../brain/",
-   summary:"Your personal knowledge base as a home-screen app. Notes live on your phone and open instantly.",
+   summary:"Your personal knowledge base as a home-screen app, with Obsidian-style [[links]], backlinks, graph and canvases. Hand-written notes now match Claude's: templates, strength meters and auto-linking on save. Next: sync notes as Markdown to a private repo so Claude (and a future Jarvis) can read them.",
    children:[
+     {title:"Templates", summary:"Any note tagged #template shows under 'Start from' on a new, empty note and fills headings, tags, folder and section."},
+     {title:"Strength meters", summary:"Lines like 'Evidence: 3/5' or 'Potency: ●●●○○' render as dot meters."},
+     {title:"Auto-linking", summary:"Done links mentions of other notes' titles, and links back from notes that mention this one; suggested tags from the folder."},
      {title:"Esoteric journal", summary:"Lesser-known remedies and supplements with benefits and uses, organized by searchable tags."},
      {title:"Kitchen codex", summary:"A linked note ecosystem for cooking techniques and recipes."},
      {title:"Palate link", summary:"Recipe ratings feed Palate; its favorites come back as notes."},
