@@ -159,7 +159,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.5.3 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.5.4 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -186,6 +186,13 @@ const SEED = [
      {title:"Score", summary:"Separate men's and women's models (once the per-sex refit is committed), a percentile within your sex, and 'what's moving it' per marker."},
      {title:"Side-profile mode", summary:"Nasofrontal, nasolabial and nasomental angles plus facial convexity, traced on a true side photo."},
      {title:"Benchmark tooling", summary:"mirror/tools: run_benchmark.py downloads SCUT-FBP5500 and the models; train_score.py extracts the exact markers Mirror uses and writes mirror/score_model.json."},
+   ]},
+  {key:"receipts", title:"Receipts (X account)", status:"building", url:"",
+   summary:"An X account that answers whatever people are arguing about with the actual data: the claim, the primary-source number, one sharp line. You post; Claude researches, fact-checks and drafts. Next: pick the handle, then 30 days of 2–4 posts a weekday before judging anything.",
+   children:[
+     {title:"Playbook doc", summary:"Angle, voice, five post formats, approved primary data sources, algorithm rules, daily workflow and the scoreboard."},
+     {title:"Daily draft deck", summary:"Weekdays 7:13 AM ET: 5–8 fact-checked post drafts plus reply drafts in a new doc, with a push notification."},
+     {title:"Weekly review", summary:"Sundays 6:43 PM ET: reads the scoreboard and reports which formats, topics and hooks worked."},
    ]},
   {key:"dashboard", title:"Command Center", status:"building", url:"../dashboard/",
    summary:"One screen that reads every app's saved data and shows a live tile per app. It works, but it only shows counts, so it needs a rethink to surface what to act on.",
