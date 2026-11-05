@@ -49,7 +49,14 @@
 
   .col{display:flex;flex-direction:column;gap:10px}
   .col + .col{margin-top:12px}
-  .col-head{display:flex;align-items:baseline;gap:10px;padding:0 2px}
+  .col-head{display:flex;align-items:center;gap:10px;padding:6px 2px;width:100%;background:none;border:none;margin:0;
+    font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:10px}
+  .col-head:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .col-head .chev{margin-left:auto;transform:rotate(45deg)}
+  .col.shut .col-head .chev{transform:rotate(-45deg)}
+  .col.shut .card,.col.shut .empty{display:none}
+  .col-head .peek{color:var(--muted);font-size:.74rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+  .col:not(.shut) .col-head .peek{display:none}
   .col-head .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
   .col-head h2{font-family:var(--display);font-weight:600;font-size:1.45rem;margin:0}
   .col-head .n{color:var(--muted);font-size:.82rem;font-variant-numeric:tabular-nums}
@@ -152,7 +159,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.4.1 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.5 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -319,6 +326,11 @@ function load(){
 function save(s){ try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){} }
 let state = load();
 const openIds = new Set();
+/* Collapsed categories, remembered per device. Building starts open; the rest start folded. */
+const UI_KEY = "builder.ui";
+const ui = (() => { try{ return JSON.parse(localStorage.getItem(UI_KEY)) || {}; }catch(e){ return {}; } })();
+if(!ui.shut) ui.shut = { live:true, idea:true, parked:true };
+const saveUI = () => { try{ localStorage.setItem(UI_KEY, JSON.stringify(ui)); }catch(e){} };
 const editing = new Set();
 
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -329,8 +341,12 @@ function render(){
   for(const col of COLS){
     const items = state.items.filter(i => i.status === col.id);
     total += items.length;
-    const wrap = document.createElement("div"); wrap.className = "col";
-    wrap.innerHTML = '<div class="col-head"><span class="dot '+col.id+'"></span><h2>'+col.name+'</h2><span class="n">'+items.length+'</span></div>';
+    const shut = !!ui.shut[col.id];
+    const wrap = document.createElement("div"); wrap.className = "col" + (shut ? " shut" : "");
+    const peek = items.map(i => i.title).join(" · ");
+    wrap.innerHTML = '<button class="col-head" aria-expanded="'+(!shut)+'"><span class="dot '+col.id+'"></span><h2>'+col.name+'</h2><span class="n">'+items.length+'</span>'
+      + '<span class="peek">'+esc(peek)+'</span><span class="chev" aria-hidden="true"></span></button>';
+    wrap.querySelector(".col-head").addEventListener("click", () => { ui.shut[col.id] = !ui.shut[col.id]; saveUI(); render(); });
     if(!items.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "—"; wrap.append(e); }
     for(const it of items) wrap.append(cardFor(it));
     board.append(wrap);
@@ -352,7 +368,7 @@ function cardFor(it){
       '<button class="del" aria-label="Delete '+esc(it.title)+'">×</button></div>' +
     '</div>';
   card.querySelector(".toggle").onclick = () => { isOpen ? openIds.delete(it.id) : openIds.add(it.id); render(); };
-  card.querySelector("select").onchange = e => { it.status = e.target.value; save(state); render(); };
+  card.querySelector("select").onchange = e => { it.status = e.target.value; ui.shut[it.status] = false; saveUI(); save(state); render(); };
   card.querySelector(".del").onclick = () => { state.items = state.items.filter(x => x.id !== it.id); save(state); render(); };
   if(isOpen) card.append(panelFor(it, kids));
   return card;
@@ -525,7 +541,7 @@ function renderMC(){
 function add(){
   const t = $("#newTitle").value.trim(); if(!t) return;
   const it = { id:uid(), title:t, summary:"", url:"", status:$("#newStatus").value, children:[] };
-  state.items.unshift(it); openIds.add(it.id);
+  state.items.unshift(it); openIds.add(it.id); ui.shut[it.status] = false; saveUI();
   save(state); $("#newTitle").value = ""; render();
   const ta = document.getElementById("sum-" + it.id); if(ta) ta.focus();
 }
