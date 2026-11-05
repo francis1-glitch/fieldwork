@@ -169,13 +169,42 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .suggest .chip{background:var(--copper-lt);border-color:transparent;color:var(--copper-dk)}
 .viewbody{flex:1;overflow:auto;display:flex;flex-direction:column;gap:14px;min-height:0}
 .viewbody .render{flex:none;overflow:visible}
-/* graph */
-.graphwrap{background:var(--page);border:1px solid var(--rule);border-radius:8px;overflow:hidden;position:relative}
-canvas.graph{display:block;width:100%;touch-action:none;cursor:grab}
-.gzoom{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
-.gzoom .btn{min-width:40px;padding:6px 8px;font-size:16px;background:var(--paper)}
-.gbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
-.gbar .gsel{flex:1 1 160px;min-width:0;font-weight:600;overflow-wrap:anywhere}
+/* graph: takes the whole page between the top of the screen and the tab bar; controls float over it */
+body.graphmode{overflow:hidden;overscroll-behavior:none}
+body.graphmode .wrap{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);bottom:calc(var(--navh) + env(safe-area-inset-bottom,0px));max-width:none;margin:0;padding:0;display:block}
+.graphwrap{position:absolute;inset:0;background:var(--page);overflow:hidden}
+canvas.graph{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.gtop{position:absolute;left:0;right:0;top:0;z-index:2;pointer-events:none;
+  padding:12px max(16px,env(safe-area-inset-right,0px)) 18px max(16px,env(safe-area-inset-left,0px));
+  background:linear-gradient(var(--page) 55%, color-mix(in srgb, var(--page) 0%, transparent))}
+.gtop > *{pointer-events:auto}
+.gtop .top{max-width:none}
+.gchips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:10px calc(-1 * max(16px,env(safe-area-inset-left,0px))) 0;padding:2px max(16px,env(safe-area-inset-left,0px));-webkit-mask:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent)}
+.gchips::-webkit-scrollbar{display:none}
+.gchips .chip{display:inline-flex;align-items:center;gap:5px;background:color-mix(in srgb, var(--paper) 88%, transparent);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:background .25s,color .25s,border-color .25s}
+.gchips .chip[aria-pressed="true"]{background:var(--copper);border-color:var(--copper);color:var(--paper)}
+.gchips .chip svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2}
+.gchips .lbl{flex:none;align-self:center;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-3);font-weight:600;margin-right:2px}
+.gzoom{position:absolute;right:max(12px,env(safe-area-inset-right,0px));bottom:16px;z-index:2;display:flex;flex-direction:column;gap:6px;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.gzoom .btn{min-width:44px;min-height:40px;padding:6px 8px;font-size:17px;background:color-mix(in srgb, var(--paper) 90%, transparent);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 1px 8px rgba(0,0,0,.08)}
+.gbar{position:absolute;left:max(12px,env(safe-area-inset-left,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 56px);bottom:16px;z-index:3;
+  display:flex;flex-direction:column;gap:8px;padding:12px 12px 10px;border:1px solid var(--rule);border-radius:12px;
+  background:color-mix(in srgb, var(--paper) 92%, transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 24px rgba(0,0,0,.12);
+  transform:translateY(calc(100% + 24px));opacity:0;transition:transform .38s cubic-bezier(.2,.8,.2,1),opacity .25s;pointer-events:none}
+.gbar.on{transform:none;opacity:1;pointer-events:auto}
+.gbar .gsel{font-weight:600;overflow-wrap:anywhere;line-height:1.3}
+.gbar .gsub{font-size:12.5px;color:var(--ink-3);font-weight:500}
+.gbar .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.gbar .btn{padding:7px 12px;font-size:14px}
+.ghead{display:flex;align-items:flex-start;gap:8px;justify-content:space-between}
+.gx{flex:none;border:0;background:transparent;color:var(--ink-3);font-size:15px;width:32px;height:32px;margin:-6px -6px 0 0;border-radius:50%}
+.gseg{display:inline-flex;border:1px solid var(--rule);border-radius:999px;overflow:hidden;margin-left:auto}
+.gseg button{border:0;background:transparent;padding:5px 10px;font-size:12.5px;font-weight:600;color:var(--ink-3);transition:background .2s,color .2s}
+.gseg button[aria-pressed="true"]{background:var(--copper-lt);color:var(--copper-dk)}
+.glegend{position:absolute;left:max(12px,env(safe-area-inset-left,0px));bottom:16px;z-index:1;display:flex;gap:12px;font-size:12px;color:var(--ink-3);transition:opacity .25s;pointer-events:none;
+  padding:5px 10px;border-radius:999px;background:color-mix(in srgb, var(--paper) 85%, transparent);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.glegend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.gempty{position:absolute;left:16px;right:16px;bottom:72px;z-index:1;text-align:center;font-size:13.5px;color:var(--ink-3)}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 /* canvas board */
@@ -436,6 +465,7 @@ function filtered(){
 function render(){
   for (const id of ['notes','canvas','graph','tags','set']) $('#nav-'+id).setAttribute('aria-current', tab===id?'page':'false');
   const app = $('#app'); app.replaceChildren();
+  document.body.classList.toggle('graphmode', tab==='graph');
   if (tab==='notes') renderNotes(app);
   else if (tab==='canvas') renderCanvasList(app);
   else if (tab==='graph') renderGraph(app);
@@ -761,15 +791,18 @@ function renderGraph(app){
   const edges = [], seen = new Set();
   notes.forEach((n,i) => { for (const t of linksOf(n.body)){ const j = idx.get(norm(t)); if (j==null || j===i) continue; const k = i<j ? i+'-'+j : j+'-'+i; if (!seen.has(k)){ seen.add(k); edges.push([i,j]); } } });
   const hright = el('div',{class:'hright'}, el('span',{class:'count',text: notes.length+' notes · '+edges.length+' link'+(edges.length===1?'':'s')}));
-  app.append(el('header',{class:'top'}, el('h1',{text:'Graph'}), hright));
+  const gtop = el('div',{class:'gtop'}, el('header',{class:'top'}, el('h1',{text:'Graph'}), hright));
   // link suggestions scan every note against every title: count them after the graph is on screen, not before
   setTimeout(() => { if (!hright.isConnected) return; const nSug = allSuggestions().length;
     if (nSug) hright.append(el('button',{class:'btn ghost imp',text:nSug+' suggestion'+(nSug===1?'':'s'),onclick:suggestionsSheet})); }, 120);
-  if (!notes.length){ app.append(el('div',{class:'empty',text:'No notes yet. Once you have a few, link them with [[Note title]] and they’ll connect here.'})); return; }
   const wrap = el('div',{class:'graphwrap'}), cv = el('canvas',{class:'graph',role:'img','aria-label':'Map of your notes and the links between them'});
-  wrap.append(cv); app.append(wrap);
-  app.append(el('div',{class:'legend'}, el('span',{}, el('i',{style:'background:var(--copper)'}), 'Linked note'), el('span',{}, el('i',{style:'background:var(--ink-3)'}), 'Not linked yet'), el('span',{text:'Drag a dot to pull it, drag space to pan, pinch or +/− to zoom. Tap a dot to highlight its links, tap again to open.'})));
-  if (!edges.length) app.append(el('p',{class:'hint',text:'Nothing is linked yet. Open a note, tap “[[ ]] Link”, and pick another note to connect them.'}));
+  wrap.append(cv, gtop); app.append(wrap);
+  if (!notes.length){ wrap.append(el('div',{class:'gempty',style:'bottom:auto;top:45%',text:'No notes yet. Once you have a few, link them with [[Note title]] and they’ll connect here.'})); return; }
+  const legend = el('div',{class:'glegend'}, el('span',{}, el('i',{style:'background:var(--copper)'}), 'Linked'), el('span',{}, el('i',{style:'background:var(--ink-3)'}), 'Not linked yet'));
+  wrap.append(legend);
+  if (!edges.length) wrap.append(el('div',{class:'gempty',text:'Nothing is linked yet. Open a note, tap “[[ ]] Link”, and pick another note to connect them.'}));
+  else { let seenTip = false; try{ seenTip = localStorage.getItem('brain.graphtip')==='1'; localStorage.setItem('brain.graphtip','1'); }catch(e){}
+    if (!seenTip) setTimeout(()=>toast('Tap a pinned chip to focus on its links. Drag dots, pinch to zoom.'), 600); }
 
   const N = notes.length, deg = new Array(N).fill(0), adj = notes.map(()=>[]);
   for (const [a,b] of edges){ deg[a]++; deg[b]++; adj[a].push(b); adj[b].push(a); }
@@ -847,20 +880,29 @@ function renderGraph(app){
   const css = getComputedStyle(document.documentElement); let C = {};
   const readColors = () => { const g = v => css.getPropertyValue(v).trim(); C = {copper:g('--copper'), rule:g('--rule'), ink:g('--ink'), ink2:g('--ink-2'), ink3:g('--ink-3'), page:g('--page')}; };
   readColors();
-  const W = wrap.clientWidth || 340, H = Math.round(Math.max(360, window.innerHeight*0.68)), dpr = Math.min(window.devicePixelRatio||1, 3);
-  cv.width = W*dpr; cv.height = H*dpr; cv.style.height = H+'px';
-  const fitView = (minK) => { const b = bounds([...Array(N).keys()]), fk = Math.min((W-60)/Math.max(1,b.x1-b.x0), (H-60)/Math.max(1,b.y1-b.y0));
-    const k = Math.max(minK, Math.min(1.4, fk));
-    let cx = (b.x0+b.x1)/2, cy = (b.y0+b.y1)/2;
-    if (fk < minK && linked.length){ const hub = linked.reduce((m,i)=>deg[i]>deg[m]?i:m, linked[0]); cx = P[hub].x; cy = P[hub].y; }
-    return {k, tx: W/2 - cx*k, ty: H/2 - cy*k}; };
-  let view = GVIEW && GVIEW.w===W ? {...GVIEW.v} : fitView(0.95), touched = !!(GVIEW && GVIEW.w===W);
-  const keepView = () => { GVIEW = {w:W, v:{...view}}; };
+  const W = wrap.clientWidth || 340, H = wrap.clientHeight || 560, dpr = Math.min(window.devicePixelRatio||1, 3);
+  cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+  // the header/chips float over the top and the zoom buttons / selection card over the bottom: frame things inside what's left
+  const insets = () => ({top: gtop.offsetHeight + 4, bottom: bar.classList.contains('on') ? bar.offsetHeight + 30 : 40});
+  const frameBox = (b, minK, maxK, pad) => { const ins = insets(), vh = Math.max(120, H - ins.top - ins.bottom);
+    const fk = Math.min((W-2*pad)/Math.max(1,b.x1-b.x0), (vh-2*pad)/Math.max(1,b.y1-b.y0)), k = Math.max(minK, Math.min(maxK, fk));
+    return {k, fk, cx:(b.x0+b.x1)/2, cy:(b.y0+b.y1)/2, sy: ins.top + vh/2}; };
+  const fitView = (minK) => { const f = frameBox(bounds([...Array(N).keys()]), minK, 1.4, 30); let {cx, cy} = f;
+    if (f.fk < minK && linked.length){ const hub = linked.reduce((m,i)=>deg[i]>deg[m]?i:m, linked[0]); cx = P[hub].x; cy = P[hub].y; }
+    return {k:f.k, tx: W/2 - cx*f.k, ty: f.sy - cy*f.k}; };
+  const sameSize = GVIEW && GVIEW.w===W && GVIEW.h===H;
+  let view = sameSize ? {...GVIEW.v} : null, touched = !!sameSize;
+  const keepView = () => { GVIEW = {w:W, h:H, v:{...view}}; };
 
   // 5. drawing: only when something changed. Links are stroked in small batches in screen pixels, dots stamped from
   //    pre-drawn sprites, labels culled and thinned when zoomed far. When nothing is moving, the whole picture is baked
   //    into an off-screen image so panning and zooming just slide that image (no re-drawing hundreds of links per frame).
-  let sel = -1, hl = 0, hlTo = 0, dirty = true, vdirty = false, tween = null;
+  let sel = -1, hl = 0, hlTo = 0, dirty = true, vdirty = false, tween = null, depth = 1, fset = null, fedges = [], focused = -1;
+  // the selected note plus everything within `depth` links of it, and the links among them
+  const buildFocus = () => { if (sel<0){ fset = null; fedges = []; return; }
+    const d = new Map([[sel,0]]), q = [sel];
+    for (let h=0; h<q.length; h++){ const v = q[h], dv = d.get(v); if (dv>=depth) continue; for (const w of adj[v]) if (!d.has(w)){ d.set(w, dv+1); q.push(w); } }
+    fset = new Set(d.keys()); fedges = edges.filter(([a,b]) => fset.has(a) && fset.has(b) && (depth>1 || a===sel || b===sel)); };
   const order = [...Array(N).keys()].sort((a,b)=>deg[b]-deg[a]);
   const ctx = cv.getContext('2d'), sprites = new Map(), labelW = new Map();
   const sprite = (fill, r) => { const q = Math.max(1, Math.round(r*2)/2), key = fill+q; let sp = sprites.get(key);
@@ -870,14 +912,14 @@ function renderGraph(app){
   const paint = (g, v, w, h, pr) => {
     const {k, tx, ty} = v;
     g.setTransform(pr,0,0,pr,0,0); g.clearRect(0,0,w,h);
-    const nb = sel>=0 ? new Set([sel, ...adj[sel]]) : null, dim = 1 - 0.75*hl;
+    const nb = sel>=0 ? fset : null, dim = 1 - 0.78*hl;
     const vx0 = -tx/k - 40, vy0 = -ty/k - 40, vx1 = (w-tx)/k + 40, vy1 = (h-ty)/k + 40, inView = p => p.x>vx0 && p.x<vx1 && p.y>vy0 && p.y<vy1;
     if (lone.length && linked.length && LG.y > vy0 && LG.y < vy1){ g.globalAlpha = dim; g.fillStyle = C.ink3; g.font = '600 11px Figtree, system-ui, sans-serif'; g.textAlign='left'; g.textBaseline='bottom'; g.fillText('NOT LINKED YET', (LG.x + 40)*k+tx, (LG.y + 4)*k+ty - 2); }
     g.lineWidth = 1.2; g.globalAlpha = nb ? dim : 1; g.strokeStyle = C.rule; g.beginPath(); let seg = 0;
-    for (const [a,b] of edges){ if (nb && (a===sel||b===sel)) continue; const p=P[a], q=P[b]; if (!inView(p) && !inView(q)) continue;
+    for (const [a,b] of edges){ if (nb && nb.has(a) && nb.has(b) && (depth>1 || a===sel || b===sel)) continue; const p=P[a], q=P[b]; if (!inView(p) && !inView(q)) continue;
       g.moveTo(p.x*k+tx, p.y*k+ty); g.lineTo(q.x*k+tx, q.y*k+ty); if (++seg % 48 === 0){ g.stroke(); g.beginPath(); } }
     g.stroke();
-    if (nb){ g.globalAlpha = 1; g.strokeStyle = C.copper; g.lineWidth = 1.3 + 0.9*hl; g.beginPath(); for (const j of adj[sel]){ g.moveTo(P[sel].x*k+tx, P[sel].y*k+ty); g.lineTo(P[j].x*k+tx, P[j].y*k+ty); } g.stroke(); }
+    if (nb){ g.globalAlpha = 0.35 + 0.65*hl; g.strokeStyle = C.copper; g.lineWidth = 1.2 + 0.9*hl; g.beginPath(); for (const [a,b] of fedges){ g.moveTo(P[a].x*k+tx, P[a].y*k+ty); g.lineTo(P[b].x*k+tx, P[b].y*k+ty); } g.stroke(); }
     for (const [fill, list] of [[C.ink3, lone], [C.copper, linked]]){
       for (const i of list){ const p = P[i]; if (!inView(p)) continue; const on = !nb || nb.has(i);
         g.globalAlpha = on ? 1 : dim; const r = rad(i)*k*(i===sel ? 1 + 0.25*hl : 1), sp = sprite(fill, r);
@@ -886,7 +928,7 @@ function renderGraph(app){
     // labels: everything once you're zoomed in, otherwise the best-connected notes
     g.font = '500 12px Figtree, system-ui, sans-serif'; g.textAlign='center'; g.textBaseline='top'; g.lineWidth = 3; g.lineJoin = 'round'; g.strokeStyle = C.page; g.fillStyle = C.ink2;
     // a label is skipped if it would land on one already drawn (hubs and the selected note's neighbours win)
-    const base = k >= 0.7 || N <= 40 ? order : order.slice(0, 25), show = nb ? [sel, ...adj[sel], ...base] : base, taken = [], done = new Set(); let drawn = 0;
+    const base = k >= 0.7 || N <= 40 ? order : order.slice(0, 25), show = nb ? [sel, ...[...nb].sort((a,b)=>deg[b]-deg[a]), ...base] : base, taken = [], done = new Set(); let drawn = 0;
     for (const i of show){ if (done.has(i)) continue; done.add(i); const p = P[i]; if (!inView(p)) continue; const on = !nb || nb.has(i); if (!on && hl > 0.98) continue; if (drawn > 220) break;
       const t = notes[i].title.length>28 ? notes[i].title.slice(0,27)+'…' : notes[i].title, x = p.x*k+tx, y = (p.y + rad(i))*k + ty + 3;
       let tw = labelW.get(t); if (tw==null){ tw = g.measureText(t).width; labelW.set(t, tw); }
@@ -895,8 +937,10 @@ function renderGraph(app){
       g.globalAlpha = on ? 1 : dim; g.strokeText(t, x, y); g.fillText(t, x, y); }
     g.globalAlpha = 1;
   };
+  // small graphs redraw crisply every frame while the camera moves; big ones slide the baked picture (the GPU cost is in the links)
+  const bigScene = N + edges.length > 450;
   const draw = () => paint(ctx, view, W, H, dpr);
-  const bake = {c: document.createElement('canvas'), v: null, ok: false}, BM = Math.round(Math.max(W, H)*0.4), BPR = Math.min(dpr, 2);
+  const bake = {c: document.createElement('canvas'), v: null, ok: false}, BM = Math.round(Math.max(W, H)*0.25), BPR = Math.min(dpr, 2);
   bake.c.width = Math.ceil((W+2*BM)*BPR); bake.c.height = Math.ceil((H+2*BM)*BPR);
   const doBake = () => { bake.v = {...view}; paint(bake.c.getContext('2d'), {k:view.k, tx:view.tx+BM, ty:view.ty+BM}, W+2*BM, H+2*BM, BPR); bake.ok = true; };
   const present = () => { const s = view.k/bake.v.k, f = dpr*s/BPR;
@@ -914,26 +958,57 @@ function renderGraph(app){
       // a couple of steps a frame, so the settle reads as motion; never more than a few ms, so the phone stays responsive
       const t0 = performance.now(); let n = 0; do { tick(); n++; } while ((reduce || n < 2) && performance.now()-t0 < (reduce ? 14 : 6) && (alpha > 0.005 || target > 0));
       pack(false); dirty = true; settledSaved = false;
-      if (!touched && alpha < 0.08 && !tween){ const f = fitView(0.95); animateTo(f, 500); touched = true; }
+      if (!touched && alpha < 0.08 && !tween){ animateTo(fitView(0.95), 600, {fly:true}); touched = true; }
     } else if (!settledSaved){ gposSave(ids); settledSaved = true; }
     if (hl !== hlTo){ hl = reduce ? hlTo : Math.abs(hlTo-hl) < 0.04 ? hlTo : hl + (hlTo-hl)*0.25; dirty = true; if (hl===0 && hlTo===0 && sel>=0 && pendingClear){ sel = -1; pendingClear = false; } }
-    if (tween){ const u = Math.min(1, (now - tween.t0)/tween.ms), e = 1 - Math.pow(1-u, 3);
-      view = {k: tween.a.k + (tween.b.k-tween.a.k)*e, tx: tween.a.tx + (tween.b.tx-tween.a.tx)*e, ty: tween.a.ty + (tween.b.ty-tween.a.ty)*e}; vdirty = true; if (u>=1){ tween = null; keepView(); } }
+    if (tween){ const T = tween, u = Math.min(1, (now - T.t0)/T.ms), e = T.inout ? (u<.5 ? 4*u*u*u : 1 - Math.pow(-2*u+2, 3)/2) : 1 - Math.pow(1-u, 3);
+      const k = Math.exp(T.lka + (T.lkb-T.lka)*e) * (1 - T.bump*Math.sin(Math.PI*e)), cx = T.ca.x + (T.cb.x-T.ca.x)*e, cy = T.ca.y + (T.cb.y-T.ca.y)*e, sx = T.sa.x + (T.sb.x-T.sa.x)*e, sy = T.sa.y + (T.sb.y-T.sa.y)*e;
+      view = {k, tx: sx - cx*k, ty: sy - cy*k}; vdirty = true; if (u>=1){ view = {...T.b}; tween = null; keepView(); } }
     if (fling){ view.tx += fling.vx; view.ty += fling.vy; fling.vx *= 0.92; fling.vy *= 0.92; vdirty = true; if (Math.abs(fling.vx)+Math.abs(fling.vy) < 0.3){ fling = null; keepView(); } }
     if (dirty){ draw(); bake.ok = false; dirty = vdirty = false; idle = 0; }
-    else if (vdirty){ if (bake.ok) present(); else draw(); vdirty = false; idle = 0; }
+    else if (vdirty){ if (bake.ok && bigScene) present(); else draw(); vdirty = false; idle = 0; }
     else if (!ptrs.size && (!bake.ok || !sameView(bake.v, view)) && ++idle >= 3){ doBake(); present(); }
     requestAnimationFrame(frame);
   };
   let pendingClear = false;
-  const animateTo = (b, ms) => { fling = null; if (reduce){ view = b; vdirty = true; keepView(); return; } tween = {a:{...view}, b, t0:performance.now(), ms}; };
+  // a camera move: anchor = the screen point that stays put for a zoom; flights between far-apart places pull back a little mid-way
+  const animateTo = (b, ms, opt={}) => { fling = null; if (reduce){ view = b; vdirty = true; keepView(); return; }
+    const a = {...view}, sa = opt.anchor || {x:W/2, y:H/2}, sb = opt.anchorTo || sa;
+    const ca = {x:(sa.x-a.tx)/a.k, y:(sa.y-a.ty)/a.k}, cb = {x:(sb.x-b.tx)/b.k, y:(sb.y-b.ty)/b.k};
+    const dist = Math.hypot(cb.x-ca.x, cb.y-ca.y)*Math.min(a.k, b.k), bump = opt.fly ? Math.min(0.45, dist/(2.2*Math.max(W,H))) : 0;
+    tween = {a, b, ca, cb, sa, sb, lka:Math.log(a.k), lkb:Math.log(b.k), bump, inout:!!opt.fly, t0:performance.now(), ms: opt.fly ? Math.round(ms*(1 + bump*1.2)) : ms}; };
   // 7. touch & mouse: drag a dot to pull it (the rest follows), drag space to pan with momentum, pinch/wheel to zoom
-  const bar = el('div',{class:'gbar'});
-  const zoomAt = (f, x, y, ms) => { const {k, tx, ty} = tween ? tween.b : view, nk = Math.max(0.2, Math.min(3, k*f)), b = {k:nk, tx: x - (x-tx)*(nk/k), ty: y - (y-ty)*(nk/k)}; touched = true;
-    if (ms) animateTo(b, ms); else { tween = null; view = b; vdirty = true; keepView(); } };
-  const select = i => { if (i<0){ hlTo = 0; pendingClear = true; } else { sel = i; pendingClear = false; hl = Math.min(hl, 0.35); hlTo = 1; } dirty = true; showSel(i); };
-  const showSel = i => { bar.replaceChildren(); if (i<0) return;
-    bar.append(el('span',{class:'gsel',text:notes[i].title+' · '+deg[i]+' link'+(deg[i]===1?'':'s')}), el('button',{class:'btn primary',text:'Open',onclick:()=>openNote(notes[i].id)}), el('button',{class:'btn ghost',text:'Clear',onclick:()=>select(-1)})); };
+  const zoomAt = (f, x, y, ms) => { const {k, tx, ty} = tween ? tween.b : view, nk = Math.max(0.2, Math.min(3.5, k*f)), b = {k:nk, tx: x - (x-tx)*(nk/k), ty: y - (y-ty)*(nk/k)}; touched = true;
+    if (ms) animateTo(b, ms, {anchor:{x, y}}); else { tween = null; view = b; vdirty = true; keepView(); } };
+  const select = i => { if (i<0){ hlTo = 0; pendingClear = true; focused = -1; } else { if (i!==sel) focused = -1; sel = i; pendingClear = false; buildFocus(); hl = Math.min(hl, 0.35); hlTo = 1; } dirty = true; showSel(i); syncChips(); };
+  // focus: frame the note and its connections in one smooth move, whatever the zoom level was
+  const focusOn = (i, fromChip) => { if (i<0) return; if (i!==sel){ sel = -1; select(i); } focused = i; showSel(i); syncChips(fromChip);
+    requestAnimationFrame(() => { const f = frameBox(bounds([...fset]), 0.35, 2.2, 44); touched = true;
+      animateTo({k:f.k, tx: W/2 - f.cx*f.k, ty: f.sy - f.cy*f.k}, 650, {fly:true}); }); };
+  const showAll = () => { select(-1); touched = true; requestAnimationFrame(() => animateTo(fitView(0.2), 600, {fly:true})); };
+  const bar = el('div',{class:'gbar',role:'region','aria-label':'Selected note'});
+  const showSel = i => { if (i<0){ bar.classList.remove('on'); legend.style.opacity = 1; return; }
+    const reach = fset ? fset.size-1 : deg[i];
+    const seg = el('div',{class:'gseg',role:'group','aria-label':'How far to follow links'}, ...[1,2].map(d => el('button',{text:d+' step'+(d>1?'s':''),'aria-pressed':String(depth===d),onclick:()=>{ if (depth===d) return; depth = d; buildFocus(); dirty = true; if (focused===sel) focusOn(sel); else showSel(sel); }})));
+    bar.replaceChildren(
+      el('div',{class:'ghead'}, el('div',{style:'min-width:0'}, el('div',{class:'gsel',text:notes[i].title}), el('div',{class:'gsub',text: deg[i]+' direct link'+(deg[i]===1?'':'s') + (depth>1 ? ' · '+reach+' notes within 2 steps' : '')})),
+        el('button',{class:'gx','aria-label':'Clear selection',text:'✕',onclick:()=>select(-1)})),
+      el('div',{class:'row'},
+        el('button',{class:'btn primary',text: focused===i ? 'Focused' : 'Focus','aria-pressed':String(focused===i),onclick:()=>focusOn(i)}),
+        el('button',{class:'btn',text:'Open',onclick:()=>openNote(notes[i].id)}), seg));
+    bar.classList.add('on'); legend.style.opacity = 0; };
+  // quick-focus chips: pinned notes first, then the best-connected hubs
+  const PIN = '<svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6 4 4H6l4-4z M12 13v8"/></svg>';
+  const pinned = linked.filter(i => notes[i].pinned).sort((a,b)=>deg[b]-deg[a]), hubs = order.filter(i => deg[i] >= 3 && !notes[i].pinned).slice(0, Math.max(0, 6 - pinned.length));
+  const chips = el('div',{class:'gchips',role:'toolbar','aria-label':'Focus on a note'}), chipBtns = new Map();
+  if (pinned.length || hubs.length){
+    chips.append(el('button',{class:'chip',text:'All',onclick:showAll}));
+    if (pinned.length) chips.append(el('span',{class:'lbl',text:'Pinned'}));
+    pinned.forEach(i => { const b = el('button',{class:'chip','aria-pressed':'false',onclick:()=>focused===i ? showAll() : focusOn(i, true)}); b.innerHTML = PIN; b.append(notes[i].title); chipBtns.set(i, b); chips.append(b); });
+    if (hubs.length) chips.append(el('span',{class:'lbl',text:'Hubs'}));
+    hubs.forEach(i => { const b = el('button',{class:'chip','aria-pressed':'false',text:notes[i].title,onclick:()=>focused===i ? showAll() : focusOn(i, true)}); chipBtns.set(i, b); chips.append(b); });
+    gtop.append(chips); }
+  function syncChips(scroll){ for (const [i,b] of chipBtns){ const on = focused===i; b.setAttribute('aria-pressed', String(on)); if (on && !scroll) b.scrollIntoView({behavior:reduce?'auto':'smooth', inline:'nearest', block:'nearest'}); } }
   const hit = (sx, sy, slop) => { const x = (sx-view.tx)/view.k, y = (sy-view.ty)/view.k; let best=-1, bd=Infinity;
     for (let i=0;i<N;i++){ const r = rad(i) + slop/view.k, d=(P[i].x-x)**2+(P[i].y-y)**2; if (d<r*r && d<bd){ bd=d; best=i; } } return best; };
   const ptrs = new Map(); let start = null, moved = false, pinch = null, grab = -1, trail = [];
@@ -952,7 +1027,7 @@ function renderGraph(app){
   const up = e => { const was = ptrs.has(e.pointerId); ptrs.delete(e.pointerId); if (ptrs.size<2) pinch = null;
     if (was && ptrs.size===0){
       if (grab>=0 && moved && deg[grab]){ fixed[grab] = 0; target = 0; }
-      else if (!moved){ const best = grab>=0 ? grab : hit(e.offsetX, e.offsetY, e.pointerType==='mouse' ? 4 : 12); if (best>=0 && best===sel && hlTo===1) openNote(notes[best].id); else select(best); }
+      else if (!moved){ const best = grab>=0 ? grab : hit(e.offsetX, e.offsetY, e.pointerType==='mouse' ? 4 : 12); if (best>=0 && best===sel && hlTo===1){ if (focused===best) openNote(notes[best].id); else focusOn(best); } else select(best); }
       else if (trail.length > 1 && !reduce){ const a = trail[0], b = trail[trail.length-1], dt = Math.max(16, b.t-a.t); if (e.timeStamp - b.t < 80) fling = {vx:(b.x-a.x)/dt*16, vy:(b.y-a.y)/dt*16}; }
       keepView(); grab = -1; cv.style.cursor = ''; start = null; } };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
@@ -962,8 +1037,11 @@ function renderGraph(app){
   wrap.append(el('div',{class:'gzoom'},
     el('button',{class:'btn','aria-label':'Zoom in',text:'+',onclick:()=>zoomAt(1.35,W/2,H/2,220)}),
     el('button',{class:'btn','aria-label':'Zoom out',text:'−',onclick:()=>zoomAt(1/1.35,W/2,H/2,220)}),
-    el('button',{class:'btn','aria-label':'Show everything',text:'Fit',onclick:()=>{ touched = true; animateTo(fitView(0.2), 420); }})));
-  wrap.after(bar);
+    el('button',{class:'btn','aria-label':'Show everything',text:'Fit',onclick:()=>{ touched = true; animateTo(fitView(0.2), 560, {fly:true}); }})));
+  wrap.append(bar);
+  const onKey = e => { if (!cv.isConnected){ document.removeEventListener('keydown', onKey); return; } if (e.key==='Escape' && sel>=0 && !$('#layer').children.length) select(-1); };
+  document.addEventListener('keydown', onKey);
+  if (!view) view = fitView(0.95);
   draw(); dirty = false; requestAnimationFrame(frame);
 }
 let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(()=>{ if (tab==='graph' && !$('#layer').children.length) render(); }, 200); });
@@ -1475,7 +1553,7 @@ function renderSettings(app){
 
   app.append(el('div',{class:'card'}, el('h2',{text:'Writing tips'}),
     el('p',{class:'hint',text:'[[Note title]] links to another note (tap “[[ ]] Link” while editing to pick one)  ·  # Heading  ·  - list item  ·  > quote  ·  **bold**  ·  *italic*  ·  ==highlight==  ·  `code`. Web links become tappable. On the capture box, the first line is the title and #tags are picked up automatically. Renaming a note updates every link to it.'})));
-  app.append(el('p',{class:'hint',style:'text-align:center;margin:18px 0 6px',text:'Second Brain v1.10'}));
+  app.append(el('p',{class:'hint',style:'text-align:center;margin:18px 0 6px',text:'Second Brain v1.11'}));
 }
 
 /* ---------- boot ---------- */
