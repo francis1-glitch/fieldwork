@@ -56,6 +56,14 @@
   .seg.active{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 
   .controls{display:flex;gap:10px;padding:16px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .shots{display:flex;gap:8px;padding:12px 16px 0;overflow-x:auto;border-top:1px solid var(--line)}
+  .shot{flex:0 0 auto;position:relative;width:58px;height:58px;border-radius:10px;overflow:hidden;border:2px solid transparent;
+    padding:0;min-width:0;background:var(--surface-2);cursor:pointer}
+  .shot img{width:100%;height:100%;object-fit:cover;display:block}
+  .shot.active{border-color:var(--ink)}
+  .shot b{position:absolute;left:0;right:0;bottom:0;font:600 .5rem/1.5 var(--sans);letter-spacing:.08em;text-transform:uppercase;
+    background:rgba(10,10,12,.62);color:#fff;text-align:center}
+  .shot.noface img{opacity:.4}
   /* crop editor */
   .cropper{position:absolute;inset:0;background:var(--surface-2);display:flex;align-items:center;justify-content:center;touch-action:none;z-index:2;overflow:hidden}
   .cropper .wrapc{position:relative;line-height:0}
@@ -137,6 +145,7 @@
       <div class="drop" id="drop">Loading analysis engine…</div>
       <canvas id="canvas" class="hide"></canvas>
     </div>
+    <div class="shots hide" id="shots"></div>
     <div class="controls">
       <label class="btn" for="file">Choose photo</label>
       <input type="file" id="file" accept="image/*" multiple>
@@ -161,9 +170,8 @@
       </div>
     </div>
     <div class="cmpbar hide" id="cmpBar">
-      <button class="seg" data-cmp="m">vs men</button>
-      <button class="seg" data-cmp="f">vs women</button>
-      <button class="seg" data-cmp="all">vs everyone</button>
+      <button class="seg" data-cmp="m">I'm a man</button>
+      <button class="seg" data-cmp="f">I'm a woman</button>
     </div>
     <div class="drivers hide" id="drivers"></div>
     <div class="prov hide" id="poseNote"></div>
@@ -191,7 +199,7 @@
     These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The score is a percentile against the SCUT-FBP5500 reference faces (see its card for who they are). Picking several photos at once averages them, which steadies every number. Facial thirds run hairline → brows → nose base → chin; the hairline comes from a hair/skin segmenter because the landmark mesh stops mid-forehead. Lighting, angle and expression all move the numbers.
   </div>
 
-  <footer>Mirror v1.8 · on-device · MediaPipe FaceLandmarker</footer>
+  <footer>Mirror v1.9 · on-device · MediaPipe FaceLandmarker</footer>
 </div>
 
 <script type="module">
@@ -215,7 +223,7 @@ let MODEL=null;   // {features,mean,std,coef,intercept,cdf,cdf_male,cdf_female,r
 const PREF_KEY='mirror.v1';
 const loadPref=()=>{try{return JSON.parse(localStorage.getItem(PREF_KEY))||{};}catch(e){return {};}};
 const savePref=p=>{try{localStorage.setItem(PREF_KEY,JSON.stringify(p));}catch(e){}};
-let cmp=loadPref().cmp||'m', lastFront=null;
+let cmp=(loadPref().cmp==='f')?'f':'m', lastFront=null;   // compared only within your own sex
 
 let landmarker=null,segmenter=null,lastPts=null,lastTrich=null,baseImg=null,showOverlay=true,mode='front';
 const D=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
@@ -463,7 +471,6 @@ function profileCompute(L){
 }
 function renderProfile(r){
   rows('m-profile',r.profile);
-  if(r.n>1) status.textContent=`Averaged over ${r.n} photos; ± is the spread between them.`;
   results.classList.remove('hide'); $('disclaimer').classList.remove('hide');
   $('frontBlock').classList.add('hide'); $('profileBlock').classList.remove('hide');
   $('scoreCard').classList.add('hide');
@@ -478,9 +485,9 @@ function render(r){
   $('dial').style.setProperty('--v',n); $('scoreNum').textContent=n;
   const hasSex=!!(MODEL&&MODEL.cdf_male&&MODEL.cdf_female);
   $('cmpBar').classList.toggle('hide',!fit||!hasSex);
-  document.querySelectorAll('#cmpBar .seg').forEach(b=>b.classList.toggle('active',b.dataset.cmp===(hasSex?cmp:'all')));
+  document.querySelectorAll('#cmpBar .seg').forEach(b=>b.classList.toggle('active',b.dataset.cmp===cmp));
   if(fit){
-    const who = !hasSex||cmp==='all'? `${MODEL.n.toLocaleString()} rated faces` : (cmp==='m'?'rated men':'rated women');
+    const who = !hasSex? `${MODEL.n.toLocaleString()} rated faces` : (cmp==='m'?'rated men':'rated women');
     $('scoreTitle').textContent='Percentile';
     $('scoreBreak').textContent=`Higher than ${fit.pct}% of ${who} · predicted rating ${fit.rating.toFixed(2)} / 5`
       + (many? ` · averaged over ${r.n} photos (range ${r.pctLo(cmp)}–${r.pctHi(cmp)})`:'')
@@ -579,7 +586,7 @@ function segment(){
 }
 
 const loadImg=file=>new Promise((ok,bad)=>{const img=new Image();img.onload=()=>ok(img);img.onerror=()=>bad(new Error('Could not read '+file.name));img.src=URL.createObjectURL(file);});
-let lastFiles=[], cropOverride=null, baseRect=null;
+let shots=[], sel=0, baseRect=null;   // shots: {file,img,crop,a}
 /* Draw a region of the original photo onto the canvas (never upscaled, so skin texture stays honest) and detect. */
 function detectIn(img,R){
   const scale=Math.min(1,520/R.w);
@@ -608,29 +615,55 @@ async function analyzeOne(img,override){
   const trich=findTrichion(pts,segment());
   return {img,R,zoomed:R!==full,pts,trich,r: mode==='profile'? profileCompute(pts) : compute(pts,trich)};
 }
-async function handleFiles(files,keepCrop){
-  files=[...files].slice(0,8); if(!keepCrop) cropOverride=null; lastFiles=files;
+/* Each photo keeps its own crop; tap a thumbnail to view (and crop) that one. */
+async function handleFiles(files){
+  files=[...files].slice(0,8);
+  shots=files.map(f=>({file:f,img:null,crop:null,a:null})); sel=0;
   status.textContent=files.length>1?`Analyzing ${files.length} photos…`:'Analyzing…';status.classList.remove('err');
   drop.classList.add('hide');canvas.classList.remove('hide');
-  const done=[]; let noFace=0;
-  try{
-    for(let i=0;i<files.length;i++){ const img=await loadImg(files[i]); const a=await analyzeOne(img,i===0?cropOverride:null); if(a) done.push(a); else { noFace++; if(i===0) baseImg=img; } }
-  }catch(e){status.textContent='Analysis error: '+e.message;status.classList.add('err');return;}
-  $('cropBtn').disabled=false;
-  if(!done.length){status.textContent='No face found. Use Crop to frame the face, or try a clearer, front-facing photo.';status.classList.add('err');lastPts=null;baseRect=null;
-    if(baseImg){canvas.width=Math.min(520,baseImg.width);canvas.height=baseImg.height*canvas.width/baseImg.width;ctx.drawImage(baseImg,0,0,canvas.width,canvas.height);} return;}
-  // show the first photo with its overlay
-  const first=done[0]; baseImg=first.img; baseRect=first.R; lastPts=first.pts; lastTrich=first.trich;
+  try{ for(const sh of shots){ sh.img=await loadImg(sh.file); sh.a=await analyzeOne(sh.img,null); } }
+  catch(e){status.textContent='Analysis error: '+e.message;status.classList.add('err');return;}
+  const firstFace=shots.findIndex(x=>x.a); sel=firstFace<0?0:firstFace;
+  refresh();
+}
+async function reanalyze(i){            // one photo, after a crop change or mode switch
+  const sh=shots[i]; if(!sh||!sh.img) return;
+  status.textContent='Re-measuring…'; sh.a=await analyzeOne(sh.img,sh.crop); refresh();
+}
+async function reanalyzeAll(){ for(const sh of shots) if(sh.img) sh.a=await analyzeOne(sh.img,sh.crop); refresh(); }
+function showShot(i){
+  sel=i; const sh=shots[i]; if(!sh) return;
+  baseImg=sh.img;
+  if(sh.a){ baseRect=sh.a.R; lastPts=sh.a.pts; lastTrich=sh.a.trich; }
+  else { baseRect={x:0,y:0,w:sh.img.width,h:sh.img.height}; lastPts=null; lastTrich=null; }
   const scale=Math.min(1,520/baseRect.w); canvas.width=Math.round(baseRect.w*scale); canvas.height=Math.round(baseRect.h*scale);
-  draw();
-  const r=mergeResults(done.map(d=>d.r));
+  draw(); thumbs();
+}
+function thumbs(){
+  const box=$('shots'); box.classList.toggle('hide',shots.length<2); box.innerHTML='';
+  if(shots.length<2) return;
+  shots.forEach((sh,i)=>{ const b=document.createElement('button');
+    b.className='shot'+(i===sel?' active':'')+(sh.a?'':' noface'); b.setAttribute('aria-label','Photo '+(i+1));
+    const tag=!sh.a?'no face':sh.crop?'cropped':sh.a.zoomed?'auto':'';
+    b.innerHTML=`<img src="${sh.img.src}" alt="">${tag?`<b>${tag}</b>`:''}`;
+    b.addEventListener('click',()=>showShot(i)); box.appendChild(b); });
+}
+function refresh(){
+  const done=shots.filter(x=>x.a), noFace=shots.length-done.length;
+  $('cropBtn').disabled=!shots.length;
+  showShot(sel);
+  if(!done.length){ status.textContent='No face found. Use Crop to frame the face, or try a clearer, front-facing photo.';status.classList.add('err');
+    results.classList.add('hide'); $('scoreCard').classList.add('hide'); return; }
+  status.classList.remove('err');
+  const r=mergeResults(done.map(d=>d.a.r));
   if(mode==='profile') renderProfile(r); else render(r);
   toggleBtn.disabled=false;
-  const skip=noFace?` (${noFace} photo${noFace>1?'s':''} had no detectable face)`:'';
-  const zoom=cropOverride?'Using your crop. ':(done.some(d=>d.zoomed)?'Zoomed in on the face automatically. ':'');
-  if(mode==='profile'){ if(r.n===1) status.textContent=zoom+'Done. Line traces glabella → nasion → tip → subnasale → lip → chin.'+skip; else status.textContent=zoom+status.textContent+skip; }
-  else status.textContent = zoom+(r.n>1?`Averaged over ${r.n} photos; ± is the spread between them. Showing the first. `:'Done. ')
-    +'Yellow = thirds (solid top line = detected hairline), red = face axis, dots = 478 landmarks.'+skip;
+  const cur=shots[sel], many=shots.length>1;
+  const skip=noFace?` ${noFace} photo${noFace>1?'s':''} had no detectable face — tap ${noFace>1?'them':'it'} and use Crop to frame the face.`:'';
+  const which=many?`Photo ${sel+1} of ${shots.length}: `:'';
+  const zoom=!cur.a?'no face found here. ':cur.crop?'your crop. ':cur.a.zoomed?'zoomed in automatically. ':'';
+  const head=many?`Averaged over ${done.length} photo${done.length>1?'s':''} (± = spread). ${which}${zoom}Tap a thumbnail to view or crop it.`:(zoom?zoom.charAt(0).toUpperCase()+zoom.slice(1):'Done. ');
+  status.textContent = head + (mode==='profile'?' Line traces glabella → nasion → tip → subnasale → lip → chin.':' Yellow = thirds (solid top line = hairline), red = face axis.') + skip;
 }
 
 /* ---------- manual crop: drag the box, drag a corner to resize; applies to the first photo ---------- */
@@ -665,8 +698,8 @@ function openCrop(){
 function closeCrop(){ if(cropUI){cropUI.wrap.remove();cropUI=null;} $('cropControls').classList.add('hide'); document.querySelector('.controls').classList.remove('hide'); }
 $('cropBtn').addEventListener('click',openCrop);
 $('cropCancel').addEventListener('click',closeCrop);
-$('cropAuto').addEventListener('click',()=>{ closeCrop(); cropOverride=null; if(lastFiles.length) handleFiles(lastFiles,true); });
-$('cropApply').addEventListener('click',()=>{ if(!cropUI) return; cropOverride=cropUI.get(); closeCrop(); handleFiles(lastFiles,true); });
+$('cropAuto').addEventListener('click',()=>{ closeCrop(); if(shots[sel]){ shots[sel].crop=null; reanalyze(sel); } });
+$('cropApply').addEventListener('click',()=>{ if(!cropUI||!shots[sel]) return; shots[sel].crop=cropUI.get(); closeCrop(); reanalyze(sel); });
 
 function setMode(m){
   mode=m;
@@ -676,7 +709,7 @@ function setMode(m){
   status.textContent = m==='profile'
     ? 'Upload a true side profile — head level, looking straight ahead, one ear visible.'
     : 'Use a straight-on photo, face level, even lighting, hair off the forehead. Pick 2–5 photos at once to average out angle and lighting.';
-  if(lastFiles.length) handleFiles(lastFiles,true);   // re-measure the same photos in the new mode
+  if(shots.length) reanalyzeAll();   // re-measure the same photos (and crops) in the new mode
 }
 $('segFront').addEventListener('click',()=>setMode('front'));
 $('segProfile').addEventListener('click',()=>setMode('profile'));
