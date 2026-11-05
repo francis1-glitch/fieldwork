@@ -8,13 +8,13 @@ Mirror's sandbox can't reach the dataset (Google Drive) or the MediaPipe model
   2. downloads the MediaPipe face_landmarker model
   3. downloads + unzips SCUT-FBP5500 (5,500 human-rated faces) from Google Drive
   4. runs train_score.py, which extracts Mirror's markers, fits the score to the
-     human ratings, reports held-out accuracy, and prints a WEIGHTS line
+     human ratings, reports held-out accuracy, and writes score_model.json
 
 Usage:
     python run_benchmark.py
 
-Then paste the printed WEIGHTS line back to Claude (or straight into
-mirror/index.html) and the score stops being a guess.
+It writes mirror/score_model.json. Commit and push that one file (or send it to
+Claude) and Mirror switches from the uncalibrated index to a real percentile.
 
 Notes:
 - First run downloads ~172MB and processes 5,500 images — expect a few minutes.
@@ -31,6 +31,9 @@ MODEL = os.path.join(HERE, "face_landmarker.task")
 DRIVE_ID = "1w0TorBfTIqbquQVd6k3h_77ypnrvfGwf"          # from the SCUT README
 MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/"
              "face_landmarker/float16/1/face_landmarker.task")
+SEG = os.path.join(HERE, "selfie_multiclass_256x256.tflite")
+SEG_URL = ("https://storage.googleapis.com/mediapipe-models/image_segmenter/"
+           "selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite")
 
 def pipi(*pkgs):
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *pkgs])
@@ -43,10 +46,11 @@ def ensure_deps():
         sys.exit(f"pip install failed: {e}\nInstall them manually and rerun.")
 
 def ensure_model():
-    if os.path.exists(MODEL):
-        print("[2/4] model already present."); return
-    print("[2/4] downloading face_landmarker model…")
-    urllib.request.urlretrieve(MODEL_URL, MODEL)
+    for path, url, name in ((MODEL, MODEL_URL, "face landmarker"), (SEG, SEG_URL, "hair/skin segmenter")):
+        if os.path.exists(path):
+            print(f"[2/4] {name} model already present."); continue
+        print(f"[2/4] downloading {name} model…")
+        urllib.request.urlretrieve(url, path)
 
 def ensure_dataset():
     if os.path.isdir(os.path.join(DATA_DIR, "Images")):
@@ -83,5 +87,4 @@ if __name__ == "__main__":
     ensure_model()
     ensure_dataset()
     run_training()
-    print("\nDone. Paste the WEIGHTS line above into mirror/index.html "
-          "(or send it to Claude).")
+    print("\nDone. Commit mirror/score_model.json (or send it to Claude).")

@@ -129,10 +129,11 @@
     <div class="score">
       <div class="scoreDial" id="dial"><b id="scoreNum">–</b></div>
       <div class="scoreMeta">
-        <h2>Composite index</h2>
+        <h2 id="scoreTitle">Composite index</h2>
         <p id="scoreBreak"></p>
       </div>
     </div>
+    <div class="prov hide" id="poseNote"></div>
     <div class="prov" id="prov">Weights fit to SCUT-FBP5500 (5,500 human-rated faces). Held-out Pearson r = 0.49 — these markers explain about a quarter of rated attractiveness; the rest needs the whole face, so read the score as a rough indicator, not a verdict.</div>
   </div>
 
@@ -152,14 +153,14 @@
   </div>
 
   <div class="note hide" id="disclaimer">
-    These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The composite index is a transparent weighted sum of the markers below, with weights fit to 5,500 human-rated faces (held-out r = 0.49). Lighting, angle and expression all move the numbers.
+    These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The score is either a percentile against 5,500 human-rated faces (once the benchmark model is published) or, until then, an uncalibrated blend of the markers below. Facial thirds run hairline → brows → nose base → chin; the hairline comes from a hair/skin segmenter because the landmark mesh stops mid-forehead. Lighting, angle and expression all move the numbers.
   </div>
 
-  <footer>Mirror v1.5 · on-device · MediaPipe FaceLandmarker</footer>
+  <footer>Mirror v1.6 · on-device · MediaPipe FaceLandmarker</footer>
 </div>
 
 <script type="module">
-import { FilesetResolver, FaceLandmarker }
+import { FilesetResolver, FaceLandmarker, ImageSegmenter }
   from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.20";
 
 const $ = id => document.getElementById(id);
@@ -172,10 +173,11 @@ const IDX={ chin:152,forehead:10,noseBottom:2, lBrow:105,rBrow:334,
   lFace:234,rFace:454,lCheek:50,rCheek:280, foreheadMid:151, lCheek2:205,rCheek2:425,
   glabella:9,nasion:168,noseTip:1 };
 
-// PROVISIONAL weights — replace with benchmarked output of train_score.py
-const WEIGHTS={ symmetry:0.01, proportion:0.83, skinEven:0.03, skinSmooth:0.14 };
+// Fallback blend, used only until score_model.json (from tools/train_score.py) is published.
+const WEIGHTS={ symmetry:0.25, proportion:0.45, skinEven:0.15, skinSmooth:0.15 };
+let MODEL=null;   // {features,mean,std,coef,intercept,cdf,r_test,n,...}
 
-let landmarker=null,lastPts=null,baseImg=null,showOverlay=true,mode='front';
+let landmarker=null,segmenter=null,lastPts=null,lastTrich=null,baseImg=null,showOverlay=true,mode='front';
 const D=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
 
 /* ---------- sRGB -> Lab (compact) ---------- */
@@ -232,47 +234,106 @@ function skinMetrics(P){
   return {evenStd,redA,tex,even01,smooth01};
 }
 
-function geometry(L){
-  const p={}; for(const k in IDX) p[k]=L[IDX[k]];
-  const browY=(p.lBrow[1]+p.rBrow[1])/2;
-  const upper=Math.abs(browY-p.forehead[1]), mid=Math.abs(p.noseBottom[1]-browY), low=Math.abs(p.chin[1]-p.noseBottom[1]);
-  const tot=upper+mid+low;
+/* Head roll from the outer eye corners; every vertical measure is taken in the face's own frame. */
+function faceFrame(L){
+  const a=L[IDX.lEyeOuter], b=L[IDX.rEyeOuter];
+  const roll=Math.atan2(b[1]-a[1], b[0]-a[0]);
+  const c=[(a[0]+b[0])/2,(a[1]+b[1])/2], cs=Math.cos(-roll), sn=Math.sin(-roll);
+  const rot=p=>[c[0]+(p[0]-c[0])*cs-(p[1]-c[1])*sn, c[1]+(p[0]-c[0])*sn+(p[1]-c[1])*cs];
+  return {roll:roll*180/Math.PI, rot};
+}
+
+/* Hairline (trichion). MediaPipe's mesh stops mid-forehead, so landmark 10 is NOT the hairline.
+   Walk up the face axis from landmark 10 through the face-skin class of the hair/skin segmenter
+   until hair starts. Three parallel scan lines, median taken, so a part or a stray strand doesn't decide it. */
+const SEG={bg:0,hair:1,body:2,face:3};
+function findTrichion(L,mask){
+  if(!mask) return null;
+  const {data,w,h,sx,sy}=mask, at=(x,y)=>{const X=Math.round(x*sx),Y=Math.round(y*sy);
+    return (X<0||Y<0||X>=w||Y>=h)?-1:data[Y*w+X];};
+  const top=L[IDX.forehead], chin=L[IDX.chin];
+  let ux=top[0]-chin[0], uy=top[1]-chin[1]; const n=Math.hypot(ux,uy)||1; ux/=n; uy/=n;
+  const off=D(L[IDX.lEyeInner],L[IDX.rEyeInner])*0.35, hits=[];
+  for(const k of[-1,0,1]){
+    let x=top[0]-uy*off*k, y=top[1]+ux*off*k;
+    if(at(x,y)!==SEG.face) continue;                  // must start on forehead skin
+    let lastSkin=[x,y], miss=0, endCls=-1;
+    for(let i=0;i<n*0.8;i++){
+      x+=ux; y+=uy; const c=at(x,y);
+      if(c===SEG.face){lastSkin=[x,y];miss=0;continue;}
+      if(++miss>4){endCls=c;break;}                   // 5px of non-skin = edge, not a speck
+    }
+    if(endCls===SEG.hair) hits.push(lastSkin);
+  }
+  if(!hits.length) return null;                       // bald/receded, hat, or bangs over the skin
+  hits.sort((a,b)=>a[1]-b[1]); return hits[Math.floor(hits.length/2)];
+}
+
+function geometry(L,trich){
+  const F=faceFrame(L), R=k=>F.rot(L[IDX[k]]);
+  const p={}; for(const k in IDX) p[k]=R(k);
+  const gl=p.glabella[1], sn=p.noseBottom[1], me=p.chin[1];
+  const mid=Math.abs(sn-gl), low=Math.abs(me-sn);
+  let thirds=null;
+  if(trich){ const up=Math.abs(gl-F.rot(trich)[1]), tot=up+mid+low; thirds=[up/tot,mid/tot,low/tot]; }
   const eyeW=D(p.lEyeOuter,p.lEyeInner), faceW=D(p.lFace,p.rFace), inter=D(p.lEyeInner,p.rEyeInner);
-  const noseLip=Math.abs(p.upperLip[1]-p.noseBottom[1]), lipChin=Math.abs(p.chin[1]-p.lowerLip[1]);
+  const noseLip=Math.abs(p.upperLip[1]-sn), lipChin=Math.abs(me-p.lowerLip[1]);
   const midX=(p.forehead[0]+p.chin[0])/2;
   const pairs=[['lEyeOuter','rEyeOuter'],['mouthL','mouthR'],['lFace','rFace'],['lBrow','rBrow'],['lCheek','rCheek']];
   let asym=0; for(const [l,r] of pairs){const dl=Math.abs(p[l][0]-midX),dr=Math.abs(p[r][0]-midX);asym+=Math.abs(dl-dr)/((dl+dr)/2||1);}
   const sym=Math.max(0,1-asym/pairs.length);
-  return {
-    thirds:[upper/tot,mid/tot,low/tot], faceW:faceW/eyeW, eyeSpace:inter/eyeW,
-    lip:noseLip/lipChin, sym
-  };
+  // yaw proxy: nose tip offset from the face-edge midpoint, as a share of face width
+  const yaw=((p.noseTip[0]-(p.lFace[0]+p.rFace[0])/2)/(faceW||1));
+  return { thirds, midLow:mid/(mid+low), faceW:faceW/eyeW, eyeSpace:inter/eyeW, lip:noseLip/lipChin, sym,
+    roll:F.roll, yaw };
+}
+
+/* Feature vector — must match tools/train_score.py exactly (same order, same math). */
+const FEATS=['third_dev','upper_third','lower_third','mid_low','facew','eyespace','lip','symmetry','skin_even','skin_smooth'];
+function featureVec(g,s){
+  const t=g.thirds;
+  return { third_dev: t? (Math.abs(t[0]-1/3)+Math.abs(t[1]-1/3)+Math.abs(t[2]-1/3))/3 : null,
+    upper_third:t?t[0]:null, lower_third:t?t[2]:null, mid_low:g.midLow,
+    facew:g.faceW, eyespace:g.eyeSpace, lip:g.lip, symmetry:g.sym,
+    skin_even:s?s.even01:null, skin_smooth:s?s.smooth01:null };
+}
+function modelScore(fv){
+  if(!MODEL) return null;
+  let y=MODEL.intercept, missing=0;
+  MODEL.features.forEach((f,i)=>{ const v=fv[f]; if(v==null){missing++;return;}   // missing = dataset mean (z=0)
+    y+=MODEL.coef[i]*(v-MODEL.mean[i])/(MODEL.std[i]||1); });
+  const q=MODEL.cdf; let k=0; while(k<q.length&&q[k]<=y) k++;
+  return {rating:y, pct:Math.round(100*k/q.length), missing};
 }
 
 function closeness(val,ideal,tol){ return Math.max(0,1-Math.abs(val-ideal)/(tol*3)); } // 1 at ideal → 0 at 3*tol
 
-function compute(L){
-  const g=geometry(L), s=skinMetrics(L);
-  const prop=[
-    {name:'Upper third',val:g.thirds[0],ideal:0.333,fmt:'ratio',tol:0.04,help:'0.333 ideal'},
-    {name:'Middle third',val:g.thirds[1],ideal:0.333,fmt:'ratio',tol:0.04,help:'0.333 ideal'},
-    {name:'Lower third',val:g.thirds[2],ideal:0.333,fmt:'ratio',tol:0.04,help:'0.333 ideal'},
-    {name:'Face width',val:g.faceW,ideal:5.0,fmt:'x',tol:0.5,help:'5.0 eye-widths ideal'},
+function compute(L,trich){
+  const g=geometry(L,trich), s=skinMetrics(L);
+  const prop=[];
+  if(g.thirds){
+    prop.push({name:'Upper third',val:g.thirds[0],ideal:0.333,fmt:'ratio',tol:0.04,help:'hairline → brows · 0.333 ideal'},
+      {name:'Middle third',val:g.thirds[1],ideal:0.333,fmt:'ratio',tol:0.04,help:'brows → nose base · 0.333 ideal'},
+      {name:'Lower third',val:g.thirds[2],ideal:0.333,fmt:'ratio',tol:0.04,help:'nose base → chin · 0.333 ideal'});
+  } else {
+    prop.push({name:'Middle : lower',val:g.midLow,ideal:0.5,fmt:'ratio',tol:0.03,help:'hairline not found · 0.500 ideal'});
+  }
+  prop.push({name:'Face width',val:g.faceW,ideal:5.0,fmt:'x',tol:0.5,help:'5.0 eye-widths ideal'},
     {name:'Eye spacing',val:g.eyeSpace,ideal:1.0,fmt:'x',tol:0.15,help:'1.0 eye-width ideal'},
-    {name:'Lip position',val:g.lip,ideal:0.5,fmt:'x',tol:0.12,help:'0.5 ideal'},
-  ];
+    {name:'Lip position',val:g.lip,ideal:0.5,fmt:'x',tol:0.12,help:'0.5 ideal'});
   const sym=[{name:'Overall symmetry',val:g.sym,ideal:1.0,fmt:'pct',tol:0.05,help:'1.00 = perfect',oneSided:true}];
   const skin = s?[
     {name:'Tone evenness',val:s.even01,ideal:1.0,fmt:'pct',tol:0.15,help:'higher = more even (ΔL '+s.evenStd.toFixed(1)+')',oneSided:true},
     {name:'Smoothness',val:s.smooth01,ideal:1.0,fmt:'pct',tol:0.15,help:'higher = less texture',oneSided:true},
     {name:'Redness (Lab a*)',val:s.redA,ideal:12,fmt:'raw',tol:6,help:'~12 typical; higher = redder'},
   ]:[];
-  // component sub-scores 0..1
-  const propScore=(closeness(g.thirds[0],.333,.04)+closeness(g.thirds[1],.333,.04)+closeness(g.thirds[2],.333,.04)
-    +closeness(g.faceW,5,.5)+closeness(g.eyeSpace,1,.15)+closeness(g.lip,.5,.12))/6;
+  const thirdsC = g.thirds? (closeness(g.thirds[0],.333,.04)+closeness(g.thirds[1],.333,.04)+closeness(g.thirds[2],.333,.04))/3
+                          : closeness(g.midLow,.5,.03);
+  const propScore=(thirdsC*3+closeness(g.faceW,5,.5)+closeness(g.eyeSpace,1,.15)+closeness(g.lip,.5,.12))/6;
   const comps={symmetry:g.sym,proportion:propScore,skinEven:s?s.even01:0.5,skinSmooth:s?s.smooth01:0.5};
-  let score=0; for(const k in WEIGHTS) score+=WEIGHTS[k]*comps[k];
-  return {prop,sym,skin,score:score*100,comps};
+  let blend=0; for(const k in WEIGHTS) blend+=WEIGHTS[k]*comps[k];
+  const fit=modelScore(featureVec(g,s));
+  return {prop,sym,skin,blend:blend*100,fit,comps,pose:{roll:g.roll,yaw:g.yaw},trich:!!g.thirds};
 }
 
 function fmtVal(v,fmt){
@@ -326,9 +387,23 @@ function render(r){
   $('frontBlock').classList.remove('hide'); $('profileBlock').classList.add('hide');
   rows('m-prop',r.prop); rows('m-sym',r.sym); rows('m-skin',r.skin);
   results.classList.remove('hide'); $('disclaimer').classList.remove('hide');
-  const n=Math.round(r.score);
+  const n = r.fit? r.fit.pct : Math.round(r.blend);
   $('dial').style.setProperty('--v',n); $('scoreNum').textContent=n;
-  $('scoreBreak').textContent=`sym ${Math.round(r.comps.symmetry*100)} · prop ${Math.round(r.comps.proportion*100)} · even ${Math.round(r.comps.skinEven*100)} · smooth ${Math.round(r.comps.skinSmooth*100)}`;
+  if(r.fit){
+    $('scoreTitle').textContent='Percentile';
+    $('scoreBreak').textContent=`Predicted rating ${r.fit.rating.toFixed(2)} / 5 · higher than ${r.fit.pct}% of the ${MODEL.n.toLocaleString()} rated faces`
+      + (r.fit.missing? ` · ${r.fit.missing} marker${r.fit.missing>1?'s':''} missing, held at average`:'');
+    $('prov').textContent=`Ridge model fit to SCUT-FBP5500 human ratings. Held-out r = ${MODEL.r_test.toFixed(2)} (R² ${MODEL.r2_test.toFixed(2)}): these markers explain about ${Math.round(MODEL.r2_test*100)}% of rated attractiveness. A rough indicator, not a verdict.`;
+  } else {
+    $('scoreTitle').textContent='Marker index (uncalibrated)';
+    $('scoreBreak').textContent=`sym ${Math.round(r.comps.symmetry*100)} · prop ${Math.round(r.comps.proportion*100)} · even ${Math.round(r.comps.skinEven*100)} · smooth ${Math.round(r.comps.skinSmooth*100)}`;
+    $('prov').textContent='Out of 100, but NOT a percentile and not yet fit to human ratings: it is a fixed blend of how close each marker sits to its reference. It moves only a few points between very different faces by design. A calibrated percentile replaces it once the benchmark is rerun.';
+  }
+  const warn=[]; if(Math.abs(r.pose.roll)>4) warn.push(`head tilted ${Math.abs(r.pose.roll).toFixed(0)}° (corrected for)`);
+  if(Math.abs(r.pose.yaw)>0.04) warn.push('face turned to one side — symmetry and widths will skew');
+  if(!r.trich) warn.push('hairline not found (bangs, hat, or receded), so the upper third is skipped');
+  $('poseNote').textContent=warn.length? 'Heads-up: '+warn.join('; ')+'.' : '';
+  $('poseNote').classList.toggle('hide',!warn.length);
   $('scoreCard').classList.remove('hide');
 }
 
@@ -348,11 +423,30 @@ function draw(){
     for(const pt of chain){ctx.beginPath();ctx.arc(pt[0],pt[1],3,0,7);ctx.fill();}
     return;
   }
-  const browY=(P[IDX.lBrow][1]+P[IDX.rBrow][1])/2;
-  ctx.strokeStyle='rgba(232,178,74,0.9)';ctx.lineWidth=1.5;
-  for(const y of[P[IDX.forehead][1],browY,P[IDX.noseBottom][1],P[IDX.chin][1]]){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
-  const midX=(P[IDX.forehead][0]+P[IDX.chin][0])/2;
-  ctx.strokeStyle='rgba(232,112,90,0.9)';ctx.beginPath();ctx.moveTo(midX,0);ctx.lineTo(midX,canvas.height);ctx.stroke();
+  // thirds: lines perpendicular to the face axis at hairline, glabella, nose base, chin
+  const top=P[IDX.forehead], chin=P[IDX.chin];
+  let ux=top[0]-chin[0], uy=top[1]-chin[1]; const n=Math.hypot(ux,uy)||1; ux/=n; uy/=n;
+  const half=D(P[IDX.lFace],P[IDX.rFace])*0.75;
+  const cross=(pt,col,dash)=>{ // project the point onto the axis through the chin, draw across the face
+    const t=(pt[0]-chin[0])*ux+(pt[1]-chin[1])*uy, cx=chin[0]+ux*t, cy=chin[1]+uy*t;
+    ctx.strokeStyle=col; ctx.setLineDash(dash||[]); ctx.beginPath();
+    ctx.moveTo(cx+uy*half,cy-ux*half); ctx.lineTo(cx-uy*half,cy+ux*half); ctx.stroke(); ctx.setLineDash([]); };
+  ctx.lineWidth=1.5;
+  if(lastTrich) cross(lastTrich,'rgba(232,178,74,0.95)'); else cross(top,'rgba(232,178,74,0.6)',[5,4]);
+  for(const k of['glabella','noseBottom','chin']) cross(P[IDX[k]],'rgba(232,178,74,0.9)');
+  ctx.strokeStyle='rgba(232,112,90,0.9)';ctx.beginPath();
+  ctx.moveTo(chin[0]-ux*canvas.height,chin[1]-uy*canvas.height);ctx.lineTo(chin[0]+ux*canvas.height,chin[1]+uy*canvas.height);ctx.stroke();
+  if(lastTrich){ctx.fillStyle='rgba(232,178,74,1)';ctx.beginPath();ctx.arc(lastTrich[0],lastTrich[1],3.5,0,7);ctx.fill();}
+}
+
+function segment(){
+  if(!segmenter) return null;
+  try{
+    const res=segmenter.segment(canvas), m=res.categoryMask;
+    if(!m){res.close&&res.close();return null;}
+    const out={data:m.getAsUint8Array().slice(),w:m.width,h:m.height,sx:m.width/canvas.width,sy:m.height/canvas.height};
+    res.close&&res.close(); return out;
+  }catch(e){ return null; }
 }
 
 function handleImage(file){
@@ -369,13 +463,14 @@ function handleImage(file){
         status.textContent='No face found. Try a clearer, front-facing photo.';status.classList.add('err');lastPts=null;draw();return;
       }
       lastPts=res.faceLandmarks[0].map(l=>[l.x*canvas.width,l.y*canvas.height]);
-      const r = mode==='profile'? profileCompute(lastPts) : compute(lastPts);
+      lastTrich = findTrichion(lastPts, segment());
+      const r = mode==='profile'? profileCompute(lastPts) : compute(lastPts,lastTrich);
       draw();
       if(mode==='profile') renderProfile(r); else render(r);
       toggleBtn.disabled=false;
       status.textContent = mode==='profile'
         ? 'Done. Line traces glabella → nasion → tip → subnasale → lip → chin.'
-        : 'Done. Yellow = thirds, red = midline, dots = 468 landmarks.';
+        : 'Done. Yellow = thirds (solid top line = detected hairline), red = face axis, dots = 478 landmarks.';
     }catch(e){status.textContent='Analysis error: '+e.message;status.classList.add('err');}
     URL.revokeObjectURL(img.src);
   };
@@ -393,7 +488,7 @@ function setMode(m){
     : 'Use a straight-on photo, face level, even lighting, hair off the forehead.';
   if(baseImg && lastPts){
     ctx.drawImage(baseImg,0,0,canvas.width,canvas.height); // clean frame for skin sampling
-    const r = m==='profile'? profileCompute(lastPts) : compute(lastPts);
+    const r = m==='profile'? profileCompute(lastPts) : compute(lastPts,lastTrich);
     draw();
     if(m==='profile') renderProfile(r); else render(r);
   }
@@ -409,6 +504,12 @@ toggleBtn.addEventListener('click',()=>{showOverlay=!showOverlay;draw();toggleBt
     landmarker=await FaceLandmarker.createFromOptions(fileset,{
       baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"},
       runningMode:"IMAGE",numFaces:1});
+    try{
+      segmenter=await ImageSegmenter.createFromOptions(fileset,{
+        baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite"},
+        runningMode:"IMAGE",outputCategoryMask:true,outputConfidenceMasks:false});
+    }catch(e){ segmenter=null; }   // without it the hairline is skipped, not guessed
+    try{ const r=await fetch('score_model.json',{cache:'no-store'}); if(r.ok) MODEL=await r.json(); }catch(e){}
     drop.textContent='Choose a front-facing photo to begin.';
   }catch(e){drop.textContent='Engine failed to load. Needs internet on first run. ('+e.message+')';}
 })();
