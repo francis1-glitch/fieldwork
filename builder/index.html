@@ -152,7 +152,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.4 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.4.1 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -172,7 +172,7 @@ const uid = () => Math.random().toString(36).slice(2,9);
    status, deletions and any summary you edit yourself are kept. */
 const SEED = [
   {key:"mirror", title:"Mirror", status:"building", url:"../mirror/",
-   summary:"On-device facial analysis (v2.0). Maps 478 landmarks plus a hair/skin segmenter for the real hairline, measures proportions, symmetry, skin and profile angles, and ranks you against your own sex in a 5,500-face rated dataset. The percentile explains about a third of rated attractiveness and is calibrated on mostly East Asian and white faces rated in China, so it's a rough indicator, not a verdict. Parked: the next real gain needs better-balanced data.",
+   summary:"On-device facial analysis (v2.0). Maps 478 landmarks plus a hair/skin segmenter for the real hairline, measures proportions, symmetry, skin and profile angles, and ranks you against your own sex in a 5,500-face rated dataset. The percentile explains about a third of rated attractiveness and is calibrated on mostly East Asian and white faces rated in China, so it's a rough indicator, not a verdict. On hold: the next real gain needs better-balanced data.",
    children:[
      {title:"Front analysis", summary:"Facial thirds from the detected hairline, face width, eye spacing, lip position, symmetry, skin, plus canthal tilt, eye openness, width-to-height, jaw width and lip ratio. Head tilt is corrected and the overlay follows your face."},
      {title:"Photos & cropping", summary:"Pick up to 8 photos to average out angle and lighting; auto-zoom on small faces; crop any single photo from its thumbnail."},
