@@ -288,14 +288,18 @@ function backlinksOf(note){ const k = norm(note.title); return S.notes.filter(x 
 function contextLine(body, title){ const k = norm(title); for (const line of body.split('\n')){ let m; LINK_RE.lastIndex=0; while ((m = LINK_RE.exec(line))) if (norm(m[1])===k) return line.replace(LINK_RE,(a,t,al)=>al||t).replace(/^[#>\-*\s]+/,'').trim(); } return ''; }
 /* ---------- unlinked mentions: a note's title written in another note without [[ ]] ---------- */
 function maskLinks(body){ return body.replace(/\[\[[^\]\n]*\]\]|https?:\/\/\S+|`[^`\n]*`/g, m => ' '.repeat(m.length)); }
+// per-body cache: masking and link-parsing every note for every title was the slow part of suggestions
+const DER = new Map();
+function derived(body){ let d = DER.get(body); if (!d){ if (DER.size > 4000) DER.clear(); d = {masked: maskLinks(body), links: new Set(linksOf(body).map(norm))}; DER.set(body, d); } return d; }
 function unlinkedMentionsOf(note){
   const title = note.title.trim(); if (title.length < 4) return [];
   let re; try{ re = new RegExp('(^|[^\\p{L}\\p{N}\\-])('+escRe(title)+')(?=$|[^\\p{L}\\p{N}\\-])','iu'); }catch(e){ return []; }
   const out = [];
   for (const x of S.notes){
     if (x.id===note.id) continue;
-    if (linksOf(x.body).some(t => norm(t)===norm(title))) continue; // already linked from there
-    const m = re.exec(maskLinks(x.body)); if (!m) continue;
+    const dx = derived(x.body);
+    if (dx.links.has(norm(title))) continue; // already linked from there
+    const m = re.exec(dx.masked); if (!m) continue;
     const idx = m.index + m[1].length, len = m[2].length;
     const ls = x.body.lastIndexOf('\n', idx)+1, le = x.body.indexOf('\n', idx), line = x.body.slice(ls, le<0 ? undefined : le);
     out.push({note:x, idx, len, context: line.replace(LINK_RE,(a,t,al)=>al||t).replace(/^[#>\-*\s]+/,'').trim().slice(0,160)});
@@ -742,122 +746,225 @@ function openEditor(id, seed){
 }
 
 /* ---------- graph ---------- */
+/* A live force layout: it paints at once, settles in the background a few milliseconds per frame,
+   remembers where every note sat (so reopening is instant and stable), and repels only nearby dots
+   through a spatial grid, so cost grows with the number of notes, not its square. */
+const GKEY = 'brain.graph.v1';
+let GPOS = null, GVIEW = null;
+function gposLoad(){ if (GPOS) return GPOS; GPOS = new Map(); try{ const o = JSON.parse(localStorage.getItem(GKEY)||'{}'); for (const id in o) GPOS.set(id, {x:o[id][0], y:o[id][1]}); }catch(e){} return GPOS; }
+function gposSave(ids){ const o = {}; for (const id of ids){ const p = GPOS.get(id); if (p) o[id] = [Math.round(p.x), Math.round(p.y)]; } try{ localStorage.setItem(GKEY, JSON.stringify(o)); }catch(e){} }
+const calmMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function renderGraph(app){
   const notes = S.notes.filter(n => n.section!=='archive');
   const idx = new Map(notes.map((n,i)=>[norm(n.title), i]));
   const edges = [], seen = new Set();
   notes.forEach((n,i) => { for (const t of linksOf(n.body)){ const j = idx.get(norm(t)); if (j==null || j===i) continue; const k = i<j ? i+'-'+j : j+'-'+i; if (!seen.has(k)){ seen.add(k); edges.push([i,j]); } } });
-  const nSug = allSuggestions().length;
-  app.append(el('header',{class:'top'}, el('h1',{text:'Graph'}), el('div',{class:'hright'}, el('span',{class:'count',text: notes.length+' notes · '+edges.length+' link'+(edges.length===1?'':'s')}),
-    nSug ? el('button',{class:'btn ghost imp',text:nSug+' suggestion'+(nSug===1?'':'s'),onclick:suggestionsSheet}) : null)));
+  const hright = el('div',{class:'hright'}, el('span',{class:'count',text: notes.length+' notes · '+edges.length+' link'+(edges.length===1?'':'s')}));
+  app.append(el('header',{class:'top'}, el('h1',{text:'Graph'}), hright));
+  // link suggestions scan every note against every title: count them after the graph is on screen, not before
+  setTimeout(() => { if (!hright.isConnected) return; const nSug = allSuggestions().length;
+    if (nSug) hright.append(el('button',{class:'btn ghost imp',text:nSug+' suggestion'+(nSug===1?'':'s'),onclick:suggestionsSheet})); }, 120);
   if (!notes.length){ app.append(el('div',{class:'empty',text:'No notes yet. Once you have a few, link them with [[Note title]] and they’ll connect here.'})); return; }
   const wrap = el('div',{class:'graphwrap'}), cv = el('canvas',{class:'graph',role:'img','aria-label':'Map of your notes and the links between them'});
   wrap.append(cv); app.append(wrap);
-  app.append(el('div',{class:'legend'}, el('span',{}, el('i',{style:'background:var(--copper)'}), 'Linked note'), el('span',{}, el('i',{style:'background:var(--ink-3)'}), 'Not linked yet'), el('span',{text:'Drag to move, pinch or +/− to zoom. Tap a dot to highlight its links, tap again to open.'})));
+  app.append(el('div',{class:'legend'}, el('span',{}, el('i',{style:'background:var(--copper)'}), 'Linked note'), el('span',{}, el('i',{style:'background:var(--ink-3)'}), 'Not linked yet'), el('span',{text:'Drag a dot to pull it, drag space to pan, pinch or +/− to zoom. Tap a dot to highlight its links, tap again to open.'})));
   if (!edges.length) app.append(el('p',{class:'hint',text:'Nothing is linked yet. Open a note, tap “[[ ]] Link”, and pick another note to connect them.'}));
 
   const N = notes.length, deg = new Array(N).fill(0), adj = notes.map(()=>[]);
   for (const [a,b] of edges){ deg[a]++; deg[b]++; adj[a].push(b); adj[b].push(a); }
+  const linked = [], lone = [];
+  for (let i=0;i<N;i++) (deg[i] ? linked : lone).push(i);
+  const rad = i => 5 + Math.min(10, Math.sqrt(deg[i])*2.8);
 
-  // 1. split into clusters (connected groups); lay out each on its own so unrelated notes never tangle
-  const comp = new Array(N).fill(-1), groups = [];
-  for (let i=0;i<N;i++){ if (comp[i]>=0 || !deg[i]) continue; const g=[i]; comp[i]=groups.length;
+  // 1. starting positions: where each note sat last time; a new note starts beside a placed neighbour
+  const mem = gposLoad(), P = notes.map(()=>null), V = notes.map(()=>({x:0,y:0})), fixed = new Uint8Array(N);
+  let fresh = 0;
+  for (const i of linked){ const p = mem.get(notes[i].id); if (p && isFinite(p.x) && isFinite(p.y)) P[i] = {x:p.x, y:p.y}; }
+  for (let pass=0; pass<3; pass++) linked.forEach((i,k) => { if (P[i]) return;
+    const nb = adj[i].find(j => P[j]);
+    if (nb!=null){ const a = Math.random()*6.283; P[i] = {x:P[nb].x+Math.cos(a)*60, y:P[nb].y+Math.sin(a)*60}; fresh++; }
+    else if (pass===2){ const a = k*2.39996, r = 40*Math.sqrt(k+1); P[i] = {x:Math.cos(a)*r, y:Math.sin(a)*r}; fresh++; } });
+  // a mostly-new layout starts hot and settles; a remembered one only gets a gentle nudge
+  let alpha = fresh > linked.length*0.25 ? 1 : fresh ? 0.35 : 0.06;
+
+  // 2. clusters (groups of notes connected to each other) are simulated separately and then packed side by side,
+  //    so unrelated topics never pile on top of each other
+  const comp = new Int32Array(N).fill(-1), groups = [];
+  for (const i of linked){ if (comp[i]>=0) continue; const g=[i]; comp[i]=groups.length;
     for (let q=0;q<g.length;q++) for (const j of adj[g[q]]) if (comp[j]<0){ comp[j]=groups.length; g.push(j); }
     groups.push(g); }
-  groups.sort((x,y)=>y.length-x.length);
-  const P = new Array(N);
-  const boxes = groups.map(g => {
-    const n = g.length, L = new Map(g.map((v,k)=>[v,k]));
-    const Q = g.map((v,k)=>{ const a=k*2.39996, r=40*Math.sqrt(k+1); return {x:Math.cos(a)*r, y:Math.sin(a)*r, vx:0, vy:0}; });
-    const E = []; for (const v of g) for (const w of adj[v]) if (v<w) E.push([L.get(v), L.get(w)]);
-    const iters = n > 300 ? 180 : 400;
-    for (let it=0; it<iters; it++){
-      const cool = 1 - it/iters;
-      for (let i=0;i<n;i++) for (let j=i+1;j<n;j++){
-        let dx=Q[i].x-Q[j].x, dy=Q[i].y-Q[j].y, d2=dx*dx+dy*dy+0.01; if (d2>640000) continue;
-        const f = 7000/d2, d=Math.sqrt(d2); dx/=d; dy/=d;
-        Q[i].vx+=dx*f; Q[i].vy+=dy*f; Q[j].vx-=dx*f; Q[j].vy-=dy*f;
-      }
-      for (const [a,b] of E){ const dx=Q[b].x-Q[a].x, dy=Q[b].y-Q[a].y, d=Math.sqrt(dx*dx+dy*dy)||1, f=(d-150)*0.03; Q[a].vx+=dx/d*f; Q[a].vy+=dy/d*f; Q[b].vx-=dx/d*f; Q[b].vy-=dy/d*f; }
-      for (const p of Q){ p.vx-=p.x*0.004; p.vy-=p.y*0.004; p.vx*=0.82; p.vy*=0.82; const sp=Math.hypot(p.vx,p.vy)||1, m=Math.min(14*cool+1, sp); p.x+=p.vx/sp*m; p.y+=p.vy/sp*m; }
-    }
-    let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity; for (const p of Q){ x0=Math.min(x0,p.x); x1=Math.max(x1,p.x); y0=Math.min(y0,p.y); y1=Math.max(y1,p.y); }
-    return {g, Q, w:x1-x0+140, h:y1-y0+90, x0, y0};
-  });
-  // 2. shelf-pack the clusters left to right, wrapping rows, with wide gutters between them
-  const GAP = 120, rowMax = Math.max(900, ...boxes.map(b=>b.w));
-  let cx = 0, cy = 0, rowH = 0, maxW = 0;
-  for (const bx of boxes){
-    if (cx > 0 && cx + bx.w > rowMax){ cx = 0; cy += rowH + GAP; rowH = 0; }
-    bx.g.forEach((v,k)=>{ P[v] = {x: cx + 70 + (bx.Q[k].x - bx.x0), y: cy + 45 + (bx.Q[k].y - bx.y0)}; });
-    cx += bx.w + GAP; rowH = Math.max(rowH, bx.h); maxW = Math.max(maxW, cx);
-  }
-  // 3. notes with no links sit in a tidy grid underneath
-  const lone = [...Array(N).keys()].filter(i=>!deg[i]);
-  const loneTop = boxes.length ? cy + rowH + GAP : 0, cols = Math.max(4, Math.floor(Math.max(maxW, 600)/150));
-  lone.forEach((v,k)=>{ P[v] = {x: 75 + (k%cols)*150, y: loneTop + 30 + Math.floor(k/cols)*80}; });
+  const gorder = groups.map((g,c)=>c).sort((a,b)=>groups[b].length-groups[a].length);
+  const cen = groups.map(()=>({x:0,y:0}));
 
-  const css = getComputedStyle(document.documentElement), col = v => css.getPropertyValue(v).trim();
-  const W = wrap.clientWidth || 340, H = Math.round(Math.max(360, window.innerHeight*0.68));
-  const dpr = Math.min(window.devicePixelRatio||1, 3);
-  cv.width = W*dpr; cv.height = H*dpr; cv.style.height = H+'px';
-  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity; for (const p of P){ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
-  const rad = i => 5 + Math.min(10, Math.sqrt(deg[i])*2.8);
-  const fitK = Math.min((W-60)/Math.max(1,maxX-minX), (H-60)/Math.max(1,maxY-minY));
-  // start readable (not squeezed): fit if it fits, otherwise zoom in on the biggest cluster and let you pan
-  let k = Math.min(1.4, Math.max(fitK, 0.95)), tx, ty;
-  const centerOn = (x,y) => { tx = W/2 - x*k; ty = H/2 - y*k; };
-  if (fitK >= 0.95) centerOn((minX+maxX)/2, (minY+maxY)/2);
-  else if (boxes.length){ const b0 = boxes[0].g.map(v=>P[v]); centerOn(b0.reduce((s,p)=>s+p.x,0)/b0.length, b0.reduce((s,p)=>s+p.y,0)/b0.length); }
-  else centerOn((minX+maxX)/2, minY + H/2/k - 30);
-  let sel = -1;
-  const order = [...Array(N).keys()].sort((a,b)=>deg[b]-deg[a]);
-  const ctx = cv.getContext('2d');
-  const draw = () => {
-    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
-    ctx.setTransform(dpr*k,0,0,dpr*k,dpr*tx,dpr*ty);
-    const nb = sel>=0 ? new Set([sel, ...adj[sel]]) : null;
-    if (lone.length && boxes.length){ ctx.fillStyle = col('--ink-3'); ctx.font = '600 '+(11/Math.min(k,1))+'px Figtree, system-ui, sans-serif'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('NOT LINKED YET', 40, loneTop - 4); }
-    ctx.lineWidth = 1.3/k;
-    for (const [a,b] of edges){ const hot = nb && (a===sel||b===sel); ctx.strokeStyle = hot ? col('--copper') : col('--rule'); ctx.globalAlpha = nb && !hot ? 0.25 : 1; ctx.beginPath(); ctx.moveTo(P[a].x,P[a].y); ctx.lineTo(P[b].x,P[b].y); ctx.stroke(); }
-    for (let i=0;i<N;i++){ ctx.globalAlpha = nb && !nb.has(i) ? 0.25 : 1; ctx.beginPath(); ctx.arc(P[i].x,P[i].y,rad(i),0,Math.PI*2); ctx.fillStyle = deg[i] ? col('--copper') : col('--ink-3'); ctx.fill();
-      if (i===sel){ ctx.lineWidth = 2.5/k; ctx.strokeStyle = col('--ink'); ctx.stroke(); } }
-    // labels: all of them once you're zoomed in enough, otherwise the hubs
-    const fs = 12/k; ctx.font = '500 '+fs+'px Figtree, system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
-    const show = k >= 0.7 || N <= 40 ? order : order.slice(0, 25);
-    for (const i of show){ if (nb && !nb.has(i)) continue;
-      const sx = P[i].x*k+tx, sy = P[i].y*k+ty; if (sx<-80||sx>W+80||sy<-30||sy>H+30) continue;
-      const t = notes[i].title.length>28 ? notes[i].title.slice(0,27)+'…' : notes[i].title, y = P[i].y + rad(i) + 3/k;
-      ctx.globalAlpha = 1; ctx.lineWidth = 3/k; ctx.strokeStyle = col('--page'); ctx.strokeText(t, P[i].x, y); ctx.fillStyle = col('--ink-2'); ctx.fillText(t, P[i].x, y); }
-    ctx.globalAlpha = 1;
+  // one simulation step: grid-based repulsion (only nearby dots in the same cluster push), springs on links, gravity to the cluster's centre
+  const REACH = 380, R2 = REACH*REACH, cell = new Map(), springs = edges.filter(([a,b])=>deg[a]&&deg[b]);
+  const tick = () => {
+    cell.clear();
+    for (const c of cen){ c.x = c.y = 0; }
+    for (const i of linked){ cen[comp[i]].x += P[i].x; cen[comp[i]].y += P[i].y;
+      const key = (Math.floor(P[i].x/REACH)+32768)*65536 + Math.floor(P[i].y/REACH)+32768; let c = cell.get(key); if (!c) cell.set(key, c=[]); c.push(i); }
+    groups.forEach((g,c) => { cen[c].x /= g.length; cen[c].y /= g.length; });
+    for (const [key, c] of cell){
+      for (let ox=-1; ox<=1; ox++) for (let oy=-1; oy<=1; oy++){ const d = cell.get(key + ox*65536 + oy); if (!d) continue;
+        for (const i of c) for (const j of d){ if (j<=i || comp[i]!==comp[j]) continue;
+          let dx=P[i].x-P[j].x, dy=P[i].y-P[j].y, d2=dx*dx+dy*dy;
+          if (d2>R2) continue; if (d2<0.01){ dx=Math.random()-.5; dy=Math.random()-.5; d2=0.25; }
+          const f = 700*alpha/d2; V[i].x+=dx*f; V[i].y+=dy*f; V[j].x-=dx*f; V[j].y-=dy*f; } } }
+    for (const [a,b] of springs){ const dx=P[b].x-P[a].x, dy=P[b].y-P[a].y, d=Math.sqrt(dx*dx+dy*dy)||1, f=(d-90)/d*0.08*alpha;
+      V[a].x+=dx*f; V[a].y+=dy*f; V[b].x-=dx*f; V[b].y-=dy*f; }
+    for (const i of linked){ if (fixed[i]){ V[i].x=V[i].y=0; continue; } const c = cen[comp[i]];
+      V[i].x -= (P[i].x-c.x)*0.006*alpha; V[i].y -= (P[i].y-c.y)*0.006*alpha;
+      V[i].x *= 0.6; V[i].y *= 0.6; const sp = Math.hypot(V[i].x, V[i].y); if (sp > 30){ V[i].x *= 30/sp; V[i].y *= 30/sp; }
+      P[i].x += V[i].x; P[i].y += V[i].y; }
+    alpha += (target - alpha)*0.0228;
   };
-  draw();
+  let target = 0;
 
-  // pan with a finger or mouse, pinch or wheel to zoom, tap a dot to select it
+  // 3. pack the clusters left to right in rows (biggest first), then the unlinked notes in a tidy grid underneath;
+  //    while the layout moves they glide to their spots instead of jumping
+  const LG = {x:0, y:0, cols:4};
+  const bounds = list => { let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity; for (const i of list){ const p=P[i]; if (p.x<x0)x0=p.x; if (p.x>x1)x1=p.x; if (p.y<y0)y0=p.y; if (p.y>y1)y1=p.y; } return {x0,x1,y0,y1}; };
+  const pack = snap => {
+    const GAP = 110, bx = groups.map(g => bounds(g)), rowMax = Math.max(900, ...bx.map(b => b.x1-b.x0+140));
+    let cx = 0, cy = 0, rowH = 0, maxW = 0;
+    for (const c of gorder){ const b = bx[c], w = b.x1-b.x0+140, h = b.y1-b.y0+90;
+      if (cx > 0 && cx + w > rowMax){ cx = 0; cy += rowH + GAP; rowH = 0; }
+      const dx = (cx + 70 - b.x0)*(snap ? 1 : 0.2), dy = (cy + 45 - b.y0)*(snap ? 1 : 0.2);
+      if (Math.abs(dx) + Math.abs(dy) > 0.05) for (const i of groups[c]) if (!fixed[i]){ P[i].x += dx; P[i].y += dy; }
+      cx += w + GAP; rowH = Math.max(rowH, h); maxW = Math.max(maxW, cx - GAP); }
+    if (!lone.length) return;
+    LG.cols = Math.max(4, Math.floor(Math.max(maxW, 600)/150)); LG.x = 0; LG.y = groups.length ? cy + rowH + GAP : 0;
+    lone.forEach((v,k) => { const tx = LG.x + 75 + (k%LG.cols)*150, ty = LG.y + 30 + Math.floor(k/LG.cols)*80;
+      if (!P[v] || snap) P[v] = {x:tx, y:ty}; else { P[v].x += (tx-P[v].x)*0.18; P[v].y += (ty-P[v].y)*0.18; } }); };
+
+  // warm up off-screen for a moment so a brand-new layout doesn't open as a burst
+  const warm = performance.now(); while (alpha > 0.12 && performance.now()-warm < 70) tick();
+  pack(true);
+  for (const i of linked) mem.set(notes[i].id, P[i]);   // same objects: the memory always holds the live positions
+
+  // 4. view: reuse the last one, otherwise fit (staying readable on big vaults)
+  const css = getComputedStyle(document.documentElement); let C = {};
+  const readColors = () => { const g = v => css.getPropertyValue(v).trim(); C = {copper:g('--copper'), rule:g('--rule'), ink:g('--ink'), ink2:g('--ink-2'), ink3:g('--ink-3'), page:g('--page')}; };
+  readColors();
+  const W = wrap.clientWidth || 340, H = Math.round(Math.max(360, window.innerHeight*0.68)), dpr = Math.min(window.devicePixelRatio||1, 3);
+  cv.width = W*dpr; cv.height = H*dpr; cv.style.height = H+'px';
+  const fitView = (minK) => { const b = bounds([...Array(N).keys()]), fk = Math.min((W-60)/Math.max(1,b.x1-b.x0), (H-60)/Math.max(1,b.y1-b.y0));
+    const k = Math.max(minK, Math.min(1.4, fk));
+    let cx = (b.x0+b.x1)/2, cy = (b.y0+b.y1)/2;
+    if (fk < minK && linked.length){ const hub = linked.reduce((m,i)=>deg[i]>deg[m]?i:m, linked[0]); cx = P[hub].x; cy = P[hub].y; }
+    return {k, tx: W/2 - cx*k, ty: H/2 - cy*k}; };
+  let view = GVIEW && GVIEW.w===W ? {...GVIEW.v} : fitView(0.95), touched = !!(GVIEW && GVIEW.w===W);
+  const keepView = () => { GVIEW = {w:W, v:{...view}}; };
+
+  // 5. drawing: only when something changed. Links are stroked in small batches in screen pixels, dots stamped from
+  //    pre-drawn sprites, labels culled and thinned when zoomed far. When nothing is moving, the whole picture is baked
+  //    into an off-screen image so panning and zooming just slide that image (no re-drawing hundreds of links per frame).
+  let sel = -1, hl = 0, hlTo = 0, dirty = true, vdirty = false, tween = null;
+  const order = [...Array(N).keys()].sort((a,b)=>deg[b]-deg[a]);
+  const ctx = cv.getContext('2d'), sprites = new Map(), labelW = new Map();
+  const sprite = (fill, r) => { const q = Math.max(1, Math.round(r*2)/2), key = fill+q; let sp = sprites.get(key);
+    if (!sp){ const s = Math.ceil((q+1)*2), c = document.createElement('canvas'); c.width = c.height = Math.ceil(s*dpr); const g = c.getContext('2d');
+      g.scale(dpr,dpr); g.fillStyle = fill; g.beginPath(); g.arc(s/2, s/2, q, 0, 6.2832); g.fill(); sp = {c, s, h:s/2}; if (sprites.size > 400) sprites.clear(); sprites.set(key, sp); }
+    return sp; };
+  const paint = (g, v, w, h, pr) => {
+    const {k, tx, ty} = v;
+    g.setTransform(pr,0,0,pr,0,0); g.clearRect(0,0,w,h);
+    const nb = sel>=0 ? new Set([sel, ...adj[sel]]) : null, dim = 1 - 0.75*hl;
+    const vx0 = -tx/k - 40, vy0 = -ty/k - 40, vx1 = (w-tx)/k + 40, vy1 = (h-ty)/k + 40, inView = p => p.x>vx0 && p.x<vx1 && p.y>vy0 && p.y<vy1;
+    if (lone.length && linked.length && LG.y > vy0 && LG.y < vy1){ g.globalAlpha = dim; g.fillStyle = C.ink3; g.font = '600 11px Figtree, system-ui, sans-serif'; g.textAlign='left'; g.textBaseline='bottom'; g.fillText('NOT LINKED YET', (LG.x + 40)*k+tx, (LG.y + 4)*k+ty - 2); }
+    g.lineWidth = 1.2; g.globalAlpha = nb ? dim : 1; g.strokeStyle = C.rule; g.beginPath(); let seg = 0;
+    for (const [a,b] of edges){ if (nb && (a===sel||b===sel)) continue; const p=P[a], q=P[b]; if (!inView(p) && !inView(q)) continue;
+      g.moveTo(p.x*k+tx, p.y*k+ty); g.lineTo(q.x*k+tx, q.y*k+ty); if (++seg % 48 === 0){ g.stroke(); g.beginPath(); } }
+    g.stroke();
+    if (nb){ g.globalAlpha = 1; g.strokeStyle = C.copper; g.lineWidth = 1.3 + 0.9*hl; g.beginPath(); for (const j of adj[sel]){ g.moveTo(P[sel].x*k+tx, P[sel].y*k+ty); g.lineTo(P[j].x*k+tx, P[j].y*k+ty); } g.stroke(); }
+    for (const [fill, list] of [[C.ink3, lone], [C.copper, linked]]){
+      for (const i of list){ const p = P[i]; if (!inView(p)) continue; const on = !nb || nb.has(i);
+        g.globalAlpha = on ? 1 : dim; const r = rad(i)*k*(i===sel ? 1 + 0.25*hl : 1), sp = sprite(fill, r);
+        g.drawImage(sp.c, p.x*k+tx - sp.h, p.y*k+ty - sp.h, sp.s, sp.s); } }
+    if (sel>=0){ g.globalAlpha = hl; g.lineWidth = 2.5; g.strokeStyle = C.ink; g.beginPath(); g.arc(P[sel].x*k+tx, P[sel].y*k+ty, rad(sel)*k*(1+0.25*hl), 0, 6.2832); g.stroke(); }
+    // labels: everything once you're zoomed in, otherwise the best-connected notes
+    g.font = '500 12px Figtree, system-ui, sans-serif'; g.textAlign='center'; g.textBaseline='top'; g.lineWidth = 3; g.lineJoin = 'round'; g.strokeStyle = C.page; g.fillStyle = C.ink2;
+    // a label is skipped if it would land on one already drawn (hubs and the selected note's neighbours win)
+    const base = k >= 0.7 || N <= 40 ? order : order.slice(0, 25), show = nb ? [sel, ...adj[sel], ...base] : base, taken = [], done = new Set(); let drawn = 0;
+    for (const i of show){ if (done.has(i)) continue; done.add(i); const p = P[i]; if (!inView(p)) continue; const on = !nb || nb.has(i); if (!on && hl > 0.98) continue; if (drawn > 220) break;
+      const t = notes[i].title.length>28 ? notes[i].title.slice(0,27)+'…' : notes[i].title, x = p.x*k+tx, y = (p.y + rad(i))*k + ty + 3;
+      let tw = labelW.get(t); if (tw==null){ tw = g.measureText(t).width; labelW.set(t, tw); }
+      const r = {x0:x-tw/2-2, x1:x+tw/2+2, y0:y-1, y1:y+15};
+      if (taken.some(q => r.x0<q.x1 && r.x1>q.x0 && r.y0<q.y1 && r.y1>q.y0)) continue; taken.push(r); drawn++;
+      g.globalAlpha = on ? 1 : dim; g.strokeText(t, x, y); g.fillText(t, x, y); }
+    g.globalAlpha = 1;
+  };
+  const draw = () => paint(ctx, view, W, H, dpr);
+  const bake = {c: document.createElement('canvas'), v: null, ok: false}, BM = Math.round(Math.max(W, H)*0.4), BPR = Math.min(dpr, 2);
+  bake.c.width = Math.ceil((W+2*BM)*BPR); bake.c.height = Math.ceil((H+2*BM)*BPR);
+  const doBake = () => { bake.v = {...view}; paint(bake.c.getContext('2d'), {k:view.k, tx:view.tx+BM, ty:view.ty+BM}, W+2*BM, H+2*BM, BPR); bake.ok = true; };
+  const present = () => { const s = view.k/bake.v.k, f = dpr*s/BPR;
+    ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.setTransform(f,0,0,f, dpr*(view.tx - (bake.v.tx+BM)*s), dpr*(view.ty - (bake.v.ty+BM)*s)); ctx.drawImage(bake.c, 0, 0); };
+  const sameView = (a, b) => a && Math.abs(a.k-b.k) < 1e-6 && Math.abs(a.tx-b.tx) < 0.01 && Math.abs(a.ty-b.ty) < 0.01;
+
+  // 6. one loop drives everything: settling, glide-to-place, zoom tweens, highlight fades, pan momentum
+  let fling = null, settledSaved = alpha < 0.02, idle = 0;
+  const reduce = calmMotion();
+  const ids = notes.map(n=>n.id);
+  const frame = now => {
+    if (!cv.isConnected){ gposSave(ids); keepView(); return; }
+    if (alpha > 0.005 || target > 0){
+      // a couple of steps a frame, so the settle reads as motion; never more than a few ms, so the phone stays responsive
+      const t0 = performance.now(); let n = 0; do { tick(); n++; } while ((reduce || n < 2) && performance.now()-t0 < (reduce ? 14 : 6) && (alpha > 0.005 || target > 0));
+      pack(false); dirty = true; settledSaved = false;
+      if (!touched && alpha < 0.08 && !tween){ const f = fitView(0.95); animateTo(f, 500); touched = true; }
+    } else if (!settledSaved){ gposSave(ids); settledSaved = true; }
+    if (hl !== hlTo){ hl = reduce ? hlTo : Math.abs(hlTo-hl) < 0.04 ? hlTo : hl + (hlTo-hl)*0.25; dirty = true; if (hl===0 && hlTo===0 && sel>=0 && pendingClear){ sel = -1; pendingClear = false; } }
+    if (tween){ const u = Math.min(1, (now - tween.t0)/tween.ms), e = 1 - Math.pow(1-u, 3);
+      view = {k: tween.a.k + (tween.b.k-tween.a.k)*e, tx: tween.a.tx + (tween.b.tx-tween.a.tx)*e, ty: tween.a.ty + (tween.b.ty-tween.a.ty)*e}; vdirty = true; if (u>=1){ tween = null; keepView(); } }
+    if (fling){ view.tx += fling.vx; view.ty += fling.vy; fling.vx *= 0.92; fling.vy *= 0.92; vdirty = true; if (Math.abs(fling.vx)+Math.abs(fling.vy) < 0.3){ fling = null; keepView(); } }
+    if (dirty){ draw(); bake.ok = false; dirty = vdirty = false; idle = 0; }
+    else if (vdirty){ if (bake.ok) present(); else draw(); vdirty = false; idle = 0; }
+    else if (!ptrs.size && (!bake.ok || !sameView(bake.v, view)) && ++idle >= 3){ doBake(); present(); }
+    requestAnimationFrame(frame);
+  };
+  let pendingClear = false;
+  const animateTo = (b, ms) => { fling = null; if (reduce){ view = b; vdirty = true; keepView(); return; } tween = {a:{...view}, b, t0:performance.now(), ms}; };
+  // 7. touch & mouse: drag a dot to pull it (the rest follows), drag space to pan with momentum, pinch/wheel to zoom
   const bar = el('div',{class:'gbar'});
-  const zoomAt = (f, x, y) => { const nk = Math.max(0.2, Math.min(3, k*f)); tx = x - (x-tx)*(nk/k); ty = y - (y-ty)*(nk/k); k = nk; draw(); };
-  const showSel = () => { bar.replaceChildren(); if (sel<0) return;
-    bar.append(el('span',{class:'gsel',text:notes[sel].title+' · '+deg[sel]+' link'+(deg[sel]===1?'':'s')}), el('button',{class:'btn primary',text:'Open',onclick:()=>openNote(notes[sel].id)}), el('button',{class:'btn ghost',text:'Clear',onclick:()=>{ sel=-1; showSel(); draw(); }})); };
-  const ptrs = new Map(); let start = null, moved = false, pinch = null;
+  const zoomAt = (f, x, y, ms) => { const {k, tx, ty} = tween ? tween.b : view, nk = Math.max(0.2, Math.min(3, k*f)), b = {k:nk, tx: x - (x-tx)*(nk/k), ty: y - (y-ty)*(nk/k)}; touched = true;
+    if (ms) animateTo(b, ms); else { tween = null; view = b; vdirty = true; keepView(); } };
+  const select = i => { if (i<0){ hlTo = 0; pendingClear = true; } else { sel = i; pendingClear = false; hl = Math.min(hl, 0.35); hlTo = 1; } dirty = true; showSel(i); };
+  const showSel = i => { bar.replaceChildren(); if (i<0) return;
+    bar.append(el('span',{class:'gsel',text:notes[i].title+' · '+deg[i]+' link'+(deg[i]===1?'':'s')}), el('button',{class:'btn primary',text:'Open',onclick:()=>openNote(notes[i].id)}), el('button',{class:'btn ghost',text:'Clear',onclick:()=>select(-1)})); };
+  const hit = (sx, sy, slop) => { const x = (sx-view.tx)/view.k, y = (sy-view.ty)/view.k; let best=-1, bd=Infinity;
+    for (let i=0;i<N;i++){ const r = rad(i) + slop/view.k, d=(P[i].x-x)**2+(P[i].y-y)**2; if (d<r*r && d<bd){ bd=d; best=i; } } return best; };
+  const ptrs = new Map(); let start = null, moved = false, pinch = null, grab = -1, trail = [];
   cv.style.touchAction = 'none';
-  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
-    if (ptrs.size===1){ start = {x:e.offsetX, y:e.offsetY, tx, ty}; moved = false; }
-    if (ptrs.size===2){ const [p1,p2] = [...ptrs.values()]; pinch = {d:Math.hypot(p1.x-p2.x,p1.y-p2.y), k}; moved = true; } });
-  cv.addEventListener('pointermove', e => { if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
-    if (ptrs.size===2 && pinch){ const [p1,p2] = [...ptrs.values()], d = Math.hypot(p1.x-p2.x,p1.y-p2.y); zoomAt((pinch.k*d/pinch.d)/k, (p1.x+p2.x)/2, (p1.y+p2.y)/2); return; }
-    if (ptrs.size===1 && start){ const dx = e.offsetX-start.x, dy = e.offsetY-start.y; if (Math.abs(dx)+Math.abs(dy) > 6) moved = true; if (moved){ tx = start.tx+dx; ty = start.ty+dy; draw(); } } });
+  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, {x:e.offsetX, y:e.offsetY}); fling = null; tween = null;
+    if (ptrs.size===1){ start = {x:e.offsetX, y:e.offsetY, tx:view.tx, ty:view.ty}; moved = false; trail = [{x:e.offsetX, y:e.offsetY, t:e.timeStamp}];
+      grab = hit(e.offsetX, e.offsetY, e.pointerType==='mouse' ? 4 : 12); if (grab>=0) cv.style.cursor = 'grabbing'; }
+    if (ptrs.size===2){ const [p1,p2] = [...ptrs.values()]; pinch = {d:Math.hypot(p1.x-p2.x,p1.y-p2.y), k:view.k}; moved = true; if (grab>=0){ fixed[grab] = 0; grab = -1; } } });
+  cv.addEventListener('pointermove', e => {
+    if (!ptrs.size && e.pointerType==='mouse'){ cv.style.cursor = hit(e.offsetX, e.offsetY, 4)>=0 ? 'pointer' : 'grab'; return; }
+    if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, {x:e.offsetX, y:e.offsetY});
+    if (ptrs.size===2 && pinch){ const [p1,p2] = [...ptrs.values()], d = Math.hypot(p1.x-p2.x,p1.y-p2.y); zoomAt((pinch.k*d/pinch.d)/view.k, (p1.x+p2.x)/2, (p1.y+p2.y)/2); return; }
+    if (ptrs.size===1 && start){ const dx = e.offsetX-start.x, dy = e.offsetY-start.y; if (Math.abs(dx)+Math.abs(dy) > 6) moved = true; if (!moved) return; touched = true;
+      if (grab>=0 && deg[grab]){ fixed[grab] = 1; P[grab].x = (e.offsetX-view.tx)/view.k; P[grab].y = (e.offsetY-view.ty)/view.k; target = 0.3; if (alpha < 0.3) alpha = 0.3; dirty = true; }
+      else { view.tx = start.tx+dx; view.ty = start.ty+dy; vdirty = true; trail.push({x:e.offsetX, y:e.offsetY, t:e.timeStamp}); if (trail.length > 5) trail.shift(); } } });
   const up = e => { const was = ptrs.has(e.pointerId); ptrs.delete(e.pointerId); if (ptrs.size<2) pinch = null;
-    if (was && ptrs.size===0 && !moved){ const x = (e.offsetX-tx)/k, y = (e.offsetY-ty)/k; let best=-1, bd=(22/k)**2;
-      for (let i=0;i<N;i++){ const d=(P[i].x-x)**2+(P[i].y-y)**2; if (d<bd){ bd=d; best=i; } }
-      if (best>=0 && best===sel) openNote(notes[best].id); else { sel = best; showSel(); draw(); } }
-    if (ptrs.size===0) start = null; };
+    if (was && ptrs.size===0){
+      if (grab>=0 && moved && deg[grab]){ fixed[grab] = 0; target = 0; }
+      else if (!moved){ const best = grab>=0 ? grab : hit(e.offsetX, e.offsetY, e.pointerType==='mouse' ? 4 : 12); if (best>=0 && best===sel && hlTo===1) openNote(notes[best].id); else select(best); }
+      else if (trail.length > 1 && !reduce){ const a = trail[0], b = trail[trail.length-1], dt = Math.max(16, b.t-a.t); if (e.timeStamp - b.t < 80) fling = {vx:(b.x-a.x)/dt*16, vy:(b.y-a.y)/dt*16}; }
+      keepView(); grab = -1; cv.style.cursor = ''; start = null; } };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   cv.addEventListener('wheel', e => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY*0.0015), e.offsetX, e.offsetY); }, {passive:false});
+  const mq = matchMedia('(prefers-color-scheme: dark)'), onScheme = () => { if (!cv.isConnected){ mq.removeEventListener('change', onScheme); return; } readColors(); sprites.clear(); dirty = true; };
+  mq.addEventListener('change', onScheme);
   wrap.append(el('div',{class:'gzoom'},
-    el('button',{class:'btn','aria-label':'Zoom in',text:'+',onclick:()=>zoomAt(1.25,W/2,H/2)}),
-    el('button',{class:'btn','aria-label':'Zoom out',text:'−',onclick:()=>zoomAt(0.8,W/2,H/2)}),
-    el('button',{class:'btn','aria-label':'Show everything',text:'Fit',onclick:()=>{ k = Math.max(0.2, Math.min(1.4, fitK)); centerOn((minX+maxX)/2,(minY+maxY)/2); draw(); }})));
+    el('button',{class:'btn','aria-label':'Zoom in',text:'+',onclick:()=>zoomAt(1.35,W/2,H/2,220)}),
+    el('button',{class:'btn','aria-label':'Zoom out',text:'−',onclick:()=>zoomAt(1/1.35,W/2,H/2,220)}),
+    el('button',{class:'btn','aria-label':'Show everything',text:'Fit',onclick:()=>{ touched = true; animateTo(fitView(0.2), 420); }})));
   wrap.after(bar);
+  draw(); dirty = false; requestAnimationFrame(frame);
 }
 let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(()=>{ if (tab==='graph' && !$('#layer').children.length) render(); }, 200); });
 
@@ -1368,6 +1475,7 @@ function renderSettings(app){
 
   app.append(el('div',{class:'card'}, el('h2',{text:'Writing tips'}),
     el('p',{class:'hint',text:'[[Note title]] links to another note (tap “[[ ]] Link” while editing to pick one)  ·  # Heading  ·  - list item  ·  > quote  ·  **bold**  ·  *italic*  ·  ==highlight==  ·  `code`. Web links become tappable. On the capture box, the first line is the title and #tags are picked up automatically. Renaming a note updates every link to it.'})));
+  app.append(el('p',{class:'hint',style:'text-align:center;margin:18px 0 6px',text:'Second Brain v1.10'}));
 }
 
 /* ---------- boot ---------- */
