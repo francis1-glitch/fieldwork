@@ -43,11 +43,14 @@ IDX = dict(chin=152, forehead=10, noseBottom=2, lBrow=105, rBrow=334,
            lEyeOuter=33, lEyeInner=133, rEyeOuter=263, rEyeInner=362,
            mouthL=61, mouthR=291, upperLip=0, lowerLip=17,
            lFace=234, rFace=454, lCheek=50, rCheek=280,
-           foreheadMid=151, lCheek2=205, rCheek2=425, glabella=9, noseTip=1)
+           foreheadMid=151, lCheek2=205, rCheek2=425, glabella=9, noseTip=1,
+           lLidTop=159, lLidBot=145, rLidTop=386, rLidBot=374, lJaw=172, rJaw=397, lipInTop=13, lipInBot=14)
 
 # Must match FEATS in mirror/index.html, same order
 FEATURES = ["third_dev", "upper_third", "lower_third", "mid_low", "facew", "eyespace",
-            "lip", "symmetry", "skin_even", "skin_smooth"]
+            "lip", "symmetry", "skin_even", "skin_smooth",
+            # v3: the markers that differ most between men's and women's faces
+            "canthal", "eye_open", "fwhr", "jaw", "lip_ratio"]
 SEG_HAIR, SEG_FACE = 1, 3
 SEG_MODEL = "selfie_multiclass_256x256.tflite"
 LM_MODEL = "face_landmarker.task"
@@ -141,6 +144,18 @@ def extract(img_bgr, landmarker, segmenter):
         dl, dr = abs(P[l][0]-midX), abs(P[r][0]-midX); asym += abs(dl-dr)/(((dl+dr)/2) or 1)
     symmetry = max(0.0, 1-asym/5)
 
+    # dimorphic markers (same math as Mirror's geometry())
+    def tilt(inner, outer):
+        return np.degrees(np.arctan2(inner[1]-outer[1], abs(outer[0]-inner[0])))
+    canthal = (tilt(P['lEyeInner'], P['lEyeOuter']) + tilt(P['rEyeInner'], P['rEyeOuter']))/2
+    eye_open = (abs(P['lLidBot'][1]-P['lLidTop'][1])/eyeW + abs(P['rLidBot'][1]-P['rLidTop'][1])/dist(P['rEyeOuter'], P['rEyeInner']))/2
+    browY = (P['lBrow'][1]+P['rBrow'][1])/2
+    faceWpx = dist(P['lFace'], P['rFace'])
+    fwhr = faceWpx/max(1.0, abs(P['upperLip'][1]-browY))
+    jaw = dist(P['lJaw'], P['rJaw'])/(faceWpx or 1)
+    upH = abs(P['lipInTop'][1]-P['upperLip'][1]); loH = abs(P['lowerLip'][1]-P['lipInBot'][1])
+    lip_ratio = loH/upH if upH > 0.5 else np.nan
+
     # skin patches (unrotated, same as Mirror)
     rad = max(6, int(round(w*0.03)))
     lums, texs = [], []
@@ -158,7 +173,7 @@ def extract(img_bgr, landmarker, segmenter):
     else:
         skin_even = skin_smooth = np.nan
     return np.array([third_dev, upper_third, lower_third, mid/(mid+low), facew, eyespace,
-                     lip, symmetry, skin_even, skin_smooth], dtype=float)
+                     lip, symmetry, skin_even, skin_smooth, canthal, eye_open, fwhr, jaw, lip_ratio], dtype=float)
 
 def build_tasks():
     from mediapipe.tasks import python
@@ -193,7 +208,7 @@ def main():
             if len(parts) >= 2: pairs.append((parts[0], float(parts[1])))
     print(f"{len(pairs)} labeled faces")
 
-    cache = "features_v2.npz"          # v2 = trichion + roll-corrected features
+    cache = "features_v3.npz"          # v3 = v2 + dimorphic markers (canthal, eyes, fWHR, jaw, lips)
     names = None
     if os.path.exists(cache):
         d = np.load(cache); X, y = d["X"], d["y"]; print(f"loaded cached features: {X.shape}")
@@ -215,41 +230,38 @@ def main():
 
     found = float(np.mean(~np.isnan(X[:, 0])))
     print(f"hairline found on {found:.1%} of faces")
-    mean = np.nanmean(X, axis=0); std = np.nanstd(X, axis=0); std[std == 0] = 1
-    Z = (X-mean)/std; Z = np.where(np.isnan(Z), 0.0, Z)     # missing marker = dataset average (Mirror does the same)
+    if names is None:
+        sys.exit("can't match features to filenames, so men and women can't be separated: delete features_v3.npz and rerun")
+    sex = np.array([n[1:2].upper() for n in names])     # SCUT names: AF/AM/CF/CM + number
 
-    Ztr, Zte, ytr, yte = train_test_split(Z, y, test_size=0.2, random_state=42)
-    reg = RidgeCV(alphas=np.logspace(-3, 3, 25)).fit(Ztr, ytr)
-    pred = reg.predict(Zte)
-    r = float(pearsonr(pred, yte)[0]); r2 = float(reg.score(Zte, yte))
-    print("\n=== Benchmark (held-out 20%) ===")
-    print(f"Pearson r : {r:.3f}\nR^2       : {r2:.3f}\n(alpha {reg.alpha_:.3g})")
-    print("\nStandardized coefficients (rating points per 1 SD of the marker):")
-    for name, c in sorted(zip(FEATURES, reg.coef_), key=lambda t: -abs(t[1])):
-        print(f"  {name:12s} {c:+.4f}")
+    def fit(Xs, ys, label):
+        mean = np.nanmean(Xs, axis=0); std = np.nanstd(Xs, axis=0); std[std == 0] = 1
+        Z = np.where(np.isnan((Xs-mean)/std), 0.0, (Xs-mean)/std)    # missing marker = group average
+        Ztr, Zte, ytr, yte = train_test_split(Z, ys, test_size=0.2, random_state=42)
+        reg = RidgeCV(alphas=np.logspace(-3, 3, 25)).fit(Ztr, ytr)
+        r = float(pearsonr(reg.predict(Zte), yte)[0]); r2 = float(reg.score(Zte, yte))
+        final = RidgeCV(alphas=[reg.alpha_]).fit(Z, ys)
+        pred = final.predict(Z)
+        print(f"  {label:6s} n={len(ys):5d}  held-out r={r:.3f}  R^2={r2:.3f}")
+        return dict(n=int(len(ys)), features=FEATURES, mean=mean.round(6).tolist(), std=std.round(6).tolist(),
+                    coef=final.coef_.round(6).tolist(), intercept=round(float(final.intercept_), 6),
+                    cdf=np.quantile(pred, np.linspace(0, 1, 201)).round(4).tolist(),
+                    r_test=round(r, 4), r2_test=round(r2, 4)), final.coef_
 
-    # refit on everything for the shipped model; percentiles from its predictions on all faces
-    final = RidgeCV(alphas=[reg.alpha_]).fit(Z, y)
-    allpred = final.predict(Z)
-    qs = np.linspace(0, 1, 201)
-    cdf = np.quantile(allpred, qs).round(4).tolist()
-    # SCUT filenames encode group + sex: AF/AM (Asian), CF/CM (Caucasian) — used only for the "vs men / vs women" comparison
-    sex_cdfs = {}
-    if names is not None:
-        sex = np.array([n[1:2].upper() for n in names])
-        for key, code in (("cdf_male", "M"), ("cdf_female", "F")):
-            m = sex == code
-            if m.sum() >= 200: sex_cdfs[key] = np.quantile(allpred[m], qs).round(4).tolist()
-        print(f"per-sex comparison: men {int((sex=='M').sum())}, women {int((sex=='F').sum())}")
-    else:
-        print("per-sex comparison skipped: cache can't be matched to filenames (delete features_v2.npz and rerun to enable)")
-    model = dict(version=2, dataset="SCUT-FBP5500", n=int(len(y)), features=FEATURES,
-                 mean=mean.round(6).tolist(), std=std.round(6).tolist(),
-                 coef=final.coef_.round(6).tolist(), intercept=round(float(final.intercept_), 6),
-                 cdf=cdf, **sex_cdfs, r_test=round(r, 4), r2_test=round(r2, 4), hairline_found=round(found, 4),
-                 rating_mean=round(float(y.mean()), 4), rating_sd=round(float(y.std()), 4))
+    print("\n=== Benchmark (held-out 20% within each group) ===")
+    shared, cs = fit(X, y, "shared")
+    men, cm = fit(X[sex == "M"], y[sex == "M"], "men")
+    women, cw = fit(X[sex == "F"], y[sex == "F"], "women")
+
+    print("\nStandardized coefficients — rating points per 1 SD (men | women):")
+    for i in np.argsort(-np.maximum(abs(cm), abs(cw))):
+        flag = "   <- opposite directions" if np.sign(cm[i]) != np.sign(cw[i]) and min(abs(cm[i]), abs(cw[i])) > 0.02 else ""
+        print(f"  {FEATURES[i]:12s} {cm[i]:+.3f} | {cw[i]:+.3f}{flag}")
+
+    model = dict(version=3, dataset="SCUT-FBP5500", hairline_found=round(found, 4), **shared,
+                 by_sex=dict(m=men, f=women), rating_mean=round(float(y.mean()), 4), rating_sd=round(float(y.std()), 4))
     with open(args.out, "w") as f: json.dump(model, f)
-    print(f"\nwrote {os.path.abspath(args.out)}  — commit it (mirror/score_model.json) and Mirror switches to percentiles")
+    print(f"\nwrote {os.path.abspath(args.out)}  — commit it (mirror/score_model.json)")
 
 if __name__ == "__main__":
     main()

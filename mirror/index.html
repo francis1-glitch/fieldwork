@@ -186,7 +186,7 @@
       <div class="metrics" id="m-sym"></div>
       <div class="section-label">Skin</div>
       <div class="metrics" id="m-skin"></div>
-      <div class="section-label">More measurements · not in the score</div>
+      <div class="section-label" id="extraLabel">More measurements · not in the score</div>
       <div class="metrics" id="m-extra"></div>
     </div>
     <div id="profileBlock" class="hide">
@@ -199,7 +199,7 @@
     These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The score is a percentile against the SCUT-FBP5500 reference faces (see its card for who they are). Picking several photos at once averages them, which steadies every number. Facial thirds run hairline → brows → nose base → chin; the hairline comes from a hair/skin segmenter because the landmark mesh stops mid-forehead. Lighting, angle and expression all move the numbers.
   </div>
 
-  <footer>Mirror v1.9 · on-device · MediaPipe FaceLandmarker</footer>
+  <footer>Mirror v2.0 · on-device · MediaPipe FaceLandmarker</footer>
 </div>
 
 <script type="module">
@@ -358,18 +358,23 @@ function featureVec(g,s){
   return { third_dev: t? (Math.abs(t[0]-1/3)+Math.abs(t[1]-1/3)+Math.abs(t[2]-1/3))/3 : null,
     upper_third:t?t[0]:null, lower_third:t?t[2]:null, mid_low:g.midLow,
     facew:g.faceW, eyespace:g.eyeSpace, lip:g.lip, symmetry:g.sym,
-    skin_even:s?s.even01:null, skin_smooth:s?s.smooth01:null };
+    skin_even:s?s.even01:null, skin_smooth:s?s.smooth01:null,
+    canthal:g.canthal, eye_open:g.eyeAR, fwhr:g.fwhr, jaw:g.jaw, lip_ratio:g.lipRatio };
 }
 const FEAT_LABEL={third_dev:'Thirds balance',upper_third:'Upper third',lower_third:'Lower third',mid_low:'Middle : lower',
-  facew:'Face width',eyespace:'Eye spacing',lip:'Lip position',symmetry:'Symmetry',skin_even:'Tone evenness',skin_smooth:'Smoothness'};
-function cdfFor(c){ if(!MODEL) return null;
+  facew:'Face width',eyespace:'Eye spacing',lip:'Lip position',symmetry:'Symmetry',skin_even:'Tone evenness',skin_smooth:'Smoothness',
+  canthal:'Canthal tilt',eye_open:'Eye openness',fwhr:'Width-to-height',jaw:'Jaw width',lip_ratio:'Lip ratio'};
+/* v3 models: a separate model per sex (own weights, own reference pool). Older files: one shared model. */
+const active=c=>MODEL&&(MODEL.by_sex&&MODEL.by_sex[c]||MODEL);
+function cdfFor(c){ if(!MODEL) return null; const M=active(c);
+  if(M!==MODEL) return M.cdf;
   return (c==='m'&&MODEL.cdf_male)||(c==='f'&&MODEL.cdf_female)||MODEL.cdf; }
 function pctOf(y,q){ let k=0; while(k<q.length&&q[k]<=y) k++; return 100*k/q.length; }
-function modelRaw(fv){
-  if(!MODEL) return null;
-  let y=MODEL.intercept, missing=0; const parts={};
-  MODEL.features.forEach((f,i)=>{ const v=fv[f]; if(v==null){missing++;return;}   // missing = dataset mean (z=0)
-    const c=MODEL.coef[i]*(v-MODEL.mean[i])/(MODEL.std[i]||1); parts[f]=c; y+=c; });
+function modelRaw(fv,c){
+  if(!MODEL) return null; const M=active(c);
+  let y=M.intercept, missing=0; const parts={};
+  M.features.forEach((f,i)=>{ const v=fv[f]; if(v==null||!isFinite(v)){missing++;return;}   // missing = group average (z=0)
+    const k=M.coef[i]*(v-M.mean[i])/(M.std[i]||1); parts[f]=k; y+=k; });
   return {rating:y, parts, missing};
 }
 function modelScore(raw,c){
@@ -413,12 +418,12 @@ function compute(L,trich){
     {name:'Jaw width',val:g.jaw,fmt:'pct',note:'jaw angles ÷ cheekbone width'},
   ];
   if(g.lipRatio!=null) extra.push({name:'Lower : upper lip',val:g.lipRatio,fmt:'x',note:'lip height ratio · ~1.6 often cited'});
-  const raw=modelRaw(featureVec(g,s));
+  const fv=featureVec(g,s);
   const quality=[];
   if(g.ipd<70) quality.push('face is small in the frame, so measurements are coarse — get closer or use a sharper photo');
   if(s&&s.lightGap>10) quality.push('one side of the face is lit more than the other — skin and symmetry readings skew');
   if(s&&(s.exposure<28||s.exposure>88)) quality.push(s.exposure<28?'photo is dark':'photo is overexposed');
-  return {prop,sym,skin,extra,blend:blend*100,raw,comps,pose:{roll:g.roll,yaw:g.yaw},trich:!!g.thirds,quality};
+  return {prop,sym,skin,extra,blend:blend*100,fv,comps,pose:{roll:g.roll,yaw:g.yaw},trich:!!g.thirds,quality};
 }
 
 function fmtVal(v,fmt){
@@ -479,20 +484,27 @@ function render(r){
   lastFront=r;
   $('frontBlock').classList.remove('hide'); $('profileBlock').classList.add('hide');
   rows('m-prop',r.prop); rows('m-sym',r.sym); rows('m-skin',r.skin); plainRows('m-extra',r.extra);
+  $('extraLabel').textContent = (MODEL&&active(cmp).features.includes('jaw'))? 'More measurements · in the score' : 'More measurements · not in the score';
   results.classList.remove('hide'); $('disclaimer').classList.remove('hide');
-  const fit=modelScore(r.raw,cmp), many=r.n>1;
+  let raw=null, lo=null, hi=null;
+  if(MODEL&&r.fvs){ const raws=r.fvs.map(fv=>modelRaw(fv,cmp)); const parts={};
+    for(const x of raws) for(const f in x.parts) parts[f]=(parts[f]||0)+x.parts[f]/raws.length;
+    raw={rating:raws.reduce((s,x)=>s+x.rating,0)/raws.length, parts, missing:Math.max(...raws.map(x=>x.missing))};
+    const ps=raws.map(x=>pctOf(x.rating,cdfFor(cmp))); lo=Math.round(Math.min(...ps)); hi=Math.round(Math.max(...ps)); }
+  const fit=modelScore(raw,cmp), many=r.n>1, M=active(cmp);
   const n = fit? fit.pct : Math.round(r.blend);
   $('dial').style.setProperty('--v',n); $('scoreNum').textContent=n;
-  const hasSex=!!(MODEL&&MODEL.cdf_male&&MODEL.cdf_female);
+  const hasSex=!!(MODEL&&(MODEL.by_sex||(MODEL.cdf_male&&MODEL.cdf_female)));
   $('cmpBar').classList.toggle('hide',!fit||!hasSex);
   document.querySelectorAll('#cmpBar .seg').forEach(b=>b.classList.toggle('active',b.dataset.cmp===cmp));
   if(fit){
     const who = !hasSex? `${MODEL.n.toLocaleString()} rated faces` : (cmp==='m'?'rated men':'rated women');
     $('scoreTitle').textContent='Percentile';
     $('scoreBreak').textContent=`Higher than ${fit.pct}% of ${who} · predicted rating ${fit.rating.toFixed(2)} / 5`
-      + (many? ` · averaged over ${r.n} photos (range ${r.pctLo(cmp)}–${r.pctHi(cmp)})`:'')
+      + (many? ` · averaged over ${r.n} photos (range ${lo}–${hi})`:'')
       + (fit.missing? ` · ${fit.missing} marker${fit.missing>1?'s':''} missing, held at average`:'');
-    $('prov').textContent=`Ridge model fit to SCUT-FBP5500 human ratings. Held-out r = ${MODEL.r_test.toFixed(2)} (R² ${MODEL.r2_test.toFixed(2)}): these markers explain about ${Math.round(MODEL.r2_test*100)}% of rated attractiveness. Reference group: mostly East Asian and white faces aged about 15–60, rated by volunteers in China; no Black, South Asian, Hispanic or Middle Eastern faces. The percentile says where you'd land among those faces, as those raters judged them: less reliable outside that group, and a rough indicator, not a verdict. "What's moving it" shows each marker's pull in percentile points; a sign that looks backwards (e.g. symmetry) reflects quirks in how this dataset was rated.`;
+    const own=MODEL.by_sex?` Separate model for ${cmp==='m'?'men':'women'}, trained only on ${cmp==='m'?'men':'women'}'s faces (n = ${M.n.toLocaleString()}).`:'';
+    $('prov').textContent=`Ridge model fit to SCUT-FBP5500 human ratings.${own} Held-out r = ${M.r_test.toFixed(2)} (R² ${M.r2_test.toFixed(2)}): these markers explain about ${Math.round(M.r2_test*100)}% of rated attractiveness. Reference group: mostly East Asian and white faces aged about 15–60, rated by volunteers in China; no Black, South Asian, Hispanic or Middle Eastern faces. The percentile says where you'd land among those faces, as those raters judged them: less reliable outside that group, and a rough indicator, not a verdict. "What's moving it" shows each marker's pull in percentile points; a sign that looks backwards (e.g. symmetry) reflects quirks in how this dataset was rated.`;
     const box=$('drivers'); box.innerHTML='<div class="eyebrow" style="margin-bottom:2px">What\'s moving it</div>';
     const mx=Math.max(1,...fit.drivers.map(d=>Math.abs(d.pts)));
     for(const d of fit.drivers){ const w=Math.abs(d.pts)/mx*50, up=d.pts>0;
@@ -519,20 +531,15 @@ document.querySelectorAll('#cmpBar .seg').forEach(b=>b.addEventListener('click',
 
 /* Merge several photos of the same person: average each marker, keep the spread. */
 function mergeResults(list){
-  if(list.length===1){ const r=list[0]; r.n=1; return r; }
+  if(list.length===1){ const r=list[0]; r.n=1; if(r.fv) r.fvs=[r.fv]; return r; }
   const meanSd=a=>{const m=a.reduce((s,v)=>s+v,0)/a.length; return [m,Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length)];};
   const mergeRows=key=>{ const order=[], by={};
     for(const r of list) for(const m of (r[key]||[])){ if(!by[m.name]){by[m.name]=[];order.push(m);} by[m.name].push(m.val); }
     return order.map(m=>{const [v,sd]=meanSd(by[m.name]); return {...m,val:v,spread:sd>0?sd:0};}); };
   const out={n:list.length};
   for(const k of ['prop','sym','skin','extra','profile']) if(list[0][k]||list.some(r=>r[k])) out[k]=mergeRows(k);
-  if(list[0].raw!==undefined){
-    const raws=list.map(r=>r.raw).filter(Boolean);
-    if(raws.length){ const parts={}; for(const r of raws) for(const f in r.parts) parts[f]=(parts[f]||0)+r.parts[f]/raws.length;
-      out.raw={rating:raws.reduce((s,r)=>s+r.rating,0)/raws.length, parts, missing:Math.max(...raws.map(r=>r.missing))};
-      out.pctLo=c=>Math.round(Math.min(...raws.map(r=>pctOf(r.rating,cdfFor(c)))));
-      out.pctHi=c=>Math.round(Math.max(...raws.map(r=>pctOf(r.rating,cdfFor(c))))); }
-    else out.raw=null;
+  if(list[0].fv!==undefined){
+    out.fvs=list.map(r=>r.fv);
     out.blend=list.reduce((s,r)=>s+r.blend,0)/list.length;
     out.comps={}; for(const k in list[0].comps) out.comps[k]=list.reduce((s,r)=>s+r.comps[k],0)/list.length;
     out.pose={roll:list[0].pose.roll,yaw:Math.max(...list.map(r=>Math.abs(r.pose.yaw)))};
