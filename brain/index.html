@@ -127,6 +127,17 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .render code{font-family:ui-monospace,Menlo,monospace;font-size:.88em;background:var(--copper-lt);padding:1px 4px;border-radius:3px}
 .render blockquote{border-left:3px solid var(--copper);margin:0 0 .7em;padding:2px 0 2px 12px;color:var(--ink-2)}
 .metarow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--rule);padding-top:10px}
+.tplrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 6px}
+.tplrow .chip{background:var(--copper-lt);border-color:transparent;color:var(--copper-dk)}
+.sugtags{display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%}
+.sugtags .chip{padding:3px 9px;font-size:12.5px}
+.meterrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:.25em 0}
+.meterrow .ml{font-weight:600}
+.meterrow .mt{color:var(--ink-2)}
+.dots{display:inline-flex;gap:3px;align-items:center}
+.dots i{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--copper);box-sizing:border-box}
+.dots i.on{background:var(--copper)}
+.dots i.half{background:linear-gradient(90deg,var(--copper) 50%,transparent 50%)}
 .metarow select{background:var(--page);border:1px solid var(--rule);border-radius:6px;padding:7px 8px;font-size:14px}
 .tagbox{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1;min-width:180px}
 .tagbox input{border:0;background:transparent;outline:none;min-width:90px;flex:1;font-size:14px;padding:6px 2px}
@@ -318,6 +329,47 @@ function openLink(title){
   S.notes.unshift(n); save(); openEditor(n.id);
 }
 function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+/* ---------- writing helpers: preferences, auto-linking, strength meters ---------- */
+const PREFS_KEY = 'brain.prefs';
+const prefs = (()=>{ try{ return Object.assign({autolink:true}, JSON.parse(localStorage.getItem(PREFS_KEY)||'{}')); }catch(e){ return {autolink:true}; } })();
+const savePrefs = () => { try{ localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); }catch(e){} };
+
+/* Link the first plain mention of every other note's title in this note, and the first mention of this
+   note's title in every other note. Longest titles first, so "Cast Iron Skillet" wins over "Skillet". */
+function autoLink(note){
+  let added = 0, back = 0;
+  const targets = S.notes.filter(x => x.id!==note.id && !x.tags.includes('template') && x.title.trim().length>=4)
+    .sort((a,b)=>b.title.length-a.title.length);
+  for (const t of targets){
+    if (linksOf(note.body).some(l => norm(l)===norm(t.title))) continue;
+    let re; try{ re = new RegExp('(^|[^\\p{L}\\p{N}\\-])('+escRe(t.title.trim())+')(?=$|[^\\p{L}\\p{N}\\-])','iu'); }catch(e){ continue; }
+    const m = re.exec(maskLinks(note.body)); if (!m) continue;
+    const idx = m.index + m[1].length, matched = note.body.substr(idx, m[2].length);
+    note.body = note.body.slice(0,idx) + (matched===t.title ? '[['+t.title+']]' : '[['+t.title+'|'+matched+']]') + note.body.slice(idx+m[2].length);
+    added++;
+  }
+  if (!note.tags.includes('template')) for (const m of unlinkedMentionsOf(note)){ if (!m.note.tags.includes('template') && linkMention(m, note)) back++; }
+  if (added) note.updatedAt = nowIso();
+  return {added, back};
+}
+
+/* "Evidence: 3/5", "**Strength:** 4.5 / 5", "Potency: ●●●○○" or "★★★☆☆" render as a meter. */
+function meterOf(line){
+  const m = /^\s*(?:\*\*)?([A-Za-z][^:*\n]{1,30}?)(?:\*\*)?\s*:\s*(?:\*\*)?\s*(.+)$/.exec(line); if (!m) return null;
+  const label = m[1].trim(); let v = m[2].trim(), on, max, rest;
+  let k = /^(\d+(?:\.5)?)\s*\/\s*(5|10)\b\s*(.*)$/.exec(v);
+  if (k){ on = parseFloat(k[1]); max = +k[2]; rest = k[3]; }
+  else if ((k = /^([●○◐]{3,10}|[★☆½]{3,10})\s*(.*)$/.exec(v))){
+    const g = k[1]; on = (g.match(/[●★]/g)||[]).length + ((g.match(/[◐½]/g)||[]).length ? 0.5 : 0); max = (g.match(/[●○◐★☆½]/g)||[]).length; rest = k[2];
+    if (/[★☆½]/.test(g) && max < 5) max = 5;
+  } else return null;
+  if (!(on>=0 && on<=max)) return null;
+  const dots = el('span',{class:'dots',role:'img','aria-label':label+' '+on+' of '+max});
+  for (let i=1;i<=max;i++) dots.append(el('i',{class: on>=i ? 'on' : (on>=i-0.5 ? 'half' : '')}));
+  rest = rest.replace(/^[\s—–·,(-]+|\)$/g,'').replace(/^\*\*\s*/,'').trim();
+  return el('span',{class:'meterrow'}, el('span',{class:'ml',text:label}), dots, rest ? el('span',{class:'mt'}, inline(rest)) : null);
+}
 function renameLinks(oldT, newT, skipId){
   const re = new RegExp('\\[\\[\\s*'+escRe(oldT.trim())+'\\s*(?=[\\]|#])','gi'); let changed = 0;
   for (const n of S.notes){ if (n.id===skipId) continue; const b = n.body.replace(re, '[['+newT.trim()); if (b!==n.body){ n.body=b; n.updatedAt=nowIso(); changed++; } }
@@ -351,9 +403,10 @@ function renderBody(body){
   const flush = () => { if (para.length){ root.append(el('p',{}, inline(para.join(' ')))); para = []; } };
   for (const raw of body.split('\n')){
     const line = raw.trimEnd();
-    if (/^\s*[-*]\s+/.test(line)){ flush(); if (!ul){ ul = el('ul'); root.append(ul); } ul.append(el('li',{}, inline(line.replace(/^\s*[-*]\s+/,'')))); continue; }
+    if (/^\s*[-*]\s+/.test(line)){ flush(); if (!ul){ ul = el('ul'); root.append(ul); } const item = line.replace(/^\s*[-*]\s+/,''), mt = meterOf(item); ul.append(el('li',{}, mt || inline(item))); continue; }
     ul = null;
     if (!line.trim()){ flush(); continue; }
+    if (!/^#/.test(line)){ const mt = meterOf(line); if (mt){ flush(); root.append(el('div',{}, mt)); continue; } }
     if (/^##\s+/.test(line)){ flush(); root.append(el('h3',{}, inline(line.replace(/^##\s+/,'')))); continue; }
     if (/^#\s+/.test(line)){ flush(); root.append(el('h2',{}, inline(line.replace(/^#\s+/,'')))); continue; }
     if (/^>\s?/.test(line)){ flush(); root.append(el('blockquote',{}, inline(line.replace(/^>\s?/,'')))); continue; }
@@ -591,14 +644,44 @@ function openEditor(id, seed){
   const title = el('input',{class:'titlein',id:'noteTitle',type:'text',placeholder:'Title',value:d.title,'aria-label':'Title'});
   const body = el('textarea',{class:'bodyin',id:'noteBody',placeholder:'Write it down. Link other notes with [[Note title]]. Use # for headings, - for lists, **bold**, and ==highlight== for the part that matters most.','aria-label':'Note'});
   body.value = d.body;
+  body.placeholder += ' Type "Evidence: 3/5" on its own line for a strength meter.';
   const sec = el('select',{id:'noteSection','aria-label':'Section'}, SECTIONS.map(s=>el('option',{value:s.id,text:s.name, selected: s.id===d.section})));
   const tagIn = el('input',{id:'tagInput',type:'text',placeholder:'+ tag',autocapitalize:'off','aria-label':'Add a tag'});
   const tagBox = el('div',{class:'tagbox'});
-  const drawTags = () => { tagBox.replaceChildren(...d.tags.map(t=>el('button',{class:'tagx','aria-label':'Remove tag '+t,text:'#'+t+' ✕',onclick:()=>{ d.tags=d.tags.filter(x=>x!==t); drawTags(); persist(); }})), tagIn); };
+  let drawTags = () => { tagBox.replaceChildren(...d.tags.map(t=>el('button',{class:'tagx','aria-label':'Remove tag '+t,text:'#'+t+' ✕',onclick:()=>{ d.tags=d.tags.filter(x=>x!==t); drawTags(); persist(); }})), tagIn); };
   tagIn.addEventListener('keydown', e => { if (e.key==='Enter' || e.key===',' || e.key===' '){ e.preventDefault(); addTag(); } });
   tagIn.addEventListener('blur', addTag);
   function addTag(){ const t = cleanTag(tagIn.value); tagIn.value=''; if (t && !d.tags.includes(t)){ d.tags.push(t); drawTags(); persist(); } }
   drawTags();
+
+  // suggested tags: what notes in the same folder (or section) usually carry
+  const sugBox = el('div',{class:'sugtags'});
+  function drawSuggestTags(){
+    const probe = {...d, section: sec.value}, path = folderOf(probe).join('/'), freq = new Map();
+    for (const x of S.notes){ if (x.id===d.id || x.tags.includes('template')) continue;
+      const same = path ? folderOf(x).join('/')===path : x.section===probe.section; if (!same) continue;
+      for (const t of x.tags) if (!d.tags.includes(t)) freq.set(t,(freq.get(t)||0)+1); }
+    const top = [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
+    sugBox.replaceChildren(...(top.length ? [el('span',{class:'hint',text:'Suggested:'})] : []),
+      ...top.map(([t]) => el('button',{class:'chip',onpointerdown:e=>e.preventDefault(),onclick:()=>{ if (!d.tags.includes(t)){ d.tags.push(t); drawTags(); drawSuggestTags(); persist(); } }}, '+#'+t)));
+  }
+  const _drawTags = drawTags; drawTags = () => { _drawTags(); drawSuggestTags(); };
+
+  // templates: any note tagged #template; shown while the note is still empty
+  const tpls = S.notes.filter(x => x.tags.includes('template') && x.id!==d.id).sort((a,b)=>a.title.localeCompare(b.title));
+  const tplRow = el('div',{class:'tplrow'});
+  function applyTemplate(t){
+    const today = new Date().toISOString().slice(0,10);
+    body.value = t.body.replace(/\{\{\s*date\s*\}\}/gi, today).replace(/\{\{\s*title\s*\}\}/gi, title.value.trim() || '');
+    for (const tg of t.tags) if (tg!=='template' && !d.tags.includes(tg)) d.tags.push(tg);
+    if (t.folder){ const parts = String(t.folder).split('/').map(x=>x.trim()).filter(Boolean); if (/^templates?$/i.test(parts[parts.length-1]||'')) parts.pop(); if (parts.length) d.folder = parts.join('/'); }
+    sec.value = t.section || sec.value;
+    if (!title.value.trim()) title.placeholder = t.title.replace(/\s*template\s*/ig,' ').trim() + ' — name it';
+    tplRow.hidden = true; drawTags(); persist(); body.focus();
+  }
+  if (!d.body.trim() && tpls.length)
+    tplRow.append(el('span',{class:'hint',text:'Start from:'}), ...tpls.map(t => el('button',{class:'chip',onclick:()=>applyTemplate(t)}, t.title.replace(/\s*template\s*$/i,'') || t.title)));
+  else tplRow.hidden = true;
 
   let tmr; const status = el('span',{class:'hint',text: existing ? 'Saved' : ''});
   function persist(){
@@ -611,7 +694,7 @@ function openEditor(id, seed){
     if (save()) status.textContent = 'Saved';
   }
   const later = () => { status.textContent = 'Saving…'; clearTimeout(tmr); tmr = setTimeout(persist, 500); };
-  title.addEventListener('input', later); body.addEventListener('input', later); sec.addEventListener('change', persist);
+  title.addEventListener('input', later); body.addEventListener('input', later); sec.addEventListener('change', ()=>{ persist(); drawSuggestTags(); });
 
   // [[ link suggestions
   const suggest = el('div',{class:'suggest',hidden:true,'aria-label':'Link to a note'});
@@ -641,6 +724,11 @@ function openEditor(id, seed){
     el('button',{class:'btn',text:'Keep',onclick:()=>{ confirm.hidden=true; }}));
   const done = () => {
     clearTimeout(tmr); persist();
+    const live = S.notes.find(x=>x.id===d.id);
+    if (prefs.autolink && live && !live.tags.includes('template')){
+      const r = autoLink(live); d.body = live.body;
+      if (r.added || r.back){ save(); toast('Linked '+[r.added?r.added+' note'+(r.added===1?'':'s')+' from here':'', r.back?r.back+' back to this one':''].filter(Boolean).join(', ')+'.'); }
+    }
     if (origTitle && d.title && norm(origTitle)!==norm(d.title)){ const k = renameLinks(origTitle, d.title, d.id); if (k){ save(); toast('Updated links in '+k+' note'+(k===1?'':'s')+'.'); } }
     closeLayer(); if (saved) openNote(d.id); else render();
   };
@@ -648,7 +736,8 @@ function openEditor(id, seed){
   sh.append(el('div',{class:'bar'},
     el('button',{class:'icon',text:'Done',onclick:done}),
     el('div',{class:'grp'}, status, linkBtn, existing ? el('button',{class:'icon',style:'color:var(--danger)',text:'Delete',onclick:()=>{ confirm.hidden=false; }}) : null)));
-  sh.append(confirm, title, body, suggest, el('div',{class:'metarow'}, sec, tagBox));
+  sh.append(confirm, title, tplRow, body, suggest, el('div',{class:'metarow'}, sec, tagBox, sugBox));
+  drawSuggestTags();
   setTimeout(()=> (existing ? body : (d.title ? body : title)).focus(), 80);
 }
 
@@ -1231,6 +1320,11 @@ function renderSettings(app){
   const confirm = el('div',{class:'confirm',hidden:true}, el('span',{text:'This replaces every note on this phone.'}),
     el('button',{class:'btn primary',text:'Yes, restore',onclick:()=>{ try{ const d=JSON.parse(ta.value); if(!Array.isArray(d.notes)) throw 0; S={notes:d.notes, canvases:Array.isArray(d.canvases)?d.canvases:[]}; save(); toast('Restored '+S.notes.length+' notes.'); tab='notes'; render(); }catch(e){ toast('That backup couldn’t be read.'); } }}),
     el('button',{class:'btn',text:'Cancel',onclick:()=>{ confirm.hidden=true; }}));
+  const al = el('input',{type:'checkbox',id:'autolinkPref'}); al.checked = prefs.autolink;
+  al.addEventListener('change', ()=>{ prefs.autolink = al.checked; savePrefs(); toast(al.checked?'Auto-linking on.':'Auto-linking off.'); });
+  app.append(el('div',{class:'card'}, el('h2',{text:'Writing'}),
+    el('label',{class:'label',for:'autolinkPref',style:'display:flex;gap:10px;align-items:center'}, al, 'Auto-link note titles when you tap Done'),
+    el('p',{class:'hint',text:'Mentions of other notes become [[links]], and other notes that mention this one link back. Templates: tag any note #template and it appears under "Start from" on a new, empty note; {{date}} fills in today. Strength meters: write "Evidence: 3/5" or "Potency: ●●●○○" on its own line or bullet.'})));
   app.append(el('div',{class:'card'}, el('h2',{text:'Backup'}),
     el('p',{class:'hint',text:'Your notes live only on this phone. Copy a backup now and then, and restore it if you switch phones or clear your browser.'}),
     el('div',{class:'actions'},
