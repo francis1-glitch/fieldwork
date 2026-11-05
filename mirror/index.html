@@ -199,7 +199,7 @@
     These are measurements, not a verdict. "Ideal" means the classical canon or demographic average — a reference line, not a target. The score is a percentile against the SCUT-FBP5500 reference faces (see its card for who they are). Picking several photos at once averages them, which steadies every number. Facial thirds run hairline → brows → nose base → chin; the hairline comes from a hair/skin segmenter because the landmark mesh stops mid-forehead. Lighting, angle and expression all move the numbers.
   </div>
 
-  <footer>Mirror v2.0 · on-device · MediaPipe FaceLandmarker</footer>
+  <footer>Mirror v2.0.1 · on-device · MediaPipe FaceLandmarker</footer>
 </div>
 
 <script type="module">
@@ -566,19 +566,23 @@ function draw(){
     for(const pt of chain){ctx.beginPath();ctx.arc(pt[0],pt[1],3,0,7);ctx.fill();}
     return;
   }
-  // thirds: lines perpendicular to the face axis at hairline, glabella, nose base, chin
-  const top=P[IDX.forehead], chin=P[IDX.chin];
-  let ux=top[0]-chin[0], uy=top[1]-chin[1]; const n=Math.hypot(ux,uy)||1; ux/=n; uy/=n;
-  const half=D(P[IDX.lFace],P[IDX.rFace])*0.75;
-  const cross=(pt,col,dash)=>{ // project the point onto the axis through the chin, draw across the face
-    const t=(pt[0]-chin[0])*ux+(pt[1]-chin[1])*uy, cx=chin[0]+ux*t, cy=chin[1]+uy*t;
+  // Thirds lines are drawn in the SAME frame they're measured in: parallel to the eye line (head roll),
+  // at the hairline, glabella, nose base and chin. The red line follows the face's actual midline landmarks,
+  // so it bends with the nose and chin instead of running as one straight rule.
+  const a=P[IDX.lEyeOuter], b=P[IDX.rEyeOuter], roll=Math.atan2(b[1]-a[1],b[0]-a[0]);
+  const ux=Math.cos(roll), uy=Math.sin(roll), vx=-uy, vy=ux;          // u = across the face, v = down the face
+  const c=[(P[IDX.lFace][0]+P[IDX.rFace][0])/2,(P[IDX.lFace][1]+P[IDX.rFace][1])/2];
+  const half=D(P[IDX.lFace],P[IDX.rFace])*0.62;
+  const level=(pt,col,dash)=>{ const t=(pt[0]-c[0])*vx+(pt[1]-c[1])*vy, cx=c[0]+vx*t, cy=c[1]+vy*t;
     ctx.strokeStyle=col; ctx.setLineDash(dash||[]); ctx.beginPath();
-    ctx.moveTo(cx+uy*half,cy-ux*half); ctx.lineTo(cx-uy*half,cy+ux*half); ctx.stroke(); ctx.setLineDash([]); };
+    ctx.moveTo(cx-ux*half,cy-uy*half); ctx.lineTo(cx+ux*half,cy+uy*half); ctx.stroke(); ctx.setLineDash([]); };
   ctx.lineWidth=1.5;
-  if(lastTrich) cross(lastTrich,'rgba(232,178,74,0.95)'); else cross(top,'rgba(232,178,74,0.6)',[5,4]);
-  for(const k of['glabella','noseBottom','chin']) cross(P[IDX[k]],'rgba(232,178,74,0.9)');
-  ctx.strokeStyle='rgba(232,112,90,0.9)';ctx.beginPath();
-  ctx.moveTo(chin[0]-ux*canvas.height,chin[1]-uy*canvas.height);ctx.lineTo(chin[0]+ux*canvas.height,chin[1]+uy*canvas.height);ctx.stroke();
+  if(lastTrich) level(lastTrich,'rgba(232,178,74,0.95)'); else level(P[IDX.forehead],'rgba(232,178,74,0.6)',[5,4]);
+  for(const k of['glabella','noseBottom','chin']) level(P[IDX[k]],'rgba(232,178,74,0.9)');
+  const MID=[10,151,9,8,168,6,197,195,5,4,1,19,94,2,164,0,17,18,200,199,175,152];
+  const line=(lastTrich?[lastTrich]:[]).concat(MID.map(i=>P[i]));
+  ctx.strokeStyle='rgba(232,112,90,0.95)'; ctx.lineWidth=1.6; ctx.lineJoin='round'; ctx.beginPath();
+  ctx.moveTo(line[0][0],line[0][1]); for(let i=1;i<line.length;i++) ctx.lineTo(line[i][0],line[i][1]); ctx.stroke();
   if(lastTrich){ctx.fillStyle='rgba(232,178,74,1)';ctx.beginPath();ctx.arc(lastTrich[0],lastTrich[1],3.5,0,7);ctx.fill();}
 }
 
@@ -670,7 +674,7 @@ function refresh(){
   const which=many?`Photo ${sel+1} of ${shots.length}: `:'';
   const zoom=!cur.a?'no face found here. ':cur.crop?'your crop. ':cur.a.zoomed?'zoomed in automatically. ':'';
   const head=many?`Averaged over ${done.length} photo${done.length>1?'s':''} (± = spread). ${which}${zoom}Tap a thumbnail to view or crop it.`:(zoom?zoom.charAt(0).toUpperCase()+zoom.slice(1):'Done. ');
-  status.textContent = head + (mode==='profile'?' Line traces glabella → nasion → tip → subnasale → lip → chin.':' Yellow = thirds (solid top line = hairline), red = face axis.') + skip;
+  status.textContent = head + (mode==='profile'?' Line traces glabella → nasion → tip → subnasale → lip → chin.':' Yellow = thirds, level with your eyes (solid top line = hairline); red = your facial midline.') + skip;
 }
 
 /* ---------- manual crop: drag the box, drag a corner to resize; applies to the first photo ---------- */
