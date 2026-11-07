@@ -54,6 +54,10 @@
   .todo input{flex:1;min-width:0;border:none;background:transparent;color:var(--ink);font:inherit;font-size:1rem;padding:4px 0;outline:none}
   .todo input::placeholder{color:var(--muted)}
   .todo .row.done input{color:var(--muted);text-decoration:line-through}
+  .todo .row{transition:opacity .35s ease,transform .35s ease,max-height .35s ease .2s,padding .35s ease .2s;max-height:60px;overflow:hidden}
+  .todo .row.gone{opacity:0;transform:translateX(14px);max-height:0;padding-top:0;padding-bottom:0}
+  .card .hint button.undo{border:none;background:none;color:var(--ink);font:inherit;font-weight:600;padding:0 0 0 6px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  @media (prefers-reduced-motion:reduce){ .todo .row{transition:none} }
 
   /* Nemesis standing */
   .standing{padding:16px 20px 20px}
@@ -128,7 +132,7 @@
     <div id="brief"></div>
   </div>
 
-  <footer>Cockpit v1.3 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Cockpit v1.4 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -157,28 +161,65 @@ async function fetchData(path){
   try{ $("#date").textContent = new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"}); }catch(e){}
 })();
 
-/* ---------- Top 3 (carries over; checked items drop at the next day) ---------- */
+/* ---------- Top 3 (carries over; checking one off clears it, with a short undo) ---------- */
 const TKEY = "cockpit.top3";
+const T3HINT = "The three that matter. They carry over until you finish them.";
+function blank(){ return {t:"",d:false}; }
 function getTop3(){
   let s = load(TKEY);
-  if(!s || !Array.isArray(s.items)) s = { date: todayKey(), items:[{t:"",d:false},{t:"",d:false},{t:"",d:false}] };
+  if(!s || !Array.isArray(s.items)) s = { date: todayKey(), items:[blank(),blank(),blank()], done:[] };
   if(s.date !== todayKey()){
     // new day: keep unfinished, clear finished, roll the date
     const keep = s.items.filter(i => i.t.trim() && !i.d).map(i => ({t:i.t,d:false}));
-    while(keep.length < 3) keep.push({t:"",d:false});
-    s = { date: todayKey(), items: keep.slice(0,3) };   // prefilled marker resets with the day
+    while(keep.length < 3) keep.push(blank());
+    s = { date: todayKey(), items: keep.slice(0,3), done:[] };   // prefilled marker resets with the day
     save(TKEY,s);
   }
+  if(!Array.isArray(s.done)) s.done = [];
+  // older builds kept checked items in place: clear them out now
+  if(s.items.some(i => i.d)){
+    s.items.filter(i => i.d && i.t.trim()).forEach(i => s.done.push(i.t));
+    s.items = s.items.filter(i => !i.d); while(s.items.length < 3) s.items.push(blank()); save(TKEY,s);
+  }
   return s;
+}
+let undoTimer = null;
+function setHint(s, last){
+  const h = $("#t3hint"); clearTimeout(undoTimer);
+  if(last){
+    h.innerHTML = 'Done: ' + esc(last.t) + '<button class="undo" id="undo">Undo</button>';
+    $("#undo").onclick = () => {
+      const st = getTop3(); const ix = st.done.lastIndexOf(last.t); if(ix > -1) st.done.splice(ix,1);
+      const filled = st.items.filter(x => x.t.trim());
+      filled.splice(Math.min(last.i, filled.length), 0, {t:last.t,d:false});
+      while(filled.length < 3) filled.push(blank());
+      st.items = filled;
+      save(TKEY, st); renderTop3(); setHint(st);
+    };
+    undoTimer = setTimeout(() => setHint(getTop3()), 6000);
+    return;
+  }
+  const n = s.done.length;
+  h.textContent = n ? n + " knocked out today. " + (s.items.some(i => i.t.trim()) ? "Keep going." : "All clear.") : T3HINT;
+}
+function finish(i, row){
+  const s = getTop3(), it = s.items[i]; if(!it || !it.t.trim()) return;
+  row.classList.add("done"); row.querySelector(".box").classList.add("done");
+  setTimeout(() => row.classList.add("gone"), 450);
+  setTimeout(() => {
+    const st = getTop3(), t = st.items[i] ? st.items[i].t : it.t;
+    st.items.splice(i,1); st.items.push(blank()); st.done.push(t); save(TKEY, st);
+    renderTop3(); setHint(st, { t, i });
+  }, 1000);
 }
 function renderTop3(){
   const s = getTop3(), box = $("#todo"); box.innerHTML = "";
   s.items.forEach((it,i) => {
-    const row = document.createElement("div"); row.className = "row" + (it.d ? " done" : "");
-    const chk = document.createElement("button"); chk.className = "box" + (it.d ? " done" : ""); chk.setAttribute("aria-label","Toggle done");
-    chk.onclick = () => { s.items[i].d = !s.items[i].d; save(TKEY,s); renderTop3(); };
+    const row = document.createElement("div"); row.className = "row";
+    const chk = document.createElement("button"); chk.className = "box"; chk.setAttribute("aria-label","Mark done");
+    chk.onclick = () => { if(row.classList.contains("done")) return; finish(i, row); };
     const inp = document.createElement("input"); inp.type = "text"; inp.value = it.t; inp.placeholder = "Priority " + (i+1); inp.maxLength = 90;
-    inp.oninput = () => { s.items[i].t = inp.value; save(TKEY,s); };
+    inp.oninput = () => { const st = getTop3(); st.items[i].t = inp.value; save(TKEY,st); };
     row.append(chk, inp); box.append(row);
   });
 }
@@ -335,7 +376,7 @@ async function renderBrief(){
 }
 let lastBrief = null;
 
-renderTop3();
+renderTop3(); setHint(getTop3());
 renderNemesis();
 renderBrief();
 document.addEventListener("visibilitychange", () => { if(!document.hidden){ renderNemesis(); renderBrief(); } });
