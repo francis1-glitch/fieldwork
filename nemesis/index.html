@@ -81,6 +81,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .bar.y i{background:var(--you)} .bar.n i{background:var(--nem)}
 .state{font-size:12px;font-weight:600;font-family:var(--mono)}
 .state.lead{color:var(--good)} .state.trail{color:var(--bad)} .state.even{color:var(--muted)}
+.addtrack{border:1px dashed var(--line);background:none;border-radius:6px;padding:12px 14px;width:100%;text-align:left;color:var(--muted);font-family:var(--display);font-size:16px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;display:flex;align-items:center;gap:10px}
+.addtrack .plus{font-family:var(--mono);font-size:18px;line-height:1;color:var(--nem)}
+.addtrack:active{border-color:var(--muted);color:var(--fg)}
+.mytrack{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
 
 .voice{border-left:3px solid var(--nem);padding:4px 0 4px 12px;display:flex;flex-direction:column;gap:4px}
 .voice p{margin:0;font-family:var(--mono);font-size:13.5px;line-height:1.6;white-space:pre-wrap}
@@ -191,7 +195,7 @@ textarea{min-height:150px;resize:vertical;line-height:1.55}
 'use strict';
 
 /* ---------------- constants ---------------- */
-const TRACKS = [
+const BUILTIN = [
   {id:'gym',    name:'Gym',        unit:'lifting sessions',       kind:'count', def:3, cap:6,  sdMin:.7},
   {id:'cardio', name:'Cardio',     unit:'sessions',               kind:'count', def:2, cap:7,  sdMin:.7},
   {id:'cpa',    name:'CPA hours',  unit:'hours studied',          kind:'hours', def:8, cap:35, sdMin:1.2},
@@ -199,7 +203,17 @@ const TRACKS = [
   {id:'cold',   name:'Cold opens', unit:'conversations started',  kind:'count', def:3, cap:20, sdMin:.8},
   {id:'teach',  name:'Teach-back', unit:'score out of 10',        kind:'score', def:6, cap:10, sdMin:.8},
 ];
-const TBYID = Object.fromEntries(TRACKS.map(t => [t.id, t]));
+/* Tracks you add live in S.meta.customTracks: {id, name, unit, kind:'count'|'hours', def, cap, sdMin, custom:true, added, removed?}.
+   ALL_TRACKS keeps removed ones so old showdowns still have names; tracksFor(wk) is what counts in a given week. */
+const MAX_CUSTOM = 6;
+let ALL_TRACKS = BUILTIN, TBYID = Object.fromEntries(BUILTIN.map(t => [t.id, t]));
+function refreshTracks(){
+  ALL_TRACKS = BUILTIN.concat((S.meta && S.meta.customTracks) || []);
+  TBYID = Object.fromEntries(ALL_TRACKS.map(t => [t.id, t]));
+}
+const tby = id => TBYID[id] || {id, name:id, unit:'', kind:'count', custom:true};
+function tracksFor(wk){ const cl = closeTime(wk); return ALL_TRACKS.filter(t => !t.custom || (!t.removed && new Date(t.added) < cl)); }
+const activeCustom = () => ALL_TRACKS.filter(t => t.custom && !t.removed);
 const SEASON_LEN = 10;
 const LIFTS = [['bench','Bench'],['squat','Squat'],['deadlift','Deadlift']];
 const STORE = 'nemesis.v1', KEYSTORE = 'nemesis.apiKey';
@@ -278,9 +292,9 @@ function init(){
 const entriesOf = wk => (S.weeks[wk] && S.weeks[wk].entries) || [];
 function youValues(wk){
   const e = entriesOf(wk), w = S.weeks[wk] || {}, v = {};
-  for (const t of TRACKS){
+  for (const t of tracksFor(wk)){
     if (t.kind==='count') v[t.id] = e.filter(x=>x.track===t.id).reduce((s,x)=>s+(Number(x.value)||1),0);
-    else if (t.kind==='hours') v[t.id] = roundTo(e.filter(x=>x.track===t.id).reduce((s,x)=>s+(Number(x.value)||0),0),.25);
+    else if (t.kind==='hours') v[t.id] = roundTo(e.filter(x=>x.track===t.id).reduce((s,x)=>s+(Number(x.value)||0),0), t.custom ? .01 : .25);
     else if (t.kind==='chess'){ const c=e.filter(x=>x.track==='chess'); v.chess = c.length && w.chessStart!=null ? Number(c[c.length-1].value)-Number(w.chessStart) : 0; }
     else v[t.id] = w.teach && w.teach.score!=null ? Number(w.teach.score) : 0;
   }
@@ -292,8 +306,9 @@ function nemesisPlan(wk, edge){
   const prior = Object.keys(S.shows).filter(k=>k<wk).sort().slice(-4).map(k=>S.shows[k]);
   const r = rng(S.meta.seed+'|'+wk);
   const plan = {};
-  const slump = r() < 0.12 ? TRACKS[Math.floor(r()*TRACKS.length)].id : null;
-  for (const t of TRACKS){
+  // Built-in tracks: this block's draw order is load-bearing. Don't touch it, or every existing week's numbers reshuffle.
+  const slump = r() < 0.12 ? BUILTIN[Math.floor(r()*BUILTIN.length)].id : null;
+  for (const t of BUILTIN){
     const hist = prior.map(s=>s.you && s.you[t.id]).filter(x=>typeof x==='number');
     const base = hist.length ? hist.reduce((a,b)=>a+b,0)/hist.length : t.def;
     if (t.kind==='chess'){ plan.chess = Math.round(base + 4 + edge*30 + normal(r)*16); continue; }
@@ -303,36 +318,58 @@ function nemesisPlan(wk, edge){
     const step = t.kind==='count' ? 1 : .5;
     plan[t.id] = clamp(roundTo(x,step), t.kind==='score'?3:0, t.cap);
   }
-  const pace = {}; for (const t of TRACKS) pace[t.id] = 0.85 + r()*0.3;
+  const pace = {}; for (const t of BUILTIN) pace[t.id] = 0.85 + r()*0.3;
+  // Your tracks: same rule (last 4 full weeks × (1 + edge), plus noise), each on its own seeded stream so
+  // adding or removing one never moves Nemesis's numbers on any other track.
+  for (const t of tracksFor(wk)){
+    if (!t.custom) continue;
+    const rc = rng(S.meta.seed+'|'+wk+'|'+t.id), step = t.kind==='count' ? 1 : .5, added = new Date(t.added);
+    // full weeks only: the partial week you added it in would drag the baseline down
+    const full = Object.keys(S.shows).filter(k=>k<wk && openTime(k)>=added).sort().map(k=>S.shows[k].you && S.shows[k].you[t.id]).filter(x=>typeof x==='number');
+    const hist = full.slice(-4);
+    const base = hist.length ? hist.reduce((a,b)=>a+b,0)/hist.length : t.def;
+    const target = Math.max(base, t.def*0.5)*(1+edge);
+    let x = target + normal(rc)*Math.max(t.sdMin, target*0.16);
+    if (rc() < 0.02) x *= 0.55;                                   // ~same off-week odds per track as the built-ins
+    const cap = Math.max(t.cap, roundTo(Math.max(0, ...full)*1.5, step));  // ceiling rises with your best week, so it never stalls
+    plan[t.id] = clamp(roundTo(x,step), 0, cap);
+    pace[t.id] = 0.85 + rc()*0.3;
+  }
   return {plan, pace, slump};
 }
-function startOf(wk){ const o=openTime(wk), c=S.meta.created?new Date(S.meta.created):o; return c>o && c<closeTime(wk) ? c : o; }
-function shareOf(wk){ const o=openTime(wk), cl=closeTime(wk); return clamp((cl-startOf(wk))/(cl-o),0,1); }
+// A week starts at Sunday 9pm, or later if you installed the app (or added the track) mid-week.
+function startOf(wk, t){
+  const o=openTime(wk), cl=closeTime(wk), c=S.meta.created?new Date(S.meta.created):o;
+  let s = c>o && c<cl ? c : o;
+  if (t && t.added){ const a = new Date(t.added); if (a>s && a<cl) s = a; }
+  return s;
+}
+function shareOf(wk, t){ const o=openTime(wk), cl=closeTime(wk); return clamp((cl-startOf(wk,t))/(cl-o),0,1); }
 function scaledPlan(wk, plan){
-  const sh = shareOf(wk); if (sh>=0.999) return plan;
   const out = {};
-  for (const t of TRACKS){
-    if (t.kind==='score') out[t.id] = plan[t.id];
-    else if (t.kind==='chess') out[t.id] = Math.round(plan[t.id]*sh);
-    else { const step = t.kind==='count'?1:.5; out[t.id] = roundTo(plan[t.id]*sh, step); }
+  for (const id of Object.keys(plan)){
+    const t = tby(id), sh = shareOf(wk, t), v = plan[id];
+    if (sh>=0.999 || t.kind==='score') out[id] = v;
+    else if (t.kind==='chess') out[id] = Math.round(v*sh);
+    else { const step = t.kind==='count'?1:.5; out[id] = roundTo(v*sh, step); }
   }
   return out;
 }
 function liveNemesis(wk, plan, pace){
   plan = scaledPlan(wk, plan);
-  const st = startOf(wk), f = clamp((now()-st)/(closeTime(wk)-st),0,1), out = {};
-  for (const t of TRACKS){
-    const p = clamp(f*pace[t.id],0,1);
-    if (t.kind==='score') out[t.id] = f>=1 ? plan[t.id] : null;
-    else if (t.kind==='chess') out[t.id] = Math.round(plan[t.id]*p);
-    else { const step = t.kind==='hours'?.5:1; out[t.id] = Math.floor(plan[t.id]*p/step)*step; }
+  const out = {};
+  for (const id of Object.keys(plan)){
+    const t = tby(id), st = startOf(wk, t), f = clamp((now()-st)/(closeTime(wk)-st),0,1), p = clamp(f*pace[id],0,1);
+    if (t.kind==='score') out[id] = f>=1 ? plan[id] : null;
+    else if (t.kind==='chess') out[id] = Math.round(plan[id]*p);
+    else { const step = t.kind==='hours'?.5:1; out[id] = Math.floor(plan[id]*p/step)*step; }
   }
   return out;
 }
 function compare(you, nem){
   const res={}; let w=0,l=0;
-  for (const t of TRACKS){ const a=you[t.id], b=nem[t.id]; if (b==null){res[t.id]='T';continue;}
-    res[t.id] = a>b?'W':a<b?'L':'T'; if(res[t.id]==='W')w++; else if(res[t.id]==='L')l++; }
+  for (const id of Object.keys(nem)){ const a=you[id]||0, b=nem[id]; if (b==null){res[id]='T';continue;}
+    res[id] = a>b?'W':a<b?'L':'T'; if(res[id]==='W')w++; else if(res[id]==='L')l++; }
   return {res, w, l, outcome: w>l?'W':w<l?'L':'T'};
 }
 function settleClosedWeeks(){
@@ -400,18 +437,19 @@ function aiError(e){ return e.code==='bad_key' ? 'Your API key was rejected. Che
 function pick(r, arr){ return arr[Math.floor(r()*arr.length)]; }
 function cannedReport(k){
   const s = S.shows[k], r = rng(S.meta.seed+'|report|'+k);
-  const margins = TRACKS.map(t=>({t, d:(s.you[t.id]-s.nem[t.id])/(Math.abs(s.nem[t.id])+1)}));
+  const ts = Object.keys(s.results).map(tby), n = ts.length;
+  const margins = ts.map(t=>({t, d:((s.you[t.id]||0)-s.nem[t.id])/(Math.abs(s.nem[t.id])+1)}));
   const best = margins.slice().sort((a,b)=>b.d-a.d)[0], worst = margins.slice().sort((a,b)=>a.d-b.d)[0];
   const notes = (S.weeks[k]&&S.weeks[k].entries||[]).filter(e=>e.note).map(e=>e.note);
   const out = [];
   if (s.preseason) out.push('Preseason. Nothing counted. I still logged it.');
-  if (s.outcome==='L') out.push(pick(r,[`${s.l}–${s.w}. As projected.`, `Final: ${s.l} tracks to ${s.w}. This is not a rivalry. It is a measurement.`, `I took ${s.l} of 6. You took ${s.w}. Filed.`]));
+  if (s.outcome==='L') out.push(pick(r,[`${s.l}–${s.w}. As projected.`, `Final: ${s.l} tracks to ${s.w}. This is not a rivalry. It is a measurement.`, `I took ${s.l} of ${n}. You took ${s.w}. Filed.`]));
   else if (s.outcome==='W') out.push(pick(r,[`You won ${s.w}–${s.l}. Recorded. Not repeated.`, `${s.w}–${s.l}, your week. Statistically, that happens.`, `Noted: ${s.w} tracks to my ${s.l}. Adjusting.`]));
   else out.push(pick(r,[`${s.w}–${s.l}. A tie is a loss you haven’t noticed yet.`, `Even at ${s.w}. Neither of us should be satisfied. Only one of us is.`]));
   const fv = (t,v)=>fmtVal(t,v);
   if (worst.d < 0) out.push(`${worst.t.name}: ${fv(worst.t,s.you[worst.t.id])} to my ${fv(worst.t,s.nem[worst.t.id])}. That gap is the story.`);
   if (best.d > 0) out.push(`${best.t.name} went your way, ${fv(best.t,s.you[best.t.id])} to ${fv(best.t,s.nem[best.t.id])}. I’ve noted it.`);
-  if (s.slump) out.push(`My ${TBYID[s.slump].name.toLowerCase()} number was down. Irrelevant.`);
+  if (s.slump) out.push(`My ${tby(s.slump).name.toLowerCase()} number was down. Irrelevant.`);
   if (notes.length) out.push(`You wrote “${notes[notes.length-1].slice(0,60)}”. I don’t write notes.`);
   out.push(s.outcome==='W' ? pick(r,['Next week’s numbers are already set. They are higher.','Enjoy the evening.']) : pick(r,['Same time next Sunday.','Try harder. Or don’t. My plan doesn’t change.','I’ll be at the gym.']));
   return out.join(' ');
@@ -419,13 +457,17 @@ function cannedReport(k){
 function weekLine(live, np){
   const a=live.w, b=live.l;
   let line = b>a ? 'Current margin: '+b+' tracks to '+a+'. I’m not adjusting anything.' : a>b ? 'You lead '+a+' to '+b+'. Most of my week happens after you stop paying attention.' : 'Level at '+a+'–'+b+'. That won’t hold through Sunday.';
-  if (np.slump) line += '\n(Minor setback on '+TBYID[np.slump].name.toLowerCase()+' this week. Irrelevant.)';
+  if (np.slump) line += '\n(Minor setback on '+tby(np.slump).name.toLowerCase()+' this week. Irrelevant.)';
   return line;
 }
 
 /* ---------------- live reactions: Nemesis answers every log, built from your own numbers ---------------- */
 const SHORT = {gym:['session','sessions'], cardio:['session','sessions'], cpa:['hour','hours'], cold:['conversation','conversations'], chess:['point','points']};
-const unitOf = (id,n) => SHORT[id] ? SHORT[id][Math.abs(n)===1?0:1] : '';
+const unitOf = (id,n) => {
+  if (SHORT[id]) return SHORT[id][Math.abs(n)===1?0:1];
+  const t = tby(id); if (!t.custom || !t.unit) return '';
+  return Math.abs(n)===1 ? t.unit.replace(/s$/,'') : t.unit;   // "pages" → "page" for 1
+};
 const EXCUSES = ['tired','busy','sick','late','work','sore','traffic','no time','short on time','lazy','hungover','rain','slept','forgot','stress','headache','long day'];
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const numTxt = v => String(Math.round(v*100)/100);
@@ -445,7 +487,7 @@ function choose(r, id, variants){
   return {key:id+':'+i, text:variants[i]};
 }
 function nemesisReact(track, entry, before){
-  const t = TBYID[track], wk = before.wk, r = rng(S.meta.seed+'|react|'+entry.t);
+  const t = tby(track), wk = before.wk, r = rng(S.meta.seed+'|react|'+entry.t);
   const youNow = youValues(wk)[track], nemNow = before.nem;
   const stBefore = before.you > nemNow ? 'W' : before.you < nemNow ? 'L' : 'T';
   const stAfter = youNow > nemNow ? 'W' : youNow < nemNow ? 'L' : 'T';
@@ -613,6 +655,7 @@ document.addEventListener('keydown', e => { if (e.key==='Escape') closeSheet(); 
 /* ---------------- render ---------------- */
 let tab = 'week', teachStart = null, teachTick = null, teachDraft = '', revealing = false;
 function render(){
+  refreshTracks();
   settleClosedWeeks();
   const cur = wkKey(now()), si = seasonInfo(cur);
   $('#seasonLabel').textContent = si.pre ? 'Preseason · season 1 starts Monday' : 'Season '+si.season+' · Week '+si.week+' of '+SEASON_LEN;
@@ -639,7 +682,7 @@ function render(){
 }
 // Publishes this week's standing to shared storage so the Command Center / Morning Cockpit can read it.
 function publishSummary(cur, si, you, nl, live){
-  const tracks = TRACKS.map(t => ({
+  const tracks = tracksFor(cur).map(t => ({
     id:t.id, name:t.name,
     you: you[t.id], nem: nl[t.id],
     state: nl[t.id]==null ? 'sealed' : (live.res[t.id]==='W' ? 'leading' : live.res[t.id]==='L' ? 'behind' : 'even')
@@ -688,7 +731,7 @@ function renderWeek(v, cur, you, nl, np, live){
   if (!Object.keys(S.weeks).length && !Object.keys(S.shows).length)
     v.append(el('div',{class:'empty',style:'margin-bottom:12px'}, 'Tap a track to log it. Nemesis’s numbers tick up through the week. Everything locks Sunday at 9:00 pm.'));
   const list = el('div',{class:'tracks'});
-  for (const t of TRACKS){
+  for (const t of tracksFor(cur)){
     const a = you[t.id], bv = nl[t.id];
     const max = Math.max(1, Math.abs(a), Math.abs(bv||0), t.kind==='chess'?20:0), st = live.res[t.id];
     const stTxt = bv==null?'sealed until Sunday':st==='W'?'leading':st==='L'?'behind':'even';
@@ -700,10 +743,11 @@ function renderWeek(v, cur, you, nl, np, live){
         el('div',{class:'bar n'}, el('i',{style:'width:'+(bv==null?0:clamp(Math.abs(bv)/max*100,0,100))+'%'}))),
       el('span',{class:'state '+stCls,text:stTxt})));
   }
+  if (activeCustom().length < MAX_CUSTOM) list.append(el('button',{class:'addtrack', onclick:openAddTrack}, el('span',{class:'plus',text:'+'}), 'Add a track'));
   v.append(list);
   const lr = lastReply(cur);
   const vb = el('div',{class:'voice',style:'margin-top:14px'}, el('span',{class:'label',text:'Nemesis'}), el('p',{text:weekLine(live,np)}));
-  if (lr) vb.append(el('span',{class:'label',style:'margin-top:8px',text:'Last word · '+TBYID[lr.track].name+' · '+new Date(lr.t).toLocaleString(undefined,{weekday:'short',hour:'numeric',minute:'2-digit'})}), el('p',{text:lr.reply}));
+  if (lr) vb.append(el('span',{class:'label',style:'margin-top:8px',text:'Last word · '+tby(lr.track).name+' · '+new Date(lr.t).toLocaleString(undefined,{weekday:'short',hour:'numeric',minute:'2-digit'})}), el('p',{text:lr.reply}));
   v.append(vb);
 
   const best = S.meta.bestLifts||{}, first = S.meta.firstLifts||{}, rows = LIFTS.filter(([k])=>best[k]);
@@ -724,7 +768,17 @@ function openLog(t){
     sh.append(el('div',{class:'trow'}, el('h3',{text:t.name}), el('button',{class:'close',text:'Close',onclick:closeSheet})));
     const note = el('input',{id:'note', type:'text', maxlength:'140', placeholder: t.id==='cold' ? 'Who / where (optional)' : 'Anything to explain? Nemesis keeps these.'});
     const done = (val, extra) => { closeSheet(); addEntry(t.id, val, extra); };
-    if (t.kind==='count'){
+    if (t.custom){
+      const dec = t.kind==='hours';
+      const amt = el('input',{id:'amt',type:'number',inputmode:dec?'decimal':'numeric',min:dec?'0.01':'1',step:dec?'0.01':'1',placeholder:dec?'e.g. 2.5':'1'});
+      sh.append(el('p',{class:'hint',text:'Your number this week: '+fmtVal(t, youValues(cur)[t.id])+' '+unitOf(t.id, youValues(cur)[t.id])+'. Weekly starting target was '+t.def+'.'}));
+      sh.append(el('div',{class:'field'}, el('label',{for:'amt',text:'How many '+(t.unit||'')+(dec?'':' (blank = 1)')}), amt), el('div',{class:'field'}, el('label',{for:'note',text:'Note'}), note));
+      sh.append(el('button',{class:'btn you wide',text:'Log '+(t.unit||'it'), onclick:()=>{
+        const raw = amt.value.trim(); let x = raw==='' && !dec ? 1 : Number(raw);
+        if (!dec) x = Math.round(x); else x = Math.round(x*100)/100;
+        if (x>0 && x<=100000) done(x, note.value.trim()?{note:note.value.trim()}:{}); else toast(dec ? 'Enter an amount above 0.' : 'Enter a whole number above 0.');
+      }}));
+    } else if (t.kind==='count'){
       let liftSel, w, r;
       if (t.id==='gym'){
         liftSel = el('select',{id:'lift','aria-label':'Lift'}, el('option',{value:'',text:'No top set'}), LIFTS.map(([k,n])=>el('option',{value:k,text:n})));
@@ -752,7 +806,7 @@ function openLog(t){
     if (entries.length){
       const box = el('div',{class:'entries'}, el('span',{class:'label',text:'This week'}));
       for (const {e,i} of entries.slice().reverse()){
-        let txt = new Date(e.t).toLocaleDateString(undefined,{weekday:'short'})+' · '+(t.kind==='hours'?e.value+' h':t.kind==='chess'?'rating '+e.value:'+1');
+        let txt = new Date(e.t).toLocaleDateString(undefined,{weekday:'short'})+' · '+(t.custom?'+'+e.value+' '+unitOf(t.id,e.value):t.kind==='hours'?e.value+' h':t.kind==='chess'?'rating '+e.value:'+1');
         if (e.lift) txt += ' · '+e.lift+' '+e.weight+'×'+e.reps+' (e1RM '+e.e1rm+')';
         if (e.note) txt += ' · '+e.note;
         box.append(el('div',{class:'entry'}, el('span',{class:'t'}, txt, e.reply ? el('span',{class:'said',text:e.reply}) : null), el('button',{class:'x',text:'Remove',onclick:()=>{ removeEntry(cur,i); closeSheet(); openLog(t); }})));
@@ -760,6 +814,39 @@ function openLog(t){
       sh.append(box);
     }
   });
+}
+
+/* ---------------- your own tracks ---------------- */
+function openAddTrack(){
+  if (activeCustom().length >= MAX_CUSTOM){ toast('That’s the limit: '+MAX_CUSTOM+' tracks of your own.'); return; }
+  openSheet(sh => {
+    sh.append(el('div',{class:'trow'}, el('h3',{text:'New track'}), el('button',{class:'close',text:'Close',onclick:closeSheet})));
+    const name = el('input',{id:'tname',type:'text',maxlength:'22',placeholder:'Reading',autocomplete:'off'});
+    const unit = el('input',{id:'tunit',type:'text',maxlength:'20',placeholder:'pages',autocomplete:'off'});
+    const kind = el('select',{id:'tkind'}, el('option',{value:'count',text:'Whole numbers (sessions, pages, reps)'}), el('option',{value:'hours',text:'Decimals (hours, miles, km)'}));
+    const def = el('input',{id:'tdef',type:'number',inputmode:'decimal',min:'0.5',step:'any',placeholder:'e.g. 50'});
+    sh.append(
+      el('div',{class:'field'}, el('label',{for:'tname',text:'Name'}), name),
+      el('div',{class:'field'}, el('label',{for:'tunit',text:'What you count (plural)'}), unit),
+      el('div',{class:'field'}, el('label',{for:'tkind',text:'Logged as'}), kind),
+      el('div',{class:'field'}, el('label',{for:'tdef',text:'Weekly starting target'}), def),
+      el('p',{class:'hint',text:'Nemesis opens at this target. From then on it runs the same engine as every other track: your average over your last four full weeks, plus its edge, ticking up through the week. Add it mid-week and Nemesis only gets credit for the time left.'}));
+    sh.append(el('button',{class:'btn you wide',text:'Add track',onclick:()=>{
+      const n = name.value.trim().replace(/\s+/g,' '), u = unit.value.trim().replace(/\s+/g,' ').toLowerCase() || 'times', k = kind.value;
+      let d = Number(def.value); if (k==='count') d = Math.round(d); else d = roundTo(d, .5);
+      if (!n){ toast('Give it a name.'); return; }
+      if (ALL_TRACKS.some(t=>!t.removed && t.name.toLowerCase()===n.toLowerCase())){ toast('You already have a track called '+n+'.'); return; }
+      if (!(d>0) || d>10000){ toast(k==='count' ? 'Set a weekly target of at least 1.' : 'Set a weekly target of at least 0.5.'); return; }
+      const step = k==='count' ? 1 : .5;
+      const t = {id:'c'+Date.now().toString(36), name:n, unit:u, kind:k, def:d, cap:roundTo(Math.max(d*4, d+3), step), sdMin:k==='count'?.7:.5, custom:true, added:new Date().toISOString()};
+      (S.meta.customTracks = S.meta.customTracks || []).push(t);
+      if (save()){ closeSheet(); render(); toast(n+' added. Nemesis has started counting.'); }
+    }}));
+  });
+}
+function removeTrack(id){
+  const t = (S.meta.customTracks||[]).find(x=>x.id===id); if (!t) return;
+  t.removed = new Date().toISOString(); save(); render(); toast(t.name+' removed. Past showdowns keep it.');
 }
 
 /* ---------------- Teach-back ---------------- */
@@ -858,7 +945,7 @@ function renderHist(v){
     const card = el('div',{class:'week'},
       el('div',{class:'wtop'}, el('span',{class:'label',text:(s.preseason?'Preseason · ':'')+'Week of '+shortDate(k)}),
         el('span',{class:'outcome '+s.outcome, text: s.outcome==='W'?'You won '+s.w+'–'+s.l : s.outcome==='L'?'Nemesis '+s.l+'–'+s.w : 'Tied '+s.w+'–'+s.l})),
-      el('div',{class:'chips'}, TRACKS.map(t=>el('span',{class:'chip '+(s.results[t.id]||'T'), text:t.name+' '+fmtVal(t,s.you[t.id])+'–'+fmtVal(t,s.nem[t.id])}))));
+      el('div',{class:'chips'}, Object.keys(s.results).map(tby).map(t=>el('span',{class:'chip '+(s.results[t.id]||'T'), text:t.name+' '+fmtVal(t,s.you[t.id]||0)+'–'+fmtVal(t,s.nem[t.id])}))));
     if (s.revealed && s.report) card.append(el('div',{class:'voice'}, el('span',{class:'label',text:'Nemesis'}), el('p',{text:s.report})));
     else if (!s.revealed) card.append(el('button',{class:'btn',text:'Reveal report',disabled:revealing,onclick:()=>reveal(k)}));
     box.append(card);
@@ -874,9 +961,9 @@ async function reveal(k){
     let streak=1; for (const x of prior.slice().reverse()){ if (S.shows[x].outcome===s.outcome) streak++; else break; }
     const si = seasonInfo(k);
     const seasonRec = record(Object.keys(S.shows).filter(x=>x<=k && !S.shows[x].preseason && seasonInfo(x).season===si.season).map(x=>S.shows[x]));
-    const notes = Object.keys(S.weeks).filter(x=>x<=k).sort().slice(-4).flatMap(x=>(S.weeks[x].entries||[]).filter(e=>e.note).map(e=>shortDate(x)+' '+TBYID[e.track].name+': '+e.note)).slice(-8);
-    const lines = TRACKS.map(t=>t.name+' ('+t.unit+'): you '+fmtVal(t,s.you[t.id])+', Nemesis '+fmtVal(t,s.nem[t.id])+' → '+({W:'you won',L:'Nemesis won',T:'tie'})[s.results[t.id]]).join('\n');
-    const prompt = 'Write the weekly showdown report for "Nemesis", an AI rival in a self-improvement app. Voice: smug but so certain of its superiority that it reads cold and clinical. Short declarative sentences. Precise numbers. No exclamation marks, no emojis, no hashtags, no pep talk, no insults about anything outside these tracks. If the user won, concede facts with grudging, minimal respect and promise correction. If Nemesis won, state it like a measurement. Reference the user\'s own notes below when relevant (quote at most a few words). 70-110 words. Plain text only.\n\n'+(s.preseason?'This was a PRESEASON week; it does not count.\n':'Season '+si.season+', week '+si.week+' of '+SEASON_LEN+'. Season record (user W-L-T): '+seasonRec+'.\n')+'Week of '+shortDate(k)+'. Result: '+(s.outcome==='W'?'USER WON':s.outcome==='L'?'NEMESIS WON':'TIE')+' '+s.w+'-'+s.l+'. Streak: '+streak+' '+(s.outcome==='W'?'user wins':s.outcome==='L'?'Nemesis wins':'ties')+' in a row.\n'+(s.slump?'Nemesis had an off week on '+TBYID[s.slump].name+' (call it irrelevant).\n':'')+(s.teachTopic?'Teach-back topic: '+s.teachTopic+'.\n':'')+'\n'+lines+'\n\nUser notes:\n'+(notes.join('\n')||'(none)');
+    const notes = Object.keys(S.weeks).filter(x=>x<=k).sort().slice(-4).flatMap(x=>(S.weeks[x].entries||[]).filter(e=>e.note).map(e=>shortDate(x)+' '+tby(e.track).name+': '+e.note)).slice(-8);
+    const lines = Object.keys(s.results).map(tby).map(t=>t.name+' ('+t.unit+'): you '+fmtVal(t,s.you[t.id]||0)+', Nemesis '+fmtVal(t,s.nem[t.id])+' → '+({W:'you won',L:'Nemesis won',T:'tie'})[s.results[t.id]]).join('\n');
+    const prompt = 'Write the weekly showdown report for "Nemesis", an AI rival in a self-improvement app. Voice: smug but so certain of its superiority that it reads cold and clinical. Short declarative sentences. Precise numbers. No exclamation marks, no emojis, no hashtags, no pep talk, no insults about anything outside these tracks. If the user won, concede facts with grudging, minimal respect and promise correction. If Nemesis won, state it like a measurement. Reference the user\'s own notes below when relevant (quote at most a few words). 70-110 words. Plain text only.\n\n'+(s.preseason?'This was a PRESEASON week; it does not count.\n':'Season '+si.season+', week '+si.week+' of '+SEASON_LEN+'. Season record (user W-L-T): '+seasonRec+'.\n')+'Week of '+shortDate(k)+'. Result: '+(s.outcome==='W'?'USER WON':s.outcome==='L'?'NEMESIS WON':'TIE')+' '+s.w+'-'+s.l+'. Streak: '+streak+' '+(s.outcome==='W'?'user wins':s.outcome==='L'?'Nemesis wins':'ties')+' in a row.\n'+(s.slump?'Nemesis had an off week on '+tby(s.slump).name+' (call it irrelevant).\n':'')+(s.teachTopic?'Teach-back topic: '+s.teachTopic+'.\n':'')+'\n'+lines+'\n\nUser notes:\n'+(notes.join('\n')||'(none)');
     try{ s.report = await askClaude(prompt, MODEL_SMART, 400); }
     catch(e){ toast(aiError(e)+' Showing the standard report.'); s.report = cannedReport(k); }
     revealing = false;
@@ -894,7 +981,21 @@ function renderSettings(v){
   else kc.append(el('div',{class:'field'}, el('label',{for:'apikey',text:'API key (from console.anthropic.com)'}), inp), el('button',{class:'btn solid',text:'Save key',onclick:()=>{ const k=inp.value.trim(); if(!k.startsWith('sk-')){ toast('That doesn’t look like an Anthropic key.'); return; } setKey(k); toast('Key saved on this phone.'); render(); }}));
   v.append(kc);
 
-  const gtok = (()=>{ try{ return localStorage.getItem(GHKEY_N)||''; }catch(e){ return ''; } })();
+  const mine = activeCustom();
+  const tc = el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Your tracks'}),
+    el('p',{class:'hint',text: mine.length ? 'Nemesis competes on these exactly like the built-in six. Removing one takes it out from this week on; past showdowns keep it.' : 'Add your own tracks (reading, runs, side-project hours) and Nemesis competes on them the same way it does the built-in six.'}));
+  for (const t of mine){
+    const confirm = el('div',{class:'actions',hidden:true}, el('span',{class:'hint',text:'Remove '+t.name+'? It stops counting from this week.'}),
+      el('button',{class:'btn you',text:'Remove',onclick:()=>removeTrack(t.id)}), el('button',{class:'btn',text:'Keep',onclick:()=>{ confirm.hidden=true; }}));
+    tc.append(el('div',{class:'mytrack'},
+      el('div',{class:'trow'}, el('div',{}, el('div',{class:'tname',text:t.name}), el('div',{class:'tunit',text:t.unit+' · started at '+t.def+' a week · added '+new Date(t.added).toLocaleDateString(undefined,{month:'short',day:'numeric'})})),
+        el('button',{class:'x',text:'Remove',onclick:()=>{ confirm.hidden=false; }})), confirm));
+  }
+  if (mine.length < MAX_CUSTOM) tc.append(el('button',{class:'btn',text:'Add a track',onclick:openAddTrack}));
+  else tc.append(el('p',{class:'hint',text:'That’s the limit of '+MAX_CUSTOM+'. Remove one to add another.'}));
+  v.append(tc);
+
+  const gtok =(()=>{ try{ return localStorage.getItem(GHKEY_N)||''; }catch(e){ return ''; } })();
   const hasShared = !gtok && (()=>{ try{ return !!localStorage.getItem('palate.gh'); }catch(e){ return false; } })();
   const sc = el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Cross-device sync'}),
     el('p',{class:'hint',text: gtok ? 'On. Nemesis publishes your weekly standing to your repo, so the Morning Cockpit shows it on any device — no backup restore.' : hasShared ? 'Using your existing GitHub token. Your weekly standing is published to your repo automatically, so the Cockpit reads it on any device.' : 'Add a GitHub token with write access and Nemesis publishes your weekly standing to your repo, so the Morning Cockpit shows it on any device without restoring a backup. The token stays on this phone.'}));
@@ -925,7 +1026,8 @@ function renderSettings(v){
     el('button',{class:'btn',text:'Erase all data',onclick:()=>{ wipeConfirm.hidden=false; }}), wipeConfirm));
 
   v.append(el('div',{class:'card',style:'margin-top:14px'}, el('h3',{text:'Rules'}),
-    el('p',{class:'hint',text:'Weeks run Sunday 9:00 pm to Sunday 9:00 pm. Each track is won, lost or tied; most tracks takes the week. Seasons are 10 weeks. Nemesis sets its numbers at the start of each week from your last four weeks, plus an edge that grows when you win and shrinks when you lose, so it stays just ahead of you. Its gains are capped at realistic weekly jumps.'})));
+    el('p',{class:'hint',text:'Weeks run Sunday 9:00 pm to Sunday 9:00 pm. Each track is won, lost or tied; most tracks takes the week. Seasons are 10 weeks. Nemesis sets its numbers at the start of each week from your last four weeks, plus an edge that grows when you win and shrinks when you lose, so it stays just ahead of you. Its gains are capped at realistic weekly jumps. Tracks you add run on the same engine: Nemesis opens at the target you set, then follows your last four full weeks on that track.'})));
+  v.append(el('p',{class:'hint',style:'text-align:center;margin-top:14px',text:'Nemesis v1.5'}));
 }
 
 /* ---------------- boot ---------------- */
