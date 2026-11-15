@@ -77,6 +77,11 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:va
 .seg::-webkit-scrollbar{display:none}
 .seg .chip{white-space:nowrap}
 .chip .cnt{opacity:.7;font-weight:500}
+.tonight{gap:10px}
+.tonight .row{justify-content:space-between}
+.tn-row{display:flex;flex-direction:column;gap:6px}
+.tn-k{font-size:12px;font-weight:700;color:var(--ink3)}
+.tn-clear{border:0;background:none;color:var(--plum);font-weight:700;font-size:13px;padding:2px 0}
 .btn.on{border-color:var(--plum);color:var(--plum)}
 .libctl{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .libctl .fld{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink2);font-weight:600;min-width:0}
@@ -289,7 +294,7 @@ const Core = (() => {
       if(it.year) f.push(['d:'+Math.floor(it.year/10)*10,0.7]);
       if(it.lang&&it.lang!=='en') f.push(['l:'+it.lang,0.8]);
       if(kind==='movie'&&it.rt){ if(it.rt<95) f.push(['r:short',0.5]); else if(it.rt>150) f.push(['r:long',0.5]); }
-      if(it.vc>=20&&it.va) f.push(['q',(it.va-6.8)]);
+      if(it.vc>=20&&it.va) f.push(['q',(crowdVa(it)-6.8)]);
       if(it.mb!=null) f.push(['mb',it.mb*2]);
       const e=emb(it); if(e) for(let i=0;i<e.length;i++) f.push(['e'+i,e[i]]);
     } else if(kind==='book'){
@@ -374,8 +379,16 @@ const Core = (() => {
     const bk=lin(rows.filter(r=>r.crowd!=null&&r.src==='ol').map(r=>[r.crowd,r.y]),{a:0,b:1});
     return {gmean, catMean, tm, bk};
   }
+  // TMDB averages pulled toward 6.8 by vote count. Titles that have MovieLens data barely move (m=100 fits
+  // MovieLens best). Recent titles with no MovieLens anchor get m=1000: early fan votes inflate them
+  // (7% of 2026 movies sit at 8.3+, vs 0.3% for 2014–2022), and m=1000 brings that share back to the old-title rate.
+  const CROWD_C=6.8, ANCHOR_YEAR=new Date().getFullYear()-4;
+  function crowdVa(it){
+    const m=(it.mb!=null||(it.year&&it.year<=ANCHOR_YEAR))?100:1000;
+    return (it.vc*it.va+m*CROWD_C)/(it.vc+m);
+  }
   function crowdOf(it){
-    if((it.kind==='movie'||it.kind==='tv')&&it.vc>=20&&it.va) return {src:'tmdb',v:it.va};
+    if((it.kind==='movie'||it.kind==='tv')&&it.vc>=20&&it.va) return {src:'tmdb',v:crowdVa(it)};
     if(it.kind==='book'&&it.olc>=5&&it.ola) return {src:'ol',v:it.ola};
     return null;
   }
@@ -1136,15 +1149,81 @@ const addToList=it=>{ const lname=listName(it); S.watchlist[it.id]=Date.now(); i
 const addDish=it=>{ S.items[it.id]=it; save(); toast('Added to your dishes. Rate it once you’ve had it.'); };
 
 // ---------- For you ----------
+// ---------- Tonight: runtime cap, light/heavy, "because you loved" ----------
+// Filters reset each day. Light/heavy = genre + keyword rules, plus (for movies) a tone axis learned from the
+// MovieLens taste vectors of titles the rules are sure about, which catches grim films with sparse keywords.
+const TN_KEY='palate.tonight';
+let TN=(()=>{ try{ const t=JSON.parse(localStorage.getItem(TN_KEY)||'null'); if(t&&t.date===todayStr()) return t; }catch(e){} return {date:todayStr(),rt:0,mood:'any',seed:null}; })();
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function saveTN(){ TN.date=todayStr(); try{ localStorage.setItem(TN_KEY,JSON.stringify(TN)); }catch(e){} }
+const tonightOn=kind=>!!((kind==='movie'&&TN.rt)||TN.mood!=='any'||(TN.seed&&TN.seed.kind===kind));
+const MOOD_G={35:-1.0,16:-0.6,10751:-1.2,10749:-0.3,10402:-0.4,12:-0.3,18:0.5,10752:1.0,36:0.4,27:0.7,53:0.4,80:0.3,9648:0.1,10768:0.6,10762:-1.0};
+const MOOD_HEAVY=/suicid|rape|abuse|holocaust|concentration camp|genocide|massacre|grief|grieving|mourning|death of |loss of (child|loved one|mother|wife)|dead child|dying|terminal|cancer|incurable|alzheimer|addict|overdose|alcoholism|torture|domestic violence|violence against women|war crime|slavery|racism|trauma|ptsd|depress(ion$|ed|ing)|despair|nihilism|^tragedy|^tragic|family tragedy|kidnapping|child abduction|missing child|serial killer|extreme violence|brutal|self-harm|incest|famine|execution|death row|death penalty|widow|prisoner of war|child soldier|child in peril|children in wartime|dystopia/;
+const MOOD_NOT_HEAVY=/drug humor|fake death|fake suicide|suicide mission|death match|death metal|death game|cheating death|tragicomedy|horror spoof|depression era|great depression/;
+const MOOD_LIGHT=/comedy|spoof|parody|slapstick|screwball|lighthearted|whimsical|feel.good|heartwarming|buddy|caper|^heist|con artist|road trip|musical|romcom|unlikely friendship|duringcreditsstinger|aftercreditsstinger/;
+const MOOD_NOT_LIGHT=/dark comedy|black comedy|comedy thriller/;
+let kwMood=null, toneAxis=null;
+const unitVec=it=>{ const c=Core.catalog(); if(!it.e||!c) return null; const b=atob(it.e), v=new Float32Array(b.length); let n=0;
+  for(let i=0;i<b.length;i++){ let x=b.charCodeAt(i); if(x>127) x-=256; v[i]=x; n+=x*x; } if(!n) return null; n=Math.sqrt(n); for(let i=0;i<v.length;i++) v[i]/=n; return v; };
+function moodRule(it){
+  const c=Core.catalog();
+  if(!kwMood){ kwMood=(c.keywords||[]).map(n=>MOOD_HEAVY.test(n)&&!MOOD_NOT_HEAVY.test(n)?1:MOOD_LIGHT.test(n)&&!MOOD_NOT_LIGHT.test(n)?-1:0); }
+  let h=0, hk=0, lk=0;
+  for(const g of it.g) h+=MOOD_G[g]||0;
+  for(const k of it.k){ const m=kwMood[k]; if(m>0) hk++; else if(m<0) lk++; }
+  return h+Math.min(hk,4)*0.45-Math.min(lk,3)*0.4;
+}
+function buildToneAxis(){
+  const c=Core.catalog(), dim=c.dim||32, L=new Float64Array(dim), H=new Float64Array(dim); let nl=0, nh=0;
+  const pool=c.items.filter(it=>it.kind==='movie'&&it.vc>=200&&it.e);
+  for(const it of pool){ const h=moodRule(it); if(h>-1&&h<1.6) continue; const u=unitVec(it); if(!u) continue;
+    if(h<=-1){ for(let i=0;i<dim;i++) L[i]+=u[i]; nl++; } else { for(let i=0;i<dim;i++) H[i]+=u[i]; nh++; } }
+  if(nl<50||nh<50) return {ok:false};
+  const a=new Float64Array(dim); let n=0; for(let i=0;i<dim;i++){ a[i]=H[i]/nh-L[i]/nl; n+=a[i]*a[i]; } n=Math.sqrt(n); for(let i=0;i<dim;i++) a[i]/=n;
+  let s=0, s2=0, k=0; for(const it of pool){ const u=unitVec(it); if(!u) continue; let d=0; for(let i=0;i<dim;i++) d+=u[i]*a[i]; s+=d; s2+=d*d; k++; }
+  const mu=s/k, sd=Math.sqrt(Math.max(1e-9,s2/k-mu*mu));
+  return {ok:true, a, mu, sd};
+}
+function toneZ(it){
+  if(it.kind!=='movie') return null;
+  if(!toneAxis) toneAxis=buildToneAxis();
+  if(!toneAxis.ok) return null;
+  const u=unitVec(it); if(!u) return null; let d=0; for(let i=0;i<u.length;i++) d+=u[i]*toneAxis.a[i];
+  return (d-toneAxis.mu)/toneAxis.sd;
+}
+// 'light' | 'heavy' | 'mid'. Tested on known titles: Light keeps The Nice Guys, The Sting, Catch Me If You Can,
+// Knives Out, Paddington 2; Heavy catches Prisoners, Manchester by the Sea, Zodiac, Schindler's List, The Departed.
+function moodOf(it){
+  if(it._mood) return it._mood;
+  const h=moodRule(it), z=toneZ(it);
+  const m= z==null ? (h<=0.45?'light':h>=1.2?'heavy':'mid')
+                   : (h<=0.45&&z<=1.3?'light':h+0.6*z>=1.5?'heavy':'mid');
+  it._mood=m; return m;
+}
+// how close a title is to the one you loved: taste-vector cosine, plus a bump per shared director/writer
+function likeness(seed, it){
+  let s=Core.embSim(seed,it);
+  if(s==null){ const a=new Set([...seed.g.map(x=>'g'+x),...seed.k.map(x=>'k'+x)]), b=[...it.g.map(x=>'g'+x),...it.k.map(x=>'k'+x)];
+    let i=0; for(const x of b) if(a.has(x)) i++; s=b.length+a.size?i/(a.size+b.length-i):0; }
+  const mk=new Set(seed.m); let sh=0; for(const x of it.m) if(mk.has(x)) sh++;
+  return s+0.15*Math.min(sh,2);
+}
 function recommend(kind, n=40, opts={}){
   const c=Core.catalog(); if(!c) return {top:[],wild:[]};
   refit();
   const sc=[];
+  const tn=opts.tonight, seed=tn&&tn.seed&&tn.seed.kind===kind?c.byId.get(tn.seed.id):null;
   for(const it of c.items){
     if(it.kind!==kind||S.ratings[it.id]||S.seen[it.id]||S.skip[it.id]||S.ban[it.id]||it.vc<60) continue;
     if(!opts.anyService&&S.settings.onlyMine&&S.settings.services.length&&!hasStremio()&&!onMyServices(it.id)) continue;
+    if(tn){
+      if(kind==='movie'&&tn.rt&&(!it.rt||it.rt>tn.rt)) continue;
+      if(tn.mood!=='any'&&moodOf(it)!==tn.mood) continue;
+    }
+    let like=0;
+    if(seed){ like=likeness(seed,it); if(like<0.35) continue; }
     // rank by the prediction, minus a little for uncertainty and more for titles nothing you've rated resembles
-    const p=predict(it); sc.push([it,p,p.p-0.25*p.conf-(Core.knnKind(it)&&knnReady()?0.45*(1-(p.cov||0)):0)]);
+    const p=predict(it); sc.push([it,p,p.p-0.25*p.conf-(Core.knnKind(it)&&knnReady()?0.45*(1-(p.cov||0)):0)+2*like]);
   }
   sc.sort((a,b)=>b[2]-a[2]);
   const top=sc.slice(0,n);
@@ -1172,15 +1251,43 @@ function viewYou(w){
   const mine=S.settings.services;
   if(mine.length&&!hasStremio()) w.append(el('div',{class:'row small muted'},
     el('button',{class:'chip','aria-pressed':S.settings.onlyMine?'true':'false',text:'Only my services',onclick:()=>{ S.settings.onlyMine=!S.settings.onlyMine; save(); render(); }})));
-  const {top,wild}=recommend(youCat);
-  if(!top.length){ w.append(el('div',{class:'empty',text:'Nothing left to suggest with these filters.'})); return; }
+  w.append(tonightCard(youCat));
+  const tOn=tonightOn(youCat);
+  const {top,wild}=recommend(youCat, 40, tOn?{tonight:TN}:{});
+  if(!top.length){ w.append(el('div',{class:'empty',text:tOn?'Nothing unrated fits all of tonight’s filters. Loosen one.':'Nothing left to suggest with these filters.'})); return; }
   const row=tag=>([it,p],refill)=>swipeable(titleRow(it,{pred:p,tag}), it, refill);
-  w.append(el('div',{class:'rechead'}, el('div',{class:'label',text:'Top picks'}),
+  w.append(el('div',{class:'rechead'}, el('div',{class:'label',text:tOn?'Tonight’s picks':'Top picks'}),
     Object.keys(S.ban||{}).length<5?el('div',{class:'tiny muted',text:'Swipe left to banish'}):null),
     pooledList(top.slice(0,20), 10, row(null)));
   w.append(recBlock({key:'latest-'+youCat, kinds:[youCat], source:'titles', seeds:()=>latestSeeds([youCat]), addLabel:'Add to watchlist', onAdd:addToList}));
   if(wild.length&&MODEL){ w.append(el('div',{class:'label',text:'Wildcards — outside what you usually rate'}), pooledList(wild, 3, row('wildcard'))); }
   if(top.length>20) w.append(el('div',{class:'label',text:'More picks'}), pooledList(top.slice(20), 20, row(null)));
+}
+function tonightCard(kind){
+  const c=Core.catalog();
+  const set=(k,v)=>{ TN[k]=v; saveTN(); render(); };
+  const chip=(label,on,fn)=>el('button',{class:'chip','aria-pressed':on?'true':'false',text:label,onclick:fn});
+  const on=tonightOn(kind);
+  const card=el('div',{class:'card tonight'},
+    el('div',{class:'row between'},
+      el('div',{class:'label',text:'Tonight'}),
+      on?el('button',{class:'tn-clear',text:'Clear',onclick:()=>{ TN={date:todayStr(),rt:0,mood:'any',seed:null}; saveTN(); render(); }}):el('span',{class:'tiny muted',text:'Resets tomorrow'})));
+  if(kind==='movie') card.append(el('div',{class:'tn-row'},el('span',{class:'tn-k',text:'Time'}),el('div',{class:'chips'},
+    [[0,'Any'],[105,'Under 1h45'],[135,'Under 2h15']].map(([v,l])=>chip(l,TN.rt===v,()=>set('rt',v))))));
+  card.append(el('div',{class:'tn-row'},el('span',{class:'tn-k',text:'Mood'}),el('div',{class:'chips'},
+    [['any','Any'],['light','Light'],['heavy','Heavy']].map(([v,l])=>chip(l,TN.mood===v,()=>set('mood',v))))));
+  // seeds: titles of this kind you rated 4★+, most recent first
+  const loved=Object.entries(S.ratings).filter(([id,r])=>r.r>=4).map(([id,r])=>[c.byId.get(id),r]).filter(([it])=>it&&it.kind===kind)
+    .sort((a,b)=>(b[1].at||0)-(a[1].at||0)).slice(0,12).map(([it])=>it);
+  const cur=TN.seed&&TN.seed.kind===kind?c.byId.get(TN.seed.id):null;
+  if(cur||loved.length){
+    const opts=cur&&!loved.includes(cur)?[cur,...loved]:loved;
+    card.append(el('div',{class:'tn-row'},el('span',{class:'tn-k',text:'Because you loved'}),el('div',{class:'seg'},
+      opts.map(it=>chip(it.title,cur===it,()=>set('seed',cur===it?null:{id:it.id,kind}))))));
+  } else {
+    card.append(el('div',{class:'tiny muted',text:'Rate a few favorites 4★+ and “Because you loved” shows up here.'}));
+  }
+  return card;
 }
 const listName=it=>it.kind==='book'?'readlist':'watchlist';
 let watchCat='all';
@@ -1837,7 +1944,7 @@ function viewSettings(w){
     '. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming info via JustWatch. Taste vectors derived from MovieLens (GroupLens Research). Books from ',
     el('a',{href:'https://openlibrary.org',target:'_blank',rel:'noopener',text:'Open Library'}),'. Dish suggestions from ',
     el('a',{href:'https://www.themealdb.com',target:'_blank',rel:'noopener',text:'TheMealDB'}),'.'));
-  w.append(el('div',{class:'tiny muted',style:'text-align:center;letter-spacing:.12em;text-transform:uppercase;padding:4px 0 8px',text:'Palate v1.15'}));
+  w.append(el('div',{class:'tiny muted',style:'text-align:center;letter-spacing:.12em;text-transform:uppercase;padding:4px 0 8px',text:'Palate v1.16'}));
 }
 
 render();
