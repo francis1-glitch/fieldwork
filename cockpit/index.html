@@ -98,6 +98,19 @@
   .lock input{font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
   .devline{font-size:.72rem;color:var(--muted);padding:0 20px 16px;display:flex;justify-content:space-between;gap:10px}
   .devline button{font:inherit;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0}
+  [hidden]{display:none!important}   /* .next/.urg set display, which beat the hidden attribute (empty black bar) */
+  .fw{padding:12px 20px 20px;display:flex;flex-direction:column;gap:12px}
+  .fw .mis{background:var(--ink);color:var(--bg);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+  .fw .mis .k{display:flex;justify-content:space-between;gap:10px;font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;opacity:.7;font-weight:600}
+  .fw .mis .c{font-family:var(--display);font-size:1.32rem;font-weight:600;line-height:1.15}
+  .fw .mis .s{font-size:.8rem;opacity:.75}
+  .fw .mis button{align-self:flex-start;margin-top:4px;font:inherit;font-size:.84rem;font-weight:600;padding:9px 15px;border-radius:999px;border:1px solid var(--bg);background:var(--bg);color:var(--ink);cursor:pointer}
+  .fw .mis button.did{background:transparent;color:var(--bg);border-color:color-mix(in srgb,var(--bg) 45%,transparent)}
+  .fw .mis.wait{background:var(--surface-2);color:var(--ink)}
+  .fw .ln{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:.88rem;padding-top:10px;border-top:1px solid var(--line)}
+  .fw .ln .v{color:var(--muted);font-weight:500;text-align:right}
+  .fw .ln .v.ok{color:var(--lead);font-weight:600}
+  .fw .stale{color:var(--muted);font-size:.78rem}
   footer{color:var(--muted);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;text-align:center;padding-top:2px}
   footer a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
 </style>
@@ -120,6 +133,12 @@
     <div class="todo" id="todo"></div>
   </div>
 
+  <!-- FIELDWORK -->
+  <div class="card">
+    <h2>Fieldwork today</h2>
+    <div id="fw"></div>
+  </div>
+
   <!-- NEMESIS -->
   <div class="card">
     <h2>This week vs Nemesis</h2>
@@ -132,7 +151,7 @@
     <div id="brief"></div>
   </div>
 
-  <footer>Cockpit v1.4 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Cockpit v1.5 · <a href="../builder/">Builder</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -376,10 +395,71 @@ async function renderBrief(){
 }
 let lastBrief = null;
 
+/* ---------- Fieldwork today: experiment mission, streak, check-in, side quest ----------
+   Same-device storage first (lets you tap "I did it today" here). Otherwise Fieldwork's feed in the repo,
+   sealed to the same device keys as the brief, so the public repo only holds ciphertext. */
+const FKEY = "fieldwork.v1";
+const dUTC = s => { const [y,m,d] = s.split("-").map(Number); return Date.UTC(y,m-1,d); };
+const dDiff = (a,b) => Math.round((dUTC(b)-dUTC(a))/864e5);
+const dAdd = (s,n) => { const [y,m,d] = s.split("-").map(Number), x = new Date(y,m-1,d); x.setDate(x.getDate()+n);
+  return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); };
+const fwPhase = (e,date) => { const day = dDiff(e.start,date); return day<0 ? "scheduled" : day<e.baseDays ? "baseline" : day<e.baseDays+e.testDays ? "test" : "complete"; };
+function fwLocal(){
+  const S = load(FKEY); if(!S || S.v !== 1 || !Array.isArray(S.experiments)) return null;
+  const t = todayKey(), ck = S.checkins || {}, act = S.experiments.filter(e => e.status === "active" && !e.sample), q = S.quests && S.quests.active;
+  if(!act.length && !q && !Object.values(ck).some(c => c && !c.sample)) return null;   // only example data: not yours yet
+  const done = e => !!(ck[t] && ck[t].adh && ck[t].adh[e.id] === true);
+  const streak = e => { let n = 0, d = t; if(!done(e)) d = dAdd(d,-1);
+    while(fwPhase(e,d) === "test"){ const c = ck[d]; if(c && c.adh && c.adh[e.id] === true){ n++; d = dAdd(d,-1); } else break; } return n; };
+  return { date:t, local:true,
+    missions: act.filter(e => fwPhase(e,t) === "test").map(e => ({ id:e.id, change:e.change||e.title, day:dDiff(e.start,t)-e.baseDays+1, of:e.testDays, streak:streak(e), done:done(e) })),
+    waiting: act.filter(e => ["baseline","scheduled"].includes(fwPhase(e,t))).map(e => ({ change:e.change||e.title, startsIn:e.baseDays-Math.max(0,dDiff(e.start,t)) })),
+    checkin: !!(ck[t] && ck[t].m && Object.keys(ck[t].m).length && !ck[t].sample),
+    quest: q ? { title: q.mystery && !q.revealed ? "Mystery destination" : q.title, day: q.day || null } : null };
+}
+function fwSetDone(id, on){
+  const S = load(FKEY); if(!S) return; const t = todayKey(), c = S.checkins[t] || { m:{}, adh:{}, note:"" };
+  c.adh = Object.assign({}, c.adh); if(on) c.adh[id] = true; else delete c.adh[id];
+  S.checkins[t] = c; save(FKEY, S);
+}
+const FW_MSG = {
+  none:   'Turn on <b>Cockpit feed</b> in <a href="../">Fieldwork</a> settings (the gear), and today’s mission, streak and check-in show up here on any device.',
+  locked: 'Fieldwork’s feed is on, but no Cockpit device can read it yet. Turn this device on under Today’s brief.',
+  nokey:  'Fieldwork’s feed is sealed. Turn this device on under Today’s brief to read it.',
+  notyet: 'This device is on. The feed unlocks the next time Fieldwork sends an update (open Fieldwork once).',
+  bad:    'Couldn’t unlock the Fieldwork feed. Open Fieldwork once to send a fresh one.' };
+async function renderFieldwork(){
+  const box = $("#fw"); let f = fwLocal(), why = "none";
+  if(!f){
+    const b = await fetchData("data/fieldwork.json");
+    if(b){ if(b.locked) why = "locked";
+      else { let r; try{ r = await unseal(b); }catch(e){ r = { state:"bad" }; } if(r.state === "open") f = r.brief; else why = r.state; } }
+  }
+  if(!f){ box.className = ""; box.innerHTML = '<div class="empty">'+FW_MSG[why]+'</div>'; return; }
+  const stale = f.date !== todayKey(), when = d => d === todayKey() ? "today" : d === dAdd(todayKey(),1) ? "tomorrow" : d;
+  let h = '<div class="fw">';
+  if(stale) h += '<div class="stale">Last update '+esc(f.date)+'. Open Fieldwork to log today.</div>';
+  for(const m of f.missions || []){
+    h += '<div class="mis"><div class="k"><span>Mission'+(stale?'':' · day '+esc(m.day)+' of '+esc(m.of))+'</span>'+(m.streak?'<span>'+esc(m.streak)+'-day streak</span>':'')+'</div>' +
+      '<div class="c">'+esc(m.change)+'</div>' +
+      (f.local ? (m.done ? '<button class="did" data-fw="undo" data-id="'+esc(m.id)+'">Done today ✓ · undo</button>' : '<button data-fw="done" data-id="'+esc(m.id)+'">I did it today</button>')
+               : '<div class="s">'+(stale ? 'Not logged today yet' : m.done ? 'Done today ✓' : 'Not done yet today')+'</div>') + '</div>';
+  }
+  for(const w of f.waiting || []) h += '<div class="mis wait"><div class="k"><span>Starts in '+esc(w.startsIn)+' day'+(w.startsIn===1?'':'s')+'</span></div><div class="c">'+esc(w.change)+'</div><div class="s">Baseline first: live normally and keep checking in.</div></div>';
+  if(!(f.missions||[]).length && !(f.waiting||[]).length) h += '<div class="ln"><span>Experiment</span><span class="v">none running</span></div>';
+  h += '<div class="ln"><span>Daily check-in</span><span class="v'+(f.checkin && !stale ? ' ok' : '')+'">'+(stale ? '—' : f.checkin ? 'Logged ✓' : 'Not yet')+'</span></div>';
+  if(f.quest) h += '<div class="ln"><span>Side quest</span><span class="v">'+esc(f.quest.title)+(f.quest.day ? ' · '+esc(when(f.quest.day)) : '')+'</span></div>';
+  h += '<div><a class="open" href="../">Open Fieldwork</a></div></div>';
+  box.className = ""; box.innerHTML = h;
+  box.querySelectorAll("[data-fw]").forEach(b => b.onclick = () => { fwSetDone(b.dataset.id, b.dataset.fw === "done"); renderFieldwork(); });
+}
+
 renderTop3(); setHint(getTop3());
+renderFieldwork();
 renderNemesis();
 renderBrief();
-document.addEventListener("visibilitychange", () => { if(!document.hidden){ renderNemesis(); renderBrief(); } });
+document.addEventListener("visibilitychange", () => { if(!document.hidden){ renderFieldwork(); renderNemesis(); renderBrief(); } });
+window.addEventListener("storage", e => { if(e.key === FKEY) renderFieldwork(); });
 setInterval(() => { if(!document.hidden && lastBrief) renderNext(lastBrief); }, 60000);
 
 try{ if("serviceWorker" in navigator){

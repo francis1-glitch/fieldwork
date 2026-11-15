@@ -247,7 +247,7 @@ nav.tabs button[data-tab="quests"][aria-current="page"]{color:var(--quest)}
 <script>
 (function(){
 "use strict";
-const VERSION="4.0.1";
+const VERSION="4.1.0";
 /* ---------- dates ---------- */
 const pad=n=>String(n).padStart(2,"0");
 const ds=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -391,7 +391,7 @@ function seed(){
   S.hasSample=true;return S;}
 function load(){try{const r=localStorage.getItem(KEY);if(r){const s=JSON.parse(r);if(s&&s.v===1)return migrate(s)}}catch(e){}return null}
 let S=load()||seed();
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}schedulePub()}
 
 const UI={tab:"today",labDetail:null,rolled:null,rolledTwist:null,draft:null,sheetDraft:null,metricView:null,eraseArm:false,delArm:null,calMonth:today().slice(0,7),wxErr:false,wxLoading:false,newType:"scale"};
 try{const h=location.hash.replace("#","");if(["today","lab","quests"].includes(h))UI.tab=h}catch(e){}
@@ -972,6 +972,7 @@ function settingsSheet(){
      <button class="btn ghost" data-act="addMetric">Add metric</button>
    </div>
    <div class="small muted">Removing a metric hides it from check-ins. Past data stays.</div></div>
+   ${feedGroup()}
    <div class="fgroup"><span class="eyebrow">Backup</span><div class="small muted">Everything lives on this device only. Copy a backup now and then, or to move to a new phone.</div>
    <div class="row"><button class="btn ghost" data-act="copyBackup">Copy backup</button><button class="btn ghost" data-act="showImport">Restore from backup</button></div>
    <textarea id="bk" hidden></textarea><button class="btn lab" data-act="doImport" id="doImport" hidden>Restore this backup</button></div>
@@ -1096,6 +1097,10 @@ document.addEventListener("click",ev=>{
     try{navigator.clipboard.writeText(txt).then(done,()=>{ta.select();toast("Select all and copy the text below")})}catch(e){ta.select();toast("Select all and copy the text below")}break}
   case "showImport":{const ta=document.getElementById("bk");ta.hidden=false;ta.value="";ta.placeholder="Paste your backup here";document.getElementById("doImport").hidden=false;ta.focus();break}
   case "doImport":{try{const s=JSON.parse(document.getElementById("bk").value);if(!s||s.v!==1||!s.checkins)throw 0;S=migrate(s);save();UI.draft=null;closeSheet();render();toast("Backup restored")}catch(e){toast("That doesn't look like a Fieldwork backup")}break}
+  case "feedOn":{const i=document.getElementById("feedTok");if(i){const v=i.value.trim();if(!/^(github_pat_|ghp_)/.test(v)){i.focus();toast("Paste a GitHub token (starts with github_pat_)");break}try{localStorage.setItem("fieldwork.gh",v)}catch(e){}}
+    try{localStorage.setItem(FEED_ON,"on")}catch(e){}toast("Sending to Cockpit…");publishFeed(true).then(()=>{settingsSheet();toast(feedErr()||"Cockpit feed on")});break}
+  case "feedNow":toast("Sending…");publishFeed(true).then(()=>{settingsSheet();toast(feedErr()||"Sent to Cockpit")});break;
+  case "feedOff":try{localStorage.setItem(FEED_ON,"off")}catch(e){}settingsSheet();toast("Cockpit feed off");break;
   case "eraseAll":if(!UI.eraseArm){UI.eraseArm=true;settingsSheet();break}S=blank();save();UI.eraseArm=false;UI.draft=null;UI.labDetail=null;closeSheet();render();toast("Everything erased");break;
   }
 });
@@ -1104,6 +1109,70 @@ function clearSample(){
   S.experiments=S.experiments.filter(e=>!e.sample);S.quests.log=S.quests.log.filter(q=>!q.sample);
   S.hasSample=false;UI.draft=null;UI.labDetail=null;save();closeSheet();render();toast("Examples cleared. It's all yours.");
 }
+/* ---------- Cockpit feed ----------
+   Sends Morning Cockpit a small summary: today's mission, streak, whether you've checked in, and the active side quest.
+   Check-in scores and notes never leave this phone. The repo is public, so the summary is sealed to the Cockpit
+   device keys in data/cockpit-keys.json (same scheme as the Morning Brief). It only sends when something meaningful
+   changes (no timestamps in the signature), so it doesn't flood the Pages build queue. */
+const FEED_PATH="data/fieldwork.json",FEED_ON="fieldwork.feed",FEED_SIG="fieldwork.feedsig",FEED_AT="fieldwork.feedat",FEED_ERR="fieldwork.feederr";
+const LIVE=/\.github\.io$/.test(location.hostname);
+const REPO=(()=>{const parts=location.pathname.split("/").filter(Boolean).filter(p=>!/\.html$/.test(p));return{owner:location.hostname.split(".")[0],repo:parts[0]||""}})();
+const ls=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const feedOn=()=>ls(FEED_ON)==="on";
+const anyToken=()=>ls("fieldwork.gh")||ls("cockpit.gh")||ls("nemesis.gh")||ls("palate.gh")||"";
+const feedErr=()=>ls(FEED_ERR)||"";
+function feedSummary(){
+  const t=today(),act=S.experiments.filter(e=>e.status==="active"&&!e.sample),q=S.quests.active,c=S.checkins[t];
+  return{date:t,
+    missions:act.filter(e=>phaseOn(e,t)==="test").map(e=>{const{day}=phaseOf(e);return{id:e.id,change:String(e.change||e.title).slice(0,120),day:day-e.baseDays+1,of:e.testDays,streak:streakOf(e),done:doneToday(e)}}),
+    waiting:act.filter(e=>{const p=phaseOn(e,t);return p==="baseline"||p==="scheduled"}).map(e=>({change:String(e.change||e.title).slice(0,120),startsIn:e.baseDays-Math.max(0,diffDays(e.start,t))})),
+    checkin:!!(hasData(c)&&!c.sample),
+    quest:q?{title:q.mystery&&!q.revealed?"Mystery destination":String(q.title||"").slice(0,90),day:q.day||null}:null}}
+const b64=u=>{let s="";const a=new Uint8Array(u);for(let i=0;i<a.length;i+=0x8000)s+=String.fromCharCode.apply(null,a.subarray(i,i+0x8000));return btoa(s)};
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function sealFeed(sum,keys){
+  const out={v:1,date:sum.date};
+  if(!keys.length){out.locked="no-devices";return out}   // nobody to seal for: publish nothing readable
+  const sub=crypto.subtle,aes=await sub.generateKey({name:"AES-GCM",length:256},true,["encrypt"]),raw=await sub.exportKey("raw",aes),iv=crypto.getRandomValues(new Uint8Array(12));
+  out.iv=b64(iv);out.ct=b64(await sub.encrypt({name:"AES-GCM",iv},aes,new TextEncoder().encode(JSON.stringify(sum))));out.keys=[];
+  for(const k of keys){const pub=await sub.importKey("spki",unb64(k.spki),{name:"RSA-OAEP",hash:"SHA-256"},false,["encrypt"]);out.keys.push({kid:k.kid,wk:b64(await sub.encrypt({name:"RSA-OAEP"},pub,raw))})}
+  return out}
+async function ghPut(path,text,msg,tok){
+  const url=`https://api.github.com/repos/${REPO.owner}/${REPO.repo}/contents/${path}`,H={Authorization:"Bearer "+tok,Accept:"application/vnd.github+json"};
+  for(let a=1;;a++){
+    let sha;const g=await fetch(url+"?ref=main&ts="+Date.now(),{headers:H,cache:"no-store"});
+    if(g.status===401||g.status===403)throw Object.assign(new Error("auth"),{fatal:true});
+    if(g.ok)sha=(await g.json()).sha;else if(g.status!==404)throw new Error("http "+g.status);
+    const r=await fetch(url,{method:"PUT",headers:H,body:JSON.stringify({message:msg,content:btoa(unescape(encodeURIComponent(text))),sha,branch:"main"})});
+    if(r.ok)return;if(r.status===401||r.status===403)throw Object.assign(new Error("auth"),{fatal:true});
+    if(a>=3||!(r.status===409||r.status===422||r.status>=500))throw new Error("http "+r.status);
+    await new Promise(z=>setTimeout(z,1200*a))}}
+let pubTimer=null,pubBusy=false;
+function schedulePub(){try{if(!feedOn())return}catch(e){return}/* save() can run before this module loads */clearTimeout(pubTimer);pubTimer=setTimeout(()=>publishFeed(false),1500)}
+async function publishFeed(force){
+  const tok=anyToken();
+  if(pubBusy||!feedOn()||!tok)return;
+  if(!LIVE){try{localStorage.setItem(FEED_ERR,"Preview copy: only the live site sends")}catch(e){}return}
+  pubBusy=true;
+  try{
+    const kr=await fetch(`https://raw.githubusercontent.com/${REPO.owner}/${REPO.repo}/main/data/cockpit-keys.json?ts=${Date.now()}`,{cache:"no-store"});
+    const keys=kr.ok?((await kr.json()).keys||[]).filter(k=>k&&k.kid&&k.spki):[];
+    const sum=feedSummary(),sig=JSON.stringify([sum,keys.map(k=>k.kid)]);
+    if(force||ls(FEED_SIG)!==sig){
+      await ghPut(FEED_PATH,JSON.stringify(await sealFeed(sum,keys))+"\n","fieldwork: feed for "+sum.date,tok);
+      localStorage.setItem(FEED_SIG,sig);localStorage.setItem(FEED_AT,String(Date.now()))}
+    localStorage.removeItem(FEED_ERR);
+  }catch(e){try{localStorage.setItem(FEED_ERR,e.fatal?"GitHub refused the token":"Couldn't reach GitHub")}catch(_){}}
+  pubBusy=false}
+function feedGroup(){
+  const on=feedOn(),tok=anyToken(),at=+ls(FEED_AT)||0,err=feedErr();
+  const st=err?esc(err):at?"Last sent "+esc(new Date(at).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})):"Nothing sent yet";
+  return `<div class="fgroup"><span class="eyebrow">Cockpit feed</span><div class="small muted">Shows today's mission, streak, check-in status and side quest on Morning Cockpit, on any device. Sealed to your Cockpit devices, so the public repo only holds ciphertext. Check-in scores and notes stay on this phone.</div>
+   ${on?`<div class="small">On · ${st}</div><div class="row"><button class="btn ghost" data-act="feedNow">Send now</button><button class="btn ghost" data-act="feedOff">Turn off</button></div>`
+     :`${tok?"":`<input id="feedTok" type="password" autocomplete="off" placeholder="GitHub token (stays on this device)" aria-label="GitHub token">`}<div class="row"><button class="btn ghost" data-act="feedOn">Turn on</button></div>`}</div>`}
+window.addEventListener("storage",e=>{if(e.key===KEY){const s=load();if(s){S=s;UI.draft=null;render()}}});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)schedulePub()});
+schedulePub();
 render();loadWx();
 try{if("serviceWorker" in navigator&&document.documentElement.dataset.pwa==="1")navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}
 })();

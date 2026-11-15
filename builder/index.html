@@ -159,13 +159,13 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.5.5 · <a href="../dashboard/">Command Center</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.6 · <a href="../cockpit/">Cockpit</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
 const KEY = "builder.v1";
-const SEED_VERSION = 2;
+const SEED_VERSION = 3;
 const COLS = [
   // name = section heading (a place); label = the state you set on a card
   {id:"building", name:"Building",  label:"Building"},
@@ -194,22 +194,24 @@ const SEED = [
      {title:"Daily draft deck", summary:"Weekdays 7:13 AM ET: 5–8 fact-checked post drafts plus reply drafts in a new doc, with a push notification."},
      {title:"Weekly review", summary:"Sundays 6:43 PM ET: reads the scoreboard and reports which formats, topics and hooks worked."},
    ]},
-  {key:"dashboard", title:"Command Center", status:"building", url:"../dashboard/",
-   summary:"One screen that reads every app's saved data and shows a live tile per app. It works, but it only shows counts, so it needs a rethink to surface what to act on.",
+  {key:"dashboard", title:"Command Center", status:"parked", url:"../cockpit/",
+   summary:"Retired Nov 15, 2026. It only showed counts. Folded into Morning Cockpit, which now shows Fieldwork's mission and check-in next to your priorities, Nemesis and the brief. The old link redirects there.",
    children:[]},
 
   {key:"fieldwork", title:"Fieldwork", status:"live", url:"../",
    summary:"The home-screen app suite and its root app, Experiment Lab + Side Quests, which turns self-improvement into structured personal experiments and real-world side quests. Every app below lives in the same repo and shares one origin, so they can read each other's data.",
    children:[
      {title:"Experiment Lab + Side Quests", url:"../", summary:"The root app: design personal experiments and get real-world side quests."},
-     {title:"data/ folder", summary:"Cross-device files apps publish to the repo, like nemesis.json and brief.json, read instantly through raw GitHub."},
+     {title:"data/ folder", summary:"Cross-device files apps publish to the repo, like nemesis.json, brief.json, fieldwork.json and tasks.json, read instantly through raw GitHub."},
+     {title:"Cockpit feed", summary:"Settings → Cockpit feed: sends today's mission, streak, check-in status and side quest to Morning Cockpit, sealed to your Cockpit devices. Scores and notes stay on the phone."},
      {title:"fieldwork-app skill", summary:"The saved build spec: repo layout, house style, sync pattern, cache rules, and the build-test loop."},
    ]},
   {key:"cockpit", title:"Morning Cockpit", status:"live", url:"../cockpit/",
-   summary:"The screen you open each morning: your three priorities (they carry over until done), where you stand against Nemesis this week with the tracks you're behind on, and today's calendar brief.",
+   summary:"The one screen you open each morning: your three priorities (they carry over until done), today's Fieldwork mission and check-in, where you stand against Nemesis with the tracks you're behind on, and today's calendar brief.",
    children:[
      {title:"Morning Brief task", summary:"Scheduled daily at 6:17 AM ET. Reads Google Calendar, triages P1–P4 with an urgency score, writes the brief Doc, and publishes today's calendar to the Cockpit, encrypted so only your turned-on devices can read it."},
      {title:"Nemesis feed", summary:"Reads your weekly standing from data/nemesis.json, so it shows on any device."},
+     {title:"Fieldwork feed", summary:"Today's experiment mission, streak, check-in status and side quest. On the same device you can tap 'I did it today' right in Cockpit; elsewhere it reads the sealed data/fieldwork.json."},
    ]},
   {key:"nemesis", title:"Nemesis", status:"live", url:"../nemesis/",
    summary:"An AI rival that competes with you every week on gym, cardio, CPA hours, chess, cold opens and teach-back. It reacts to each log, locks Sunday at 9 PM, and settles the week in a showdown.",
@@ -325,14 +327,19 @@ function load(){
   let s = null;
   try{ s = JSON.parse(localStorage.getItem(KEY) || "null"); }catch(e){}
   if(!s || !Array.isArray(s.items)) { s = freshSeed(); save(s); return s; }
-  if((s.v || 1) < SEED_VERSION){
+  const v0 = s.v || 1;
+  if(v0 < 2){
     // first version had no keys: match seeded projects by title, and treat all of them as already seeded
     s.seeded = Array.isArray(s.seeded) ? s.seeded : V1_KEYS.slice();
     for(const it of s.items){
       if(!it.key){ const m = SEED.find(x => x.title.toLowerCase() === String(it.title).toLowerCase()); if(m) it.key = m.key; }
     }
-    s.v = SEED_VERSION;
   }
+  if(v0 < 3){
+    // Nov 15, 2026: Command Center retired into Morning Cockpit (status is otherwise yours to keep)
+    for(const it of s.items) if(it.key === "dashboard"){ it.status = "parked"; it.url = "../cockpit/"; }
+  }
+  s.v = SEED_VERSION;
   if(!Array.isArray(s.seeded)) s.seeded = [];
   // add seed projects that were never seeded before (deleted ones stay deleted)
   for(const sd of SEED){
@@ -414,7 +421,8 @@ function panelFor(it, kids){
   } else {
     const sm = document.createElement("p"); sm.className = "summary"; sm.textContent = it.summary; p.append(sm);
   }
-  const mine = checks.filter(c => c.keys.includes(it.key));
+  const mine = checks.filter(c => !c.subs && c.keys.includes(it.key))
+    .concat(checks.filter(c => c.subs).flatMap(c => c.subs.filter(x => x.keys.includes(it.key))));
   if(mine.length){
     p.insertAdjacentHTML("beforeend", '<div class="subhead">Status</div>' +
       mine.map(c => '<div class="st-row"><span class="lt '+c.state+'"></span><span>'+esc(c.name)+' · '+esc(c.text)+'</span></div>').join(""));
@@ -525,6 +533,73 @@ async function checkNemesis(){
   const st = s.pre ? "preseason" : "S" + s.season + " W" + s.week + " · you " + s.youWins + "–" + s.nemWins;
   return { state: stale ? "amber" : "green", text: (stale ? "stale · " : "synced ") + ago(s.updatedAt) + " · " + st };
 }
+/* Scheduled tasks: the Mission Control auto-fixer snapshots every scheduled task's last run (from the
+   scheduler, twice a day) into data/tasks.json. A browser can't ask the scheduler itself, so this file is the bridge.
+   Per task: paused → grey; failed → red; missed its last scheduled slot → red; running >3h → amber;
+   finished but took >2h → amber; else green. The snapshot itself going >14h stale means the auto-fixer stopped. */
+const TASK_KEYS = [[/mission control/i,["builder"]],[/morning brief/i,["agents","cockpit"]],[/receipts/i,["receipts"]],
+  [/skill lab/i,["skilllab"]],[/nemesis/i,["nemesis"]],[/nba/i,["nba"]],[/cpa|big 4|roundup|tracker/i,["agents"]]];
+const taskKeys = n => { for(const [re,k] of TASK_KEYS) if(re.test(n)) return k; return ["builder"]; };
+const zfmt = {};
+function zparts(d, tz){
+  const f = zfmt[tz] || (zfmt[tz] = new Intl.DateTimeFormat("en-US", { timeZone:tz, hour12:false, year:"numeric", month:"numeric", day:"numeric", hour:"numeric", minute:"numeric", weekday:"short" }));
+  const p = Object.fromEntries(f.formatToParts(d).map(x => [x.type, x.value]));
+  return { min:+p.minute, hour:(+p.hour)%24, dom:+p.day, mon:+p.month, dow:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(p.weekday) };
+}
+function cronHas(spec, v, lo, hi){
+  return String(spec).split(",").some(part => {
+    const [r, st] = part.split("/"), step = st ? +st : 1; let a, b;
+    if(r === "*"){ a = lo; b = hi; } else if(r.includes("-")){ [a, b] = r.split("-").map(Number); } else { a = +r; b = st ? hi : a; }
+    return v >= a && v <= b && (v - a) % step === 0;
+  });
+}
+// the most recent time at or before `before` that the cron expression fires (minute must be a plain number)
+function prevSlot(expr, before){
+  let e = String(expr || "").trim(), tz = "UTC"; const m = /^CRON_TZ=(\S+)\s+(.*)$/.exec(e); if(m){ tz = m[1]; e = m[2]; }
+  const f = e.split(/\s+/); if(f.length !== 5 || !/^\d+$/.test(f[0])) return null;
+  const mi = +f[0], dw = f[4].replace(/7/g, "0");
+  let t = new Date(before.getTime()); t.setUTCMinutes(mi, 0, 0); if(t > before) t = new Date(t.getTime() - 36e5);
+  for(let i = 0; i < 8 * 24; i++, t = new Date(t.getTime() - 36e5)){
+    const p = zparts(t, tz);
+    if(p.min === mi && cronHas(f[1], p.hour, 0, 23) && cronHas(f[2], p.dom, 1, 31) && cronHas(f[3], p.mon, 1, 12) && cronHas(dw, p.dow, 0, 6)) return t;
+  }
+  return null;
+}
+const slotLabel = d => d.toLocaleString([], { weekday:"short", hour:"numeric", minute:"2-digit" });
+function taskState(t, snapAt){
+  if(/mission control/i.test(t.name)){
+    const h = (Date.now() - snapAt) / 36e5;
+    return h > 14 ? { state:"amber", text:"snapshot " + Math.round(h) + "h old · auto-fixer may have stopped" } : { state:"green", text:"snapshot " + ago(snapAt) };
+  }
+  if(!t.enabled) return { state:"grey", text:"paused" + (t.lastFired ? " · last ran " + ago(t.lastFired) : "") };
+  if(!t.lastFired) return { state:"grey", text:"hasn't run yet" };
+  const fired = new Date(t.lastFired), st = String(t.lastStatus || "").replace(/^ROUTINE_RUN_STATUS_/, "");
+  const fail = String(t.failure || "").replace(/^ROUTINE_RUN_FAILURE_REASON_/, "").replace(/^UNSPECIFIED$/, "").toLowerCase().replace(/_/g, " ");
+  if(!t.lastFinished && (!st || /RUNNING|PROGRESS|PENDING|QUEUED/.test(st))){
+    const h = (snapAt - fired) / 36e5;
+    return h > 3 ? { state:"amber", text:"stuck · still running after " + Math.round(h) + "h" } : { state:"info", text:"running · started " + ago(fired) };
+  }
+  if(st && st !== "SUCCEEDED") return { state:"red", text:"last run " + st.toLowerCase().replace(/_/g, " ") + (fail ? " (" + fail + ")" : "") + " · " + ago(fired) };
+  const slot = prevSlot(t.cron, new Date(snapAt.getTime() - 20 * 60000));
+  if(slot && fired < new Date(slot.getTime() - 5 * 60000)) return { state:"red", text:"missed its " + slotLabel(slot) + " run · last ran " + ago(fired) };
+  const dur = t.lastFinished ? (new Date(t.lastFinished) - fired) / 36e5 : 0;
+  if(dur > 2) return { state:"amber", text:"last run took " + Math.round(dur) + "h · " + ago(fired) };
+  return { state:"green", text:"ran " + ago(fired) };
+}
+async function checkTasks(){
+  const d = await rawJSON("data/tasks.json");
+  if(d === null) return { state:"grey", text:"couldn't check" };
+  if(d.missing || !Array.isArray(d.tasks)) return { state:"amber", text:"no snapshot yet · the auto-fixer writes data/tasks.json" };
+  const snapAt = new Date(d.checkedAt);
+  const subs = d.tasks.map(t => Object.assign({ name:t.name, keys:taskKeys(t.name) }, taskState(t, snapAt)));
+  const bad = subs.filter(x => x.state === "red" || x.state === "amber").sort((a, b) => RANK[b.state] - RANK[a.state]);
+  const worst = subs.reduce((w, x) => RANK[x.state] > RANK[w] ? x.state : w, "green");
+  const paused = subs.filter(x => x.state === "grey").length, ok = subs.length - paused - bad.length;
+  const text = bad.length
+    ? bad.slice(0, 2).map(x => x.name + ": " + x.text).join(" · ") + (bad.length > 2 ? " · +" + (bad.length - 2) + " more" : "")
+    : ok + " on schedule" + (paused ? " · " + paused + " paused" : "") + " · snapshot " + ago(snapAt);
+  return { state: worst === "info" ? "green" : worst, text, subs };
+}
 const CHECKS = [
   { keys:["fieldwork"],        name:"Site deploys",       run: checkDeploys },
   { keys:["cockpit","agents"], name:"Morning Brief feed", run: checkBrief },
@@ -532,6 +607,7 @@ const CHECKS = [
   { keys:["mirror"],           name:"Mirror score model", run: checkMirror },
   { keys:["palate"],           name:"Palate catalog",     run: () => checkWorkflow("palate-catalog.yml", true) },
   { keys:["palate"],           name:"Palate lab",         run: () => checkWorkflow("palate-lab.yml", false) },
+  { keys:["agents"],           name:"Scheduled tasks",    run: checkTasks },
 ];
 
 async function runChecks(force){
@@ -543,7 +619,11 @@ async function runChecks(force){
     catch(e){ return Object.assign({}, c, { state:"grey", text: e.message === "rate" ? "GitHub rate limit · try again later" : "couldn't check" }); }
   }));
   health = {};
-  for(const c of checks) for(const k of c.keys) if(!(k in health) || RANK[c.state] > RANK[health[k]]) health[k] = c.state;
+  for(const c of checks){
+    // a check with per-task results colors each project by its own tasks, not by the worst task overall
+    const parts = c.subs ? c.subs.flatMap(x => x.keys.map(k => [k, x.state])) : c.keys.map(k => [k, c.state]);
+    for(const [k, st] of parts) if(!(k in health) || RANK[st] > RANK[health[k]]) health[k] = st;
+  }
   checkedAt = new Date(); scanning = false;
   renderMC(); render();
 }
@@ -562,7 +642,7 @@ function renderMC(){
     '<div class="mc-head"><span class="mc-title">Mission Control</span>' + sum +
     '<button class="mc-ref" id="mcRef" aria-label="Run checks again">' + (scanning ? "…" : "↻") + '</button></div>' +
     '<div class="mc-rows">' + rows + '</div>' +
-    '<div class="mc-foot">checked ' + t + ' · scheduled tasks + NBA model not monitored yet</div>';
+    '<div class="mc-foot">checked ' + t + ' · task runs snapshotted twice a day by the auto-fixer · NBA model repo not monitored</div>';
   $("#mcRef").onclick = () => runChecks(true);
 }
 
