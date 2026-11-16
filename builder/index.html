@@ -159,7 +159,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.6 · <a href="../cockpit/">Cockpit</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.7 · <a href="../cockpit/">Cockpit</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -188,11 +188,21 @@ const SEED = [
      {title:"Benchmark tooling", summary:"mirror/tools: run_benchmark.py downloads SCUT-FBP5500 and the models; train_score.py extracts the exact markers Mirror uses and writes mirror/score_model.json."},
    ]},
   {key:"receipts", title:"Receipts (X account)", status:"building", url:"",
-   summary:"An X account that answers whatever people are arguing about with the actual data: the claim, the primary-source number, one sharp line. You post; Claude researches, fact-checks and drafts. Next: pick the handle, then 30 days of 2–4 posts a weekday before judging anything.",
+   summary:"An X account that answers whatever people are arguing about with the actual data: the claim, the primary-source number, one sharp line. You post; Claude researches, fact-checks and drafts. On hold: paused in Nov 2026 because it wasn't working. Both scheduled tasks are off as of Nov 16 and no posts have been logged. Next: revisit how the X algorithm ranks posts, then rework the drafts before turning the tasks back on.",
    children:[
-     {title:"Playbook doc", summary:"Angle, voice, five post formats, approved primary data sources, algorithm rules, daily workflow and the scoreboard."},
-     {title:"Daily draft deck", summary:"Weekdays 7:13 AM ET: 5–8 fact-checked post drafts plus reply drafts in a new doc, with a push notification."},
-     {title:"Weekly review", summary:"Sundays 6:43 PM ET: reads the scoreboard and reports which formats, topics and hooks worked."},
+     {title:"Playbook doc", summary:"Angle, voice, five post formats, approved primary data sources, algorithm rules, daily workflow and the scoreboard, which is still empty."},
+     {title:"Daily draft deck", summary:"Paused Nov 16. When on: weekdays 7:13 AM ET, 5–8 fact-checked post drafts plus reply drafts in a new doc, with a push notification."},
+     {title:"Weekly review", summary:"Paused Nov 16. When on: Sundays 6:43 PM ET, reads the scoreboard and reports which formats, topics and hooks worked."},
+   ]},
+  {key:"audit", title:"Claude usage audit", status:"building", url:"",
+   summary:"A Nov 16 review of how you use Claude: recent chats, the 26 custom skills, 89 artifacts and the 10 scheduled tasks. The builds held up; the gap is upkeep. Two of the five fixes are done. Open: the Skill Lab approvals, what the public repo shows, and doc sprawl.",
+   children:[
+     {title:"Receipts tasks", summary:"Done Nov 16: both scheduled tasks paused while the project is on hold."},
+     {title:"Job and CPA tasks", summary:"Done Nov 16: the three Monday tasks were re-aimed at your current targets."},
+     {title:"Skill Lab backlog", summary:"Open: two tested lease-skill edits are waiting for approval, and the feedback log is empty."},
+     {title:"Repo exposure", summary:"Open: cut down what the public Fieldwork repo and its data files reveal."},
+     {title:"Doc sprawl", summary:"Open: 73 of 89 artifacts are scheduled-task output; move each task to one rolling doc."},
+     {title:"Skill gaps", summary:"Open: only the lease skill is blind-tested, and there are no tax skills beyond the ASC 740 provision."},
    ]},
   {key:"dashboard", title:"Command Center", status:"parked", url:"../cockpit/",
    summary:"Retired Nov 15, 2026. It only showed counts. Folded into Morning Cockpit, which now shows Fieldwork's mission and check-in next to your priorities, Nemesis and the brief. The old link redirects there.",
@@ -258,33 +268,34 @@ const SEED = [
      {title:"Stack", summary:"React, Node/Express, PostgreSQL on Neon, JWT auth, deployed on Render."},
    ]},
   {key:"skills", title:"Accounting skills library", status:"live", url:"",
-   summary:"Your \"every-accounting calculator\": 20+ accounting skills saved to your Claude account so any function is one ask away, from leases and revenue to tax provisions, consolidations and audit sampling.",
+   summary:"Your \"every-accounting calculator\": 20+ accounting skills saved to your Claude account so any function is one ask away, from leases and revenue to tax provisions, consolidations and audit sampling. Only the lease skill has been blind-tested so far.",
    children:[
      {title:"Calculation-heavy", summary:"ASC 842 lessee, ASC 606, ASC 740, bonds and debt, EPS, stock comp, equity method, consolidations, cash flow, business combinations, impairment."},
      {title:"Partly calculated", summary:"Close schedules, bank reconciliation, audit sampling, governmental, nonprofit."},
      {title:"Judgment-heavy", summary:"Accounting memo, journal-entry review, flux analysis, QuickBooks cleanup, Excel workpaper."},
    ]},
   {key:"skilllab", title:"Skill Lab", status:"live", url:"",
-   summary:"Your \"dreaming\" loop. A weekly run blind-tests your skills, turns logged corrections into test cases, and proposes one edit only if it scores higher with no regressions. The pilot is ASC 842 lessee.",
+   summary:"Your \"dreaming\" loop. A weekly run blind-tests your skills, turns logged corrections into test cases, and proposes one edit only if it scores higher with no regressions. The pilot is ASC 842 lessee. As of Nov 16: two tested edits (Nov 9 and Nov 16) are waiting for your approval, and no corrections have been logged yet.",
    children:[
      {title:"ASC 842 test suite", summary:"21 lease cases with an answer key computed in code; the blind test-taker never sees the key."},
      {title:"skill-feedback (\"log it\")", summary:"Say \"log it\" when an answer is off and the correction goes into the feedback log."},
      {title:"skill-improver", summary:"Runs the loop: feedback to tests, blind baseline, one edit, re-test for regressions."},
-     {title:"Weekly improver task", summary:"Scheduled Sundays at 7:37 PM ET."},
+     {title:"Weekly improver task", summary:"Scheduled Sundays at 7:37 PM ET. Its chat scan is skipped, because scheduled runs can't search chats."},
      {title:"Skill Lab doc", summary:"Where the feedback log, test suites and run history live."},
    ]},
   {key:"agents", title:"Briefing agents", status:"live", url:"",
    summary:"Scheduled Claude runs that work unattended and leave finished docs for you.",
    children:[
      {title:"Morning Brief", summary:"Daily at 6:17 AM ET: calendar triage with an urgency score; also feeds the Cockpit."},
-     {title:"CPA Exam Section Tracker", summary:"Mondays: score release dates, credit-window countdown, and your next section."},
-     {title:"CPA & Accounting News Roundup", summary:"Mondays: standard setters, IRS, licensure, and Big 4 news from the past week."},
-     {title:"Big 4 Job Tracker", summary:"Mondays: openings that fit your background, plus recruiting events."},
+     {title:"CPA Exam Section Tracker", summary:"Mondays: score release dates, credit-window countdown, licensure rules and your next section. Re-aimed Nov 16."},
+     {title:"CPA & Accounting News Roundup", summary:"Mondays: standard setters, IRS, licensure, and Big 4 news from the past week. Re-aimed Nov 16."},
+     {title:"Big 4 Job Tracker", summary:"Mondays: openings that fit your background, plus recruiting events. Search area updated Nov 16."},
    ]},
   {key:"builder", title:"Builder Board", status:"live", url:"./",
-   summary:"This board (v1.5): every project, its state, what it does and what lives inside it, with Mission Control on top running live health checks. Categories fold to keep the page short. Next: monitor the scheduled tasks and the NBA model, which Mission Control can't see yet.",
+   summary:"This board (v1.7): every project, its state, what it does and what lives inside it, with Mission Control on top running live health checks, including each scheduled task's last run. Categories fold to keep the page short. Not monitored yet: the NBA model repo.",
    children:[
-     {title:"Mission Control", summary:"Live checks for site deploys, the Morning Brief feed, Nemesis sync, Mirror's score model and the Palate workflows."},
+     {title:"Mission Control", summary:"Live checks for site deploys, the Morning Brief feed, Nemesis sync, Mirror's score model, the Palate workflows and the scheduled tasks."},
+     {title:"Auto-fixer task", summary:"Scheduled 7:41 AM and 6:41 PM ET: snapshots each scheduled task's last run to data/tasks.json, then re-runs or opens a PR for anything red or amber."},
      {title:"Collapsible categories", summary:"Building, Live, Ideas and Graveyard fold open or shut, showing a one-line peek of project names when folded; remembered per device."},
      {title:"builder-sync skill", summary:"When you say you're done with a project for the moment, Claude rewrites its card here from what changed that session."},
    ]},
