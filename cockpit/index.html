@@ -220,7 +220,7 @@
     </div>
   </details>
 
-  <footer>Cockpit v2.1 · <a href="../builder/">Builder</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Cockpit v2.2 · <a href="../builder/">Builder</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -255,7 +255,7 @@ const greetWord = d => { const h = d.getHours(); return h < 4 ? "Good evening" :
    Spoken in under 60 seconds. It runs longer only when the brief flags something very important
    (wake.override), and never past 90. If the script is over budget, the lowest-priority lines are
    cut and stay in the written version. Order of what goes first:
-   Knicks → Nemesis → your field → markets → extra world stories → extra local / heads-up items.
+   Knicks → your field → markets → extra world stories → extra local / heads-up items.
    Greeting, weather, urgency, first move and today's schedule are never cut. */
 const W = { state:"loading", brief:null, raw:null, weather:null, nem:null, tasks:null, fit:null };
 const VKEY = "cockpit.voice", CALKEY = "cockpit.wps", PLAYKEY = "cockpit.played", LKEY = "cockpit.loc";
@@ -381,7 +381,6 @@ function buildSegs(){
     (wk.ahead || []).forEach((a,i) => add("ahead"+i, i ? 2 : 1, (i ? "" : "Heads up: ") + endDot(a.say)));
   }
   tasksFailed().forEach((n,i) => add("task"+i, 1, "The " + n + " task failed its last run."));
-  add("nem", 6, nemBehind());
   if(fresh){
     const world = (wk.world || []).map((x,i) => Object.assign({ i }, x)).sort((a,b) => CATORD.indexOf(a.cat) - CATORD.indexOf(b.cat) || a.i - b.i);
     const seen = {};
@@ -501,7 +500,7 @@ function renderWriteup(){
     h += sec("Today", t);
     if((wk.ahead || []).length) h += sec("Next 7 days", wk.ahead.map(a => '<p>' + (a.when ? '<b>' + esc(whenTxt(a.when)) + '</b> · ' : '') + esc(a.read || a.say) + '</p>').join(""));
   }
-  const status = tasksFailed().map(n => '<p class="flag">The ' + esc(n) + ' task failed its last run.</p>').join("") + (nemBehind() ? '<p class="flag">' + esc(nemBehind()) + '</p>' : '');
+  const status = tasksFailed().map(n => '<p class="flag">The ' + esc(n) + ' task failed its last run.</p>').join("");   // Nemesis stays out of the morning brief (its card is in the bottom section)
   if(status) h += sec("Needs attention", status);
   if(fresh){
     const world = (wk.world || []).map((x,i) => Object.assign({ i }, x)).sort((a,b) => CATORD.indexOf(a.cat) - CATORD.indexOf(b.cat) || a.i - b.i);
