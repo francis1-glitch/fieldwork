@@ -220,7 +220,7 @@
     </div>
   </details>
 
-  <footer>Cockpit v2.0 · <a href="../builder/">Builder</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Cockpit v2.1 · <a href="../builder/">Builder</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -259,7 +259,10 @@ const greetWord = d => { const h = d.getHours(); return h < 4 ? "Good evening" :
    Greeting, weather, urgency, first move and today's schedule are never cut. */
 const W = { state:"loading", brief:null, raw:null, weather:null, nem:null, tasks:null, fit:null };
 const VKEY = "cockpit.voice", CALKEY = "cockpit.wps", PLAYKEY = "cockpit.played", LKEY = "cockpit.loc";
-const vset = () => Object.assign({ rate:1, voice:"", skipGreet:false, addr:"sir" }, load(VKEY) || {});
+const vset = () => Object.assign({ rate:1, voice:"", skipGreet:false, addr:"sir", viaSC:false, scName:"Cockpit Voice" }, load(VKEY) || {});
+// iOS only gives web pages its built-in voices. Downloaded Premium/Enhanced voices (Jamie, Ava, Zoe) only work through
+// the Shortcuts app, so this option hands the fitted script to a Shortcut that speaks it. Budgeted at a safe 2.5 words a second.
+const SC_WPS = 2.5;
 const wps = () => { const c = load(CALKEY); return c && c.wps > 1.6 && c.wps < 4.5 ? c.wps : 2.5; };   // words per second at speed 1, learned on this phone
 const words = t => String(t || "").trim().split(/\s+/).filter(Boolean).length;
 const endDot = t => { t = String(t || "").trim(); return /[.!?]$/.test(t) ? t : t + "."; };
@@ -392,7 +395,7 @@ function buildSegs(){
 }
 function fitSegs(segs){
   const br = W.brief, wk = W.state === "open" && br && br.date === todayKey() ? (br.wake || {}) : {};
-  const over = !!wk.override, limit = over ? 90 : 60, speed = wps() * (vset().rate || 1);
+  const over = !!wk.override, limit = over ? 90 : 60, speed = vset().viaSC ? SC_WPS : wps() * (vset().rate || 1);
   const keep = segs.map(s => Object.assign({}, s)), cut = [];
   const est = () => (keep.reduce((s,x) => s + x.w, 0) + (keep.some(x => x.world != null) ? 3 : 0)) / speed;
   while(est() > limit){
@@ -415,7 +418,18 @@ function pickVoice(){
     voices.find(v => /en-US/i.test(v.lang)) || voices[0] || null;
 }
 function utter(text){ const v = vset(), u = new SpeechSynthesisUtterance(text), vc = pickVoice(); if(vc){ u.voice = vc; u.lang = vc.lang; } else u.lang = "en-US"; u.rate = v.rate || 1; return u; }
+function handoff(text){
+  const name = (vset().scName || "Cockpit Voice").trim() || "Cockpit Voice";
+  location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent(name) + "&input=text&text=" + encodeURIComponent(text);
+}
 function play(){
+  if(vset().viaSC){                         // speak through the Shortcuts app (Premium voices)
+    W.fit = fitSegs(buildSegs()); const list = W.fit.keep; if(!list.length) return;
+    save(PLAYKEY, { date:todayKey(), at:Date.now(), secs:W.fit.secs });
+    handoff(list.map(x => x.say).join(" "));
+    setTimeout(() => { paintWake(); renderWriteup(); }, 600);
+    return;
+  }
   const ss = window.speechSynthesis;
   if(!ss){ $("#wakeSub").textContent = "This browser can't speak. Read the writeup below."; return; }
   if(speaking){ speaking = false; ss.cancel(); paintWake(); return; }
@@ -759,16 +773,23 @@ function renderSettings(){
     '<label>Address me as<input type="text" id="s-addr" value="'+esc(v.addr)+'" maxlength="24"></label>' +
     '<label>Voice<select id="s-voice">' + (voices.length ? voices.map(x => '<option value="'+esc(x.voiceURI)+'"'+(x === pickVoice() ? ' selected' : '')+'>'+esc(x.name)+' · '+esc(x.lang)+'</option>').join("") : '<option>Default</option>') + '</select></label>' +
     '<label>Speed · <span id="s-rv">'+Number(v.rate).toFixed(2)+'×</span><input type="range" id="s-rate" min="0.8" max="1.3" step="0.05" value="'+v.rate+'"></label>' +
+    '<div class="mut" style="margin-top:-6px">iOS only lets web pages use its built-in voices. For Jamie or another Premium voice, use the Shortcut option below.</div>' +
+    '<label class="tg"><input type="checkbox" id="s-sc"'+(v.viaSC ? ' checked' : '')+'> Speak with an iPhone voice through Shortcuts</label>' +
+    (v.viaSC ? '<label>Shortcut name<input type="text" id="s-scn" value="'+esc(v.scName)+'" maxlength="40"></label>' : '') +
     '<label class="tg"><input type="checkbox" id="s-skip"'+(v.skipGreet ? ' checked' : '')+'> My alarm Shortcut says the greeting, so skip it here</label>' +
     '<button class="btn ghost" id="s-test">Test the voice</button>' +
-    '<div class="mut">Pace on this phone: '+(c && c.n ? wps().toFixed(2)+' words a second, learned from '+c.n+' play'+(c.n===1?'':'s')+' (last one '+c.last+'s).' : 'not measured yet. The first full play calibrates the 60-second budget.')+
+    '<div class="mut">'+(v.viaSC ? 'Your Shortcut does the talking, so set the voice and speed there. The 60-second budget assumes '+SC_WPS+' words a second.' : 'Pace on this phone: '+(c && c.n ? wps().toFixed(2)+' words a second, learned from '+c.n+' play'+(c.n===1?'':'s')+' (last one '+c.last+'s).' : 'not measured yet. The first full play calibrates the 60-second budget.'))+
     ' Weather uses this phone’s location, which stays on this device.</div>';
   const upd = patch => { save(VKEY, Object.assign(vset(), patch)); paintWake(); renderWriteup(); };
   $("#s-addr").onchange = e => upd({ addr: e.target.value.trim() || "sir" });
   $("#s-voice").onchange = e => upd({ voice: e.target.value });
   $("#s-rate").oninput = e => { $("#s-rv").textContent = Number(e.target.value).toFixed(2) + "×"; upd({ rate: +e.target.value }); };
   $("#s-skip").onchange = e => upd({ skipGreet: e.target.checked });
-  $("#s-test").onclick = () => { try{ speechSynthesis.cancel(); speechSynthesis.speak(utter(greetWord(new Date()) + ", " + (vset().addr || "sir") + ". This is how your briefing will sound.")); }catch(e){} };
+  $("#s-sc").onchange = e => { upd({ viaSC: e.target.checked }); renderSettings(); };
+  if($("#s-scn")) $("#s-scn").onchange = e => upd({ scName: e.target.value.trim() || "Cockpit Voice" });
+  $("#s-test").onclick = () => { const t = greetWord(new Date()) + ", " + (vset().addr || "sir") + ". This is how your briefing will sound.";
+    if(vset().viaSC) return handoff(t);
+    try{ speechSynthesis.cancel(); speechSynthesis.speak(utter(greetWord(new Date()) + ", " + (vset().addr || "sir") + ". This is how your briefing will sound.")); }catch(e){} };
 }
 
 /* ---------- boot ---------- */
