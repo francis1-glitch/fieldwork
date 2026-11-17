@@ -14,7 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>Morning Cockpit</title>
 <style>
-  /* Shared suite identity. A daily driver: priorities you set, this week's standing, the day's brief. */
+  /* Shared suite identity. A wake-up call: tap once, hear the day in a minute, read the full writeup below. */
   :root{
     --bg:#edecea; --surface:#fcfcfb; --surface-2:#e5e4e1; --line:#dad9d4;
     --ink:#19191b; --muted:#84847e; --accent:#19191b; --accent-ink:#fcfcfb;
@@ -33,16 +33,63 @@
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;
     padding:max(18px,env(safe-area-inset-left)) max(18px,env(safe-area-inset-right));
     padding-block:34px calc(env(safe-area-inset-bottom) + 24px)}
-  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
   header{padding:0 2px}
   .eyebrow{font-size:.66rem;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);font-weight:600}
   header h1{font-family:var(--display);font-weight:600;font-size:2.7rem;line-height:.95;letter-spacing:-.01em;margin:.3rem 0 0}
   header .date{margin:.5rem 0 0;color:var(--muted);font-size:.9rem}
 
+  /* Wake-up call */
+  .wake{background:var(--ink);color:var(--bg);border-radius:22px;padding:22px 22px 20px;display:flex;flex-direction:column;gap:14px}
+  .wake .top{display:flex;align-items:center;gap:18px}
+  .wake .k{font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;opacity:.6;font-weight:600}
+  .wake .ttl{font-family:var(--display);font-size:1.75rem;font-weight:600;line-height:1.05;margin-top:2px}
+  .wake .sub{font-size:.82rem;opacity:.72;font-variant-numeric:tabular-nums}
+  .play{flex:0 0 auto;width:74px;height:74px;border-radius:50%;border:none;background:var(--bg);color:var(--ink);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:transform .15s ease}
+  .play:active{transform:scale(.96)}
+  .play svg{width:28px;height:28px}
+  .play.pulse{animation:pulse 1.8s ease-out infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--bg) 55%,transparent)}100%{box-shadow:0 0 0 18px transparent}}
+  @media (prefers-reduced-motion:reduce){ .play.pulse{animation:none} }
+  .wake .now{font-size:.95rem;line-height:1.5;border-top:1px solid color-mix(in srgb,var(--bg) 18%,transparent);padding-top:12px}
+  .wake .long{font-size:.8rem;background:color-mix(in srgb,var(--bg) 12%,transparent);border-radius:12px;padding:8px 12px}
+
   .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;
     box-shadow:0 1px 2px rgba(20,16,10,.03),0 18px 40px -30px rgba(20,16,10,.3)}
   .card h2{font-family:var(--display);font-weight:600;font-size:1.4rem;margin:0;padding:18px 20px 0}
   .card .hint{color:var(--muted);font-size:.78rem;padding:2px 20px 0}
+
+  /* Writeup */
+  .wu{padding:6px 20px 20px;display:flex;flex-direction:column}
+  .sec{padding:14px 0;border-top:1px solid var(--line)}
+  .sec:first-child{border-top:none}
+  .sec>.h{font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
+  .sec p{margin:.2rem 0}
+  .mut{color:var(--muted);font-size:.86rem}
+  .wx{font-family:var(--display);font-size:1.5rem;font-weight:600;line-height:1.15}
+  .wx small{font-family:var(--sans);font-size:.82rem;font-weight:500;color:var(--muted);display:block;margin-top:4px;font-variant-numeric:tabular-nums}
+  .flag{font-size:.86rem;color:var(--behind);font-weight:600;margin-top:4px}
+  .urg2{font-size:.8rem;color:var(--muted);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+  .urg2 b{font-family:var(--display);font-size:1.6rem;letter-spacing:0;color:var(--ink);margin-right:2px}
+  .urg2.hot b{color:var(--behind)}
+  .first{font-size:.98rem;font-weight:600}
+  .first .k{font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-right:6px}
+  .ev{display:flex;gap:14px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line)}
+  .evs{margin-top:8px}
+  .evs .ev:first-child{border-top:none}
+  .ev .t{flex:0 0 auto;width:74px;color:var(--muted);font-size:.8rem;font-variant-numeric:tabular-nums}
+  .ev .ttl{min-width:0}
+  .pri{font-size:.9rem;padding:3px 0}
+  .item{padding:10px 0;border-top:1px dashed var(--line)}
+  .item:first-of-type{border-top:none;padding-top:2px}
+  .item .cat{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;gap:8px;align-items:center}
+  .item .cat .only{letter-spacing:.06em;text-transform:none;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+  .item .rd{margin:.25rem 0 0;font-size:.95rem}
+  .item .why{margin:.3rem 0 0;font-size:.84rem;color:var(--muted)}
+  .item .why b{color:var(--ink);font-weight:600}
+  .item a{font-size:.78rem;color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line);font-weight:600}
+  .doc{display:inline-block;margin-top:2px}
 
   /* Top 3 */
   .todo{display:flex;flex-direction:column;padding:12px 8px 16px}
@@ -71,34 +118,23 @@
   .empty{color:var(--muted);font-size:.88rem;padding:16px 20px 20px;line-height:1.55}
   .empty a,.open{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line);font-weight:600}
 
-  /* Brief */
-  .brief{padding:6px 20px 20px;display:flex;flex-direction:column;gap:10px}
-  .ev{display:flex;gap:14px;align-items:baseline;padding:8px 0;border-top:1px solid var(--line)}
-  .ev:first-child{border-top:none}
-  .ev .t{flex:0 0 auto;width:74px;color:var(--muted);font-size:.8rem;font-variant-numeric:tabular-nums}
-  .ev .ttl{min-width:0}
-  .pri{font-size:.9rem;padding:4px 0}
-
-  /* next up + urgency + private brief */
-  .urg{display:inline-flex;align-items:center;gap:8px;margin-top:12px;font-size:.74rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-  .urg b{font-family:var(--display);font-size:1.5rem;letter-spacing:0;color:var(--ink);line-height:1}
-  .urg.hot b{color:var(--behind)}
-  .next{display:flex;align-items:center;gap:16px;background:var(--ink);color:var(--bg);border-radius:18px;padding:16px 20px}
+  /* next up + private brief */
+  .next{display:flex;align-items:center;gap:16px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:14px 20px}
   .next .l{flex:1;min-width:0}
-  .next .k{font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;opacity:.6;font-weight:600}
-  .next .w{font-size:1.02rem;font-weight:600;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .next .w span{opacity:.6;font-weight:500;margin-right:8px;font-variant-numeric:tabular-nums}
-  .next .in{flex:0 0 auto;font-family:var(--display);font-size:1.7rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
-  .next.clear{background:var(--surface);color:var(--muted);border:1px solid var(--line)}
-  .lock{padding:16px 20px 20px;display:flex;flex-direction:column;gap:12px;font-size:.88rem;color:var(--muted);line-height:1.55}
+  .next .k{font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .next .w{font-size:1rem;font-weight:600;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .next .w span{color:var(--muted);font-weight:500;margin-right:8px;font-variant-numeric:tabular-nums}
+  .next .in{flex:0 0 auto;font-family:var(--display);font-size:1.6rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .next.clear{color:var(--muted)}
+  .lock{padding:4px 0 0;display:flex;flex-direction:column;gap:12px;font-size:.88rem;color:var(--muted);line-height:1.55}
   .lock b{color:var(--ink);font-weight:600}
   .btn{align-self:flex-start;font:inherit;font-size:.86rem;font-weight:600;padding:10px 16px;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--bg);cursor:pointer}
   .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
   .btn:disabled{opacity:.5}
-  .lock input{font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+  .lock input,.set input[type=text],.set select{font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
   .devline{font-size:.72rem;color:var(--muted);padding:0 20px 16px;display:flex;justify-content:space-between;gap:10px}
   .devline button{font:inherit;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0}
-  [hidden]{display:none!important}   /* .next/.urg set display, which beat the hidden attribute (empty black bar) */
+  [hidden]{display:none!important}
   .fw{padding:12px 20px 20px;display:flex;flex-direction:column;gap:12px}
   .fw .mis{background:var(--ink);color:var(--bg);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
   .fw .mis .k{display:flex;justify-content:space-between;gap:10px;font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;opacity:.7;font-weight:600}
@@ -111,6 +147,20 @@
   .fw .ln .v{color:var(--muted);font-weight:500;text-align:right}
   .fw .ln .v.ok{color:var(--lead);font-weight:600}
   .fw .stale{color:var(--muted);font-size:.78rem}
+
+  /* More + settings */
+  details.more{display:flex;flex-direction:column;gap:22px}
+  details.more>summary{list-style:none;cursor:pointer;font-size:.7rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:4px 2px;display:flex;justify-content:space-between}
+  details.more>summary::-webkit-details-marker{display:none}
+  details.more>summary::after{content:"+";font-size:1rem;line-height:1}
+  details.more[open]>summary::after{content:"–"}
+  details.more[open]{gap:22px}
+  details.more .card{margin-top:16px}
+  .set{padding:10px 20px 20px;display:flex;flex-direction:column;gap:14px;font-size:.88rem}
+  .set label{display:flex;flex-direction:column;gap:6px;font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .set label.tg{flex-direction:row;align-items:center;gap:10px;font-size:.88rem;letter-spacing:0;text-transform:none;color:var(--ink);font-weight:500}
+  .set input[type=range]{width:100%;accent-color:var(--ink)}
+  .set .mut{font-size:.8rem}
   footer{color:var(--muted);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;text-align:center;padding-top:2px}
   footer a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
 </style>
@@ -118,40 +168,59 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="eyebrow">Fieldwork</div>
+    <div class="eyebrow">Fieldwork · Morning Cockpit</div>
     <h1 id="greeting">Good morning</h1>
     <div class="date" id="date"></div>
-    <div class="urg" id="urg" hidden></div>
   </header>
+
+  <!-- WAKE-UP CALL -->
+  <section class="wake" aria-label="Wake-up call">
+    <div class="top">
+      <button class="play" id="play" aria-label="Play your briefing"></button>
+      <div>
+        <div class="k">Wake-up call</div>
+        <div class="ttl" id="wakeTtl">Getting your brief…</div>
+        <div class="sub" id="wakeSub"></div>
+      </div>
+    </div>
+    <div class="long" id="wakeLong" hidden></div>
+    <div class="now" id="wakeNow" hidden></div>
+  </section>
 
   <div class="next" id="next" hidden></div>
 
-  <!-- TOP 3 -->
+  <!-- FULL WRITEUP -->
   <div class="card">
-    <h2>Today's three</h2>
-    <div class="hint" id="t3hint">The three that matter. They carry over until you finish them.</div>
-    <div class="todo" id="todo"></div>
+    <h2>Today's writeup</h2>
+    <div id="writeup"></div>
   </div>
 
-  <!-- FIELDWORK -->
-  <div class="card">
-    <h2>Fieldwork today</h2>
-    <div id="fw"></div>
-  </div>
+  <details class="more" id="more">
+    <summary>Priorities · Nemesis · Fieldwork · Voice</summary>
 
-  <!-- NEMESIS -->
-  <div class="card">
-    <h2>This week vs Nemesis</h2>
-    <div id="nem"></div>
-  </div>
+    <div class="card">
+      <h2>Today's three</h2>
+      <div class="hint" id="t3hint">The three that matter. They carry over until you finish them.</div>
+      <div class="todo" id="todo"></div>
+    </div>
 
-  <!-- BRIEF -->
-  <div class="card">
-    <h2>Today's brief</h2>
-    <div id="brief"></div>
-  </div>
+    <div class="card">
+      <h2>This week vs Nemesis</h2>
+      <div id="nem"></div>
+    </div>
 
-  <footer>Cockpit v1.5 · <a href="../builder/">Builder</a> · <a href="../">Fieldwork</a></footer>
+    <div class="card">
+      <h2>Fieldwork today</h2>
+      <div id="fw"></div>
+    </div>
+
+    <div class="card">
+      <h2>Voice and alarm</h2>
+      <div class="set" id="set"></div>
+    </div>
+  </details>
+
+  <footer>Cockpit v2.0 · <a href="../builder/">Builder</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -160,13 +229,14 @@ const $ = s => document.querySelector(s);
 const todayKey = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 function load(key){ try{ return JSON.parse(localStorage.getItem(key) || "null"); }catch(e){ return null; } }
 function save(key,v){ try{ localStorage.setItem(key, JSON.stringify(v)); }catch(e){} }
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const params = new URLSearchParams(location.search);
 
 // Raw GitHub serves committed files instantly (no Pages build). Owner/repo derived from the URL.
 const RAW = (()=>{ const parts = location.pathname.split("/").filter(Boolean).filter(p=>!/\.html$/.test(p));
   const owner = location.hostname.split(".")[0], repo = parts[0] || "";
   return p => "https://raw.githubusercontent.com/"+owner+"/"+repo+"/main/"+p+"?ts="+Date.now(); })();
 async function fetchData(path){
-  // raw first (instant), then the Pages-served copy as a fallback
   for(const url of [RAW(path), "../"+path+"?ts="+Date.now()]){
     try{ const r = await fetch(url, { cache:"no-store" }); if(r.ok) return await r.json(); }catch(e){}
   }
@@ -174,119 +244,274 @@ async function fetchData(path){
 }
 
 /* ---------- header ---------- */
+const greetWord = d => { const h = d.getHours(); return h < 4 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; };
 (function(){
   const h = new Date().getHours();
-  $("#greeting").textContent = h < 5 ? "Still up" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  $("#greeting").textContent = h < 4 ? "Still up" : greetWord(new Date());
   try{ $("#date").textContent = new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"}); }catch(e){}
 })();
 
-/* ---------- Top 3 (carries over; checking one off clears it, with a short undo) ---------- */
-const TKEY = "cockpit.top3";
-const T3HINT = "The three that matter. They carry over until you finish them.";
-function blank(){ return {t:"",d:false}; }
-function getTop3(){
-  let s = load(TKEY);
-  if(!s || !Array.isArray(s.items)) s = { date: todayKey(), items:[blank(),blank(),blank()], done:[] };
-  if(s.date !== todayKey()){
-    // new day: keep unfinished, clear finished, roll the date
-    const keep = s.items.filter(i => i.t.trim() && !i.d).map(i => ({t:i.t,d:false}));
-    while(keep.length < 3) keep.push(blank());
-    s = { date: todayKey(), items: keep.slice(0,3), done:[] };   // prefilled marker resets with the day
-    save(TKEY,s);
+/* ================= WAKE-UP CALL =================
+   Spoken in under 60 seconds. It runs longer only when the brief flags something very important
+   (wake.override), and never past 90. If the script is over budget, the lowest-priority lines are
+   cut and stay in the written version. Order of what goes first:
+   Knicks → Nemesis → your field → markets → extra world stories → extra local / heads-up items.
+   Greeting, weather, urgency, first move and today's schedule are never cut. */
+const W = { state:"loading", brief:null, raw:null, weather:null, nem:null, tasks:null, fit:null };
+const VKEY = "cockpit.voice", CALKEY = "cockpit.wps", PLAYKEY = "cockpit.played", LKEY = "cockpit.loc";
+const vset = () => Object.assign({ rate:1, voice:"", skipGreet:false, addr:"sir" }, load(VKEY) || {});
+const wps = () => { const c = load(CALKEY); return c && c.wps > 1.6 && c.wps < 4.5 ? c.wps : 2.5; };   // words per second at speed 1, learned on this phone
+const words = t => String(t || "").trim().split(/\s+/).filter(Boolean).length;
+const endDot = t => { t = String(t || "").trim(); return /[.!?]$/.test(t) ? t : t + "."; };
+const CATS = { local:"Where you are", global:"World", markets:"Markets", field:"Your field", knicks:"Knicks" };
+const CATORD = ["local","global","markets","field","knicks"];
+const timeSay = d => { const h = d.getHours() % 12 || 12, m = d.getMinutes(); return m ? h + ":" + String(m).padStart(2,"0") : h + " o'clock"; };
+const dateSay = d => d.toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" });
+const hourSay = h => h === 0 ? "midnight" : h === 12 ? "noon" : (h % 12) + (h < 12 ? " AM" : " PM");
+
+/* ----- weather: this phone's location, never written to the repo ----- */
+const COND = c => c === 0 ? "clear" : c <= 2 ? "partly cloudy" : c === 3 ? "cloudy" : c <= 48 ? "foggy" : c <= 57 ? "drizzly" : c <= 67 ? "rainy" : c <= 77 ? "snowy" : c <= 82 ? "showery" : c <= 86 ? "snowy" : "stormy";
+const PKIND = c => c >= 95 ? "storms" : ((c >= 71 && c <= 77) || c === 85 || c === 86) ? "snow" : ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) ? "rain" : null;
+function wxRead(j, city){
+  const cur = j.current || {}, H = j.hourly || {}, D = j.daily || {}, T = H.time || [];
+  const nowH = String(cur.time || "").slice(0,13), today = (D.time || [])[0] || nowH.slice(0,10);
+  let i0 = T.findIndex(t => t.slice(0,13) >= nowH); if(i0 < 0) i0 = 0;
+  const rest = [], night = [];
+  for(let i = i0; i < T.length; i++){
+    const t = T[i], h = +t.slice(11,13);
+    if(t.slice(0,10) === today) rest.push({ h, p:H.precipitation_probability?.[i] ?? 0, c:H.weather_code?.[i] ?? 0, g:H.wind_gusts_10m?.[i] ?? 0 });
+    if(t.slice(0,10) > today && h > 7) break;
+    night.push(H.temperature_2m?.[i]);
   }
-  if(!Array.isArray(s.done)) s.done = [];
-  // older builds kept checked items in place: clear them out now
-  if(s.items.some(i => i.d)){
-    s.items.filter(i => i.d && i.t.trim()).forEach(i => s.done.push(i.t));
-    s.items = s.items.filter(i => !i.d); while(s.items.length < 3) s.items.push(blank()); save(TKEY,s);
+  const now = Math.round(cur.temperature_2m), hi = Math.round(D.temperature_2m_max?.[0]);
+  const lows = night.filter(Number.isFinite), lo = lows.length ? Math.round(Math.min(...lows)) : Math.round(D.temperature_2m_min?.[0]);
+  const ex = [], wet = x => x.p >= 50 && PKIND(x.c);
+  if(rest.length){
+    if(wet(rest[0])){ const k = PKIND(rest[0].c), dry = rest.find(x => x.p < 40); ex.push(dry ? k + " until about " + hourSay(dry.h) : k + " on and off all day"); }
+    else { const w = rest.find(wet); if(w) ex.push(PKIND(w.c) + " likely after " + hourSay(w.h)); }
   }
-  return s;
+  if(Number.isFinite(lo) && lo <= 32) ex.push("below freezing tonight, down to " + lo);
+  const gust = Math.max(0, ...rest.map(x => x.g || 0)); if(gust >= 35) ex.push("gusts up to " + Math.round(gust));
+  if(hi >= 92) ex.push("hot, up to " + hi);
+  const extras = ex.slice(0,2), cond = COND(cur.weather_code);
+  if(!Number.isFinite(now)) return { err:"fetch", city };
+  const say = (city ? city + " is " : "It's ") + now + " and " + cond + (Number.isFinite(hi) && hi > now ? ", high of " + hi : "") +
+    (extras.length ? ", " + extras.join(", and ") : "") + ".";
+  return { city, now, hi, lo, cond, extras, say };
 }
-let undoTimer = null;
-function setHint(s, last){
-  const h = $("#t3hint"); clearTimeout(undoTimer);
-  if(last){
-    h.innerHTML = 'Done: ' + esc(last.t) + '<button class="undo" id="undo">Undo</button>';
-    $("#undo").onclick = () => {
-      const st = getTop3(); const ix = st.done.lastIndexOf(last.t); if(ix > -1) st.done.splice(ix,1);
-      const filled = st.items.filter(x => x.t.trim());
-      filled.splice(Math.min(last.i, filled.length), 0, {t:last.t,d:false});
-      while(filled.length < 3) filled.push(blank());
-      st.items = filled;
-      save(TKEY, st); renderTop3(); setHint(st);
-    };
-    undoTimer = setTimeout(() => setHint(getTop3()), 6000);
-    return;
-  }
-  const n = s.done.length;
-  h.textContent = n ? n + " knocked out today. " + (s.items.some(i => i.t.trim()) ? "Keep going." : "All clear.") : T3HINT;
-}
-function finish(i, row){
-  const s = getTop3(), it = s.items[i]; if(!it || !it.t.trim()) return;
-  row.classList.add("done"); row.querySelector(".box").classList.add("done");
-  setTimeout(() => row.classList.add("gone"), 450);
-  setTimeout(() => {
-    const st = getTop3(), t = st.items[i] ? st.items[i].t : it.t;
-    st.items.splice(i,1); st.items.push(blank()); st.done.push(t); save(TKEY, st);
-    renderTop3(); setHint(st, { t, i });
-  }, 1000);
-}
-function renderTop3(){
-  const s = getTop3(), box = $("#todo"); box.innerHTML = "";
-  s.items.forEach((it,i) => {
-    const row = document.createElement("div"); row.className = "row";
-    const chk = document.createElement("button"); chk.className = "box"; chk.setAttribute("aria-label","Mark done");
-    chk.onclick = () => { if(row.classList.contains("done")) return; finish(i, row); };
-    const inp = document.createElement("input"); inp.type = "text"; inp.value = it.t; inp.placeholder = "Priority " + (i+1); inp.maxLength = 90;
-    inp.oninput = () => { const st = getTop3(); st.items[i].t = inp.value; save(TKEY,st); };
-    row.append(chk, inp); box.append(row);
+function getPos(){
+  return new Promise(res => {
+    if(!navigator.geolocation) return res(null);
+    let done = false; const fin = v => { if(!done){ done = true; res(v); } };
+    setTimeout(() => fin(null), 7000);
+    navigator.geolocation.getCurrentPosition(p => fin({ lat:+p.coords.latitude.toFixed(3), lon:+p.coords.longitude.toFixed(3) }), () => fin(null),
+      { maximumAge:30*60e3, timeout:6500, enableHighAccuracy:false });
   });
 }
-
-/* ---------- This week vs Nemesis (reads nemesis.summary) ---------- */
-function fmtLeft(ms){
-  if(ms<=0) return "locks soon";
-  const d=Math.floor(ms/864e5), h=Math.floor(ms%864e5/36e5);
-  return (d? d+"d ":"") + h + "h left this week";
-}
-async function renderNemesis(){
-  const box = $("#nem");
-  // repo file first (works on any device), then same-device localStorage
-  let s = await fetchData("data/nemesis.json");
-  if(!s) s = load("nemesis.summary");
-  if(!s){
-    box.className=""; box.innerHTML =
-      '<div class="empty">Open <a href="../nemesis/">Nemesis</a> and turn on Cross-device sync in its settings, and your standing — plus what you still owe this week — shows up here on any device.</div>';
-    return;
+const km = (a,b) => 111 * Math.hypot(a.lat - b.lat, (a.lon - b.lon) * Math.cos(a.lat * Math.PI / 180));
+async function loadWeather(){
+  let pos = await getPos(); const last = load(LKEY); let source = "live";
+  if(!pos && last){ pos = { lat:last.lat, lon:last.lon }; source = "last"; }
+  if(!pos) return { err:"noloc" };
+  let city = last && km(last, pos) < 10 ? last.city || "" : "";
+  if(!city){
+    try{ const r = await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude="+pos.lat+"&longitude="+pos.lon+"&localityLanguage=en");
+      const j = await r.json(); city = j.city || j.locality || j.principalSubdivision || ""; }catch(e){}
   }
-  const behind = (s.tracks||[]).filter(t => t.state === "behind");
-  let owe;
-  if(s.pre) owe = '<div class="owe-none">Preseason — nothing owed yet.</div>';
-  else if(!behind.length) owe = '<div class="owe-none">Ahead or even on every track. Keep it there.</div>';
-  else owe = '<div class="owe">' + behind.map(t => '<span class="chip behind">'+t.name+'</span>').join("") + '</div>';
-  const title = s.pre ? "Preseason" : "Season "+s.season+" · Week "+s.week+" of "+s.len;
-  box.innerHTML =
-    '<div class="standing">' +
-      '<div class="vs"><span>'+s.youWins+'</span><span class="mid">You · Nemesis</span><span>'+s.nemWins+'</span></div>' +
-      '<div class="meta">'+title+' · '+fmtLeft(s.closeMs)+'</div>' +
-      owe +
-      '<div style="margin-top:14px"><a class="open" href="../nemesis/">Open Nemesis</a></div>' +
-    '</div>';
+  save(LKEY, { lat:pos.lat, lon:pos.lon, city, at:Date.now() });
+  try{
+    const r = await fetch("https://api.open-meteo.com/v1/forecast?latitude="+pos.lat+"&longitude="+pos.lon+
+      "&current=temperature_2m,weather_code&hourly=temperature_2m,precipitation_probability,weather_code,wind_gusts_10m"+
+      "&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=2");
+    if(!r.ok) throw 0;
+    return Object.assign(wxRead(await r.json(), city), { source });
+  }catch(e){ return { err:"fetch", city }; }
 }
 
-/* ---------- Today's brief: sealed so only your devices can read it ----------
+/* ----- status lines: only when something's off ----- */
+function nemBehind(){
+  const s = W.nem; if(!s || s.pre) return "";
+  const left = (s.closeMs || 0) - (Date.now() - (s.updatedAt || Date.now()));
+  const behind = (s.tracks || []).filter(t => t.state === "behind").map(t => t.name);
+  if(!behind.length || left <= 0) return "";
+  const days = Math.ceil(left / 864e5), list = behind.length > 1 ? behind.slice(0,-1).join(", ") + " and " + behind.slice(-1) : behind[0];
+  return "You're behind Nemesis on " + list + ", with " + days + " day" + (days === 1 ? "" : "s") + " left.";
+}
+function tasksFailed(){
+  const t = W.tasks; if(!t || !Array.isArray(t.tasks)) return [];
+  // same reading as Mission Control: a finished run whose status isn't SUCCEEDED, in the last 36 hours
+  return t.tasks.filter(x => {
+    const st = String(x.lastStatus || "").replace(/^ROUTINE_RUN_STATUS_/, "");
+    return x.enabled !== false && !/mission control/i.test(x.name) && x.lastFired && Date.now() - Date.parse(x.lastFired) < 36*36e5 &&
+      st && st !== "SUCCEEDED" && !/RUNNING|PROGRESS|PENDING|QUEUED/.test(st);
+  }).map(x => x.name);
+}
+function lockedSay(){
+  return ({ nokey:"Your brief is sealed on this device. Turn it on in Cockpit to hear it.",
+    notyet:"This device was just turned on, so your brief unlocks with tomorrow's.",
+    none:"No brief has been published yet.", bad:"I couldn't unlock today's brief." })[W.state] || "";
+}
+// "9:00 AM" -> minutes after midnight
+function mins(t){ const m=/^(\d{1,2}):(\d{2})\s*([AP]M)$/i.exec(String(t||"").trim()); if(!m) return null; let h=+m[1]%12; if(/p/i.test(m[3])) h+=12; return h*60+ +m[2]; }
+function scheduleSay(br){
+  const ev = (br.events || []); if(!ev.length) return "Calendar's clear.";
+  const nm = new Date().getHours()*60 + new Date().getMinutes();
+  const left = ev.filter(e => { const m = mins(e.time); return m == null || m >= nm - 5; });
+  if(!left.length) return "Nothing else on the calendar today.";
+  const say = e => (mins(e.time) != null ? e.time.replace(":00","").replace(/\s*([AP])M/i," $1M") + ", " : "") + e.title;
+  return "On the calendar: " + left.slice(0,4).map(say).join("; ") + (left.length > 4 ? "; and " + (left.length - 4) + " more." : ".");
+}
+
+/* ----- build the script, then fit it to the time limit ----- */
+function buildSegs(){
+  const v = vset(), now = new Date(), segs = [];
+  const add = (id, p, say, x) => { say = String(say || "").trim(); if(say) segs.push(Object.assign({ id, p, say, w:words(say) }, x || {})); };
+  if(!(v.skipGreet || params.get("greeted") === "1")) add("greet", 0, greetWord(now) + ", " + (v.addr || "sir") + ". It's " + timeSay(now) + " on " + dateSay(now) + ".");
+  if(W.weather && W.weather.say) add("weather", 0, W.weather.say);
+  const br = W.brief, fresh = W.state === "open" && br && br.date === todayKey(), wk = fresh ? (br.wake || {}) : {};
+  if(W.state !== "open") add("nobrief", 0, lockedSay());
+  else if(!fresh) add("nobrief", 0, "Today's brief isn't in yet.");
+  else {
+    if(br.urgency) add("urg", 0, "Today's urgency is " + br.urgency.score + " out of 10." + (wk.first ? " First up: " + endDot(wk.first) : ""));
+    else if(wk.first) add("urg", 0, "First up: " + endDot(wk.first));
+    add("today", 0, wk.today ? endDot(wk.today) : scheduleSay(br));
+    (wk.ahead || []).forEach((a,i) => add("ahead"+i, i ? 2 : 1, (i ? "" : "Heads up: ") + endDot(a.say)));
+  }
+  tasksFailed().forEach((n,i) => add("task"+i, 1, "The " + n + " task failed its last run."));
+  add("nem", 6, nemBehind());
+  if(fresh){
+    const world = (wk.world || []).map((x,i) => Object.assign({ i }, x)).sort((a,b) => CATORD.indexOf(a.cat) - CATORD.indexOf(b.cat) || a.i - b.i);
+    const seen = {};
+    world.forEach(x => { const n = seen[x.cat] = (seen[x.cat] || 0) + 1;
+      const p = x.cat === "local" ? (n === 1 ? 1 : 2) : x.cat === "global" ? (n === 1 ? 2 : 3) : x.cat === "markets" ? 4 : x.cat === "field" ? 5 : 7;
+      add("w"+x.i, p, endDot(x.say), { world:x.i }); });
+    if(!world.length) add("quiet", 7, "Quiet news day.");
+  }
+  add("bye", 0, "That's the brief.");
+  return segs;
+}
+function fitSegs(segs){
+  const br = W.brief, wk = W.state === "open" && br && br.date === todayKey() ? (br.wake || {}) : {};
+  const over = !!wk.override, limit = over ? 90 : 60, speed = wps() * (vset().rate || 1);
+  const keep = segs.map(s => Object.assign({}, s)), cut = [];
+  const est = () => (keep.reduce((s,x) => s + x.w, 0) + (keep.some(x => x.world != null) ? 3 : 0)) / speed;
+  while(est() > limit){
+    let worst = -1;
+    keep.forEach((x,i) => { if(x.p > 0 && (worst < 0 || x.p >= keep[worst].p)) worst = i; });   // lowest priority, last one first
+    if(worst < 0) break;
+    cut.push(keep.splice(worst, 1)[0]);
+  }
+  const fw = keep.find(x => x.world != null); if(fw){ fw.say = "In the news: " + fw.say; fw.w += 3; }
+  return { keep, cut, secs:Math.round(est()), limit, over, why:wk.override || "" };
+}
+
+/* ----- speak it ----- */
+let speaking = false, t0 = 0, voices = [];
+function loadVoices(){ try{ voices = (speechSynthesis.getVoices() || []).filter(v => /^en/i.test(v.lang)); }catch(e){ voices = []; } }
+function pickVoice(){
+  const want = vset().voice; if(!voices.length) loadVoices();
+  return voices.find(v => v.voiceURI === want) || voices.find(v => /premium/i.test(v.name) && /en-US/i.test(v.lang)) ||
+    voices.find(v => /enhanced/i.test(v.name) && /en-US/i.test(v.lang)) || voices.find(v => /samantha/i.test(v.name)) ||
+    voices.find(v => /en-US/i.test(v.lang)) || voices[0] || null;
+}
+function utter(text){ const v = vset(), u = new SpeechSynthesisUtterance(text), vc = pickVoice(); if(vc){ u.voice = vc; u.lang = vc.lang; } else u.lang = "en-US"; u.rate = v.rate || 1; return u; }
+function play(){
+  const ss = window.speechSynthesis;
+  if(!ss){ $("#wakeSub").textContent = "This browser can't speak. Read the writeup below."; return; }
+  if(speaking){ speaking = false; ss.cancel(); paintWake(); return; }
+  W.fit = fitSegs(buildSegs());            // rebuilt at the tap so the spoken time is exact
+  const list = W.fit.keep; if(!list.length) return;
+  ss.cancel(); speaking = true; t0 = 0;
+  list.forEach((sg, ix) => {                 // queued inside the tap: iOS only allows speech that starts from a tap
+    const u = utter(sg.say);
+    u.onstart = () => { if(!t0) t0 = performance.now(); const n = $("#wakeNow"); n.hidden = false; n.textContent = sg.say; };
+    u.onend = () => { if(ix === list.length - 1) finish(true); };
+    u.onerror = () => { if(ix === list.length - 1) finish(false); };
+    ss.speak(u);
+  });
+  paintWake();
+}
+function finish(ok){
+  if(!speaking) return; speaking = false;
+  const secs = t0 ? (performance.now() - t0) / 1000 : 0;
+  if(ok && secs > 8){
+    const spoken = W.fit.keep.reduce((s,x) => s + x.w, 0), m = spoken / secs / (vset().rate || 1), c = load(CALKEY);
+    save(CALKEY, { wps: c && c.wps ? c.wps * 0.6 + m * 0.4 : m, n:(c && c.n || 0) + 1, last:Math.round(secs) });
+    save(PLAYKEY, { date:todayKey(), at:Date.now(), secs:Math.round(secs) });
+  }
+  $("#wakeNow").hidden = true; paintWake(); renderWriteup();
+}
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>';
+const ICON_STOP = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>';
+function paintWake(){
+  const b = $("#play"), played = load(PLAYKEY), playedToday = played && played.date === todayKey();
+  b.innerHTML = speaking ? ICON_STOP : ICON_PLAY; b.setAttribute("aria-label", speaking ? "Stop" : "Play your briefing");
+  const morning = new Date().getHours() >= 4 && new Date().getHours() < 12;
+  b.classList.toggle("pulse", !speaking && !playedToday && (params.get("wake") === "1" || morning) && W.state !== "loading");
+  if(speaking){ $("#wakeTtl").textContent = "Playing…"; $("#wakeSub").textContent = "Tap to stop"; return; }
+  if(W.state === "loading"){ $("#wakeTtl").textContent = "Getting your brief…"; $("#wakeSub").textContent = ""; return; }
+  W.fit = fitSegs(buildSegs());
+  const f = W.fit, n = f.cut.length;
+  $("#wakeTtl").textContent = playedToday ? "Play it again" : (params.get("wake") === "1" ? "Tap to hear your day" : "Your briefing");
+  $("#wakeSub").textContent = "About " + f.secs + " seconds" + (n ? " · " + n + " item" + (n === 1 ? "" : "s") + " in the writeup only" : "") +
+    (playedToday ? " · played at " + new Date(played.at).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" }) : "");
+  const L = $("#wakeLong"); L.hidden = !f.over; if(f.over) L.textContent = "Running long today: " + f.why;
+}
+
+/* ----- the full writeup ----- */
+const sec = (h, body, right) => '<div class="sec"><div class="h"><span>' + h + '</span>' + (right ? '<span>' + right + '</span>' : '') + '</div>' + body + '</div>';
+const whenTxt = d => { try{ const [y,m,dd] = d.split("-").map(Number); return new Date(y,m-1,dd).toLocaleDateString(undefined,{ weekday:"short", month:"short", day:"numeric" }); }catch(e){ return d; } };
+function wxHTML(w){
+  if(!w) return '<p class="mut">Checking the weather…</p>';
+  if(w.err === "noloc") return '<p class="mut">Allow location for Cockpit to get the weather where you are. It stays on this phone.</p>';
+  if(w.err) return '<p class="mut">Couldn’t reach the weather service. Try again in a bit.</p>';
+  return '<div class="wx">' + w.now + '° and ' + esc(w.cond) + '<small>' + esc(w.city || "Your location") +
+    (Number.isFinite(w.hi) ? ' · high ' + w.hi + '°' : '') + (Number.isFinite(w.lo) ? ' · low ' + w.lo + '°' : '') +
+    (w.source === "last" ? ' · last known location' : '') + '</small></div>' +
+    w.extras.map(x => '<div class="flag">' + esc(x.charAt(0).toUpperCase() + x.slice(1)) + '</div>').join("");
+}
+function renderWriteup(){
+  const box = $("#writeup"), br = W.brief, fresh = W.state === "open" && br && br.date === todayKey(), wk = fresh ? (br.wake || {}) : {};
+  const cut = new Set((W.fit ? W.fit.cut : []).map(x => x.world).filter(x => x != null));
+  let h = '<div class="wu">' + sec("Weather", wxHTML(W.weather));
+  if(W.state === "loading") h += sec("Today", '<p class="mut">Loading…</p>');
+  else if(W.state !== "open") h += sec("Today", lockHTML());
+  else {
+    let t = fresh ? '' : '<p class="mut">This is the latest brief (' + esc(br.date) + '). Today’s lands after the 6:17 AM run.</p>';
+    if(br.urgency) t += '<div class="urg2' + (br.urgency.score >= 7 ? ' hot' : '') + '"><b>' + esc(br.urgency.score) + '</b>/10 · ' + esc(br.urgency.label || "") + '</div>';
+    if(wk.first) t += '<p class="first"><span class="k">First up</span>' + esc(wk.first) + '</p>';
+    const ev = br.events || [], pr = br.priorities || [];
+    t += ev.length ? '<div class="evs">' + ev.map(e => '<div class="ev"><div class="t">' + esc(e.time || "All day") + '</div><div class="ttl">' + esc(e.title) + '</div></div>').join("") + '</div>'
+                   : '<p class="mut">Calendar’s clear.</p>';
+    if(pr.length) t += '<div style="margin-top:8px">' + pr.map(p => '<div class="pri">• ' + esc(p) + '</div>').join("") + '</div>';
+    h += sec("Today", t);
+    if((wk.ahead || []).length) h += sec("Next 7 days", wk.ahead.map(a => '<p>' + (a.when ? '<b>' + esc(whenTxt(a.when)) + '</b> · ' : '') + esc(a.read || a.say) + '</p>').join(""));
+  }
+  const status = tasksFailed().map(n => '<p class="flag">The ' + esc(n) + ' task failed its last run.</p>').join("") + (nemBehind() ? '<p class="flag">' + esc(nemBehind()) + '</p>' : '');
+  if(status) h += sec("Needs attention", status);
+  if(fresh){
+    const world = (wk.world || []).map((x,i) => Object.assign({ i }, x)).sort((a,b) => CATORD.indexOf(a.cat) - CATORD.indexOf(b.cat) || a.i - b.i);
+    h += sec("The world", world.length ? world.map(x => '<div class="item"><div class="cat"><span>' + esc(CATS[x.cat] || "World") + '</span>' +
+        (cut.has(x.i) ? '<span class="only">Writeup only</span>' : '') + '</div><p class="rd">' + esc(x.read || x.say) + '</p>' +
+        (x.why ? '<p class="why"><b>Why it matters:</b> ' + esc(x.why) + '</p>' : '') +
+        (x.url ? '<a href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.src || "Source") + ' ↗</a>' : (x.src ? '<span class="mut">' + esc(x.src) + '</span>' : '')) + '</div>').join("")
+      : '<p class="mut">Quiet news day. Nothing cleared the bar.</p>', wk.place ? esc(wk.place) : "");
+    if(wk.docUrl) h += sec("Full brief", '<a class="open doc" href="' + esc(wk.docUrl) + '" target="_blank" rel="noopener">Open today’s Morning Brief doc</a>');
+  }
+  box.innerHTML = h + '</div>' + devLine();
+  bindLock();
+}
+
+/* ---------- sealed brief: only your devices can read it ----------
    The repo is public, so the Morning Brief encrypts brief.json to each device you turn on here.
-   Each device makes its own key pair; only the PUBLIC half is published (data/cockpit-keys.json).
-   The private half never leaves this device. Old plaintext briefs (v1) still display. */
+   Each device makes its own key pair; only the PUBLIC half is published (data/cockpit-keys.json). */
 const KEYSTORE = "cockpit.key";
 const b64 = u => { let s=""; const a=new Uint8Array(u); for(let i=0;i<a.length;i+=0x8000) s+=String.fromCharCode.apply(null,a.subarray(i,i+0x8000)); return btoa(s); };
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const REPO = (()=>{ const parts = location.pathname.split("/").filter(Boolean).filter(p=>!/\.html$/.test(p));
   return { owner: location.hostname.split(".")[0], repo: parts[0] || "" }; })();
 const ghToken = () => { try{ return localStorage.getItem("cockpit.gh") || localStorage.getItem("nemesis.gh") || localStorage.getItem("palate.gh") || ""; }catch(e){ return ""; } };
 const devLabel = () => { const u=navigator.userAgent; return /iPhone/.test(u)?"iPhone":/iPad/.test(u)?"iPad":/Android/.test(u)?"Android":/Windows/.test(u)?"Windows PC":/Mac/.test(u)?"Mac":"This device"; };
-
 async function ghKeys(method, body, sha){
   const url = `https://api.github.com/repos/${REPO.owner}/${REPO.repo}/contents/data/cockpit-keys.json`;
   const r = await fetch(url + (method==="GET" ? "?ref=main&ts="+Date.now() : ""), { method, cache:"no-store",
@@ -327,26 +552,114 @@ async function unseal(b){
   const pt = await crypto.subtle.decrypt({ name:"AES-GCM", iv:unb64(b.iv) }, aes, unb64(b.ct));
   return { state:"open", brief: JSON.parse(new TextDecoder().decode(pt)) };
 }
+function devLine(){ const k = load(KEYSTORE); return k ? '<div class="devline"><span>Private brief on · '+esc(k.label)+'</span><button id="forget">Turn off on this device</button></div>' : ""; }
+function lockHTML(){
+  const b = W.raw || {};
+  if(W.state === "none") return '<p class="mut">No brief published yet. The Morning Brief runs at 6:17 AM and lands here sealed.</p>';
+  if(W.state === "nokey"){
+    const tok = ghToken();
+    return '<div class="lock"><div><b>Your brief is sealed.</b> The repo is public, so it’s encrypted and only devices you turn on can read it'+(b.date?' (latest: '+esc(b.date)+(b.n!=null?', '+b.n+' events':'')+')':'')+'.</div>'+
+      (tok?'':'<input id="tok" type="password" autocomplete="off" placeholder="Paste your GitHub token (stays on this device)">')+
+      '<button class="btn" id="enable">Turn on this device</button><div style="font-size:.78rem">Creates a key on this device and publishes only its public half. Briefs sealed after this unlock here.</div></div>';
+  }
+  if(W.state === "notyet") return '<div class="lock"><div><b>This device is on.</b> The latest brief ('+esc(b.date)+') was sealed before it was added, so it unlocks with the next one (6:17 AM).</div></div>';
+  return '<div class="lock"><div><b>Couldn’t unlock this brief.</b> If you reset this device’s key, turn it off and on again; the next brief will unlock.</div></div>';
+}
+let busy = false;
+function bindLock(){
+  const en = $("#enable");
+  if(en) en.onclick = async () => {
+    if(busy) return; const t = $("#tok"); if(t){ const v=t.value.trim(); if(!/^(github_pat_|ghp_)/.test(v)){ t.focus(); return; } try{ localStorage.setItem("cockpit.gh", v); }catch(e){} }
+    busy = true; en.disabled = true; en.textContent = "Turning on…";
+    try{ await enableDevice(); busy=false; loadBrief(); }
+    catch(e){ busy=false; en.disabled=false; en.textContent = e.fatal ? "GitHub refused the token · retry" : "Couldn’t reach GitHub · retry"; }
+  };
+  const f = $("#forget");
+  if(f) f.onclick = async () => { if(!confirm("Turn off the private brief on this device? Its key is deleted and future briefs won’t be sealed for it.")) return; try{ await forgetDevice(); }catch(e){ alert("Couldn’t reach GitHub. Try again."); return; } loadBrief(); };
+}
+async function loadBrief(){
+  const b = await fetchData("data/brief.json"), k = load(KEYSTORE);
+  W.raw = b;
+  if(!b){ W.state = "none"; W.brief = null; }
+  else if(b.v !== 2){ W.state = "open"; W.brief = b; }                 // legacy plaintext
+  else {
+    let r; try{ r = b.locked ? { state: k ? "notyet" : "nokey" } : await unseal(b); }catch(e){ r = { state:"bad" }; }
+    W.state = r.state; W.brief = r.state === "open" ? r.brief : null;
+  }
+  paintWake(); renderWriteup(); renderNext(W.brief); prefillTop3(W.brief);
+}
 
-// "9:00 AM" -> minutes after midnight
-function mins(t){ const m=/^(\d{1,2}):(\d{2})\s*([AP]M)$/i.exec(String(t||"").trim()); if(!m) return null; let h=+m[1]%12; if(/p/i.test(m[3])) h+=12; return h*60+ +m[2]; }
 function renderNext(br){
   const el = $("#next"), now = new Date(), nm = now.getHours()*60+now.getMinutes();
   if(!br || br.date !== todayKey()){ el.hidden = true; return; }
   const timed = (br.events||[]).map(e=>({e, m:mins(e.time)})).filter(x=>x.m!=null).sort((a,b)=>a.m-b.m);
   const nx = timed.find(x=>x.m >= nm-5);
+  if(!nx){ el.hidden = true; return; }
   el.hidden = false;
-  if(!nx){ el.className="next clear"; el.innerHTML='<div class="l"><div class="k">Next up</div><div class="w">'+(timed.length?"Nothing else on the calendar today.":"No timed events today.")+'</div></div>'; return; }
   const d = nx.m - nm, inTxt = d<=0 ? "now" : d<60 ? d+"m" : Math.floor(d/60)+"h"+(d%60?" "+d%60+"m":"");
   el.className="next"; el.innerHTML='<div class="l"><div class="k">Next up</div><div class="w"><span>'+esc(nx.e.time)+'</span>'+esc(nx.e.title)+'</div></div><div class="in">'+(d<=0?"now":"in "+inTxt)+'</div>';
 }
-function renderUrgency(br){
-  const el = $("#urg");
-  if(!br || br.date !== todayKey() || !br.urgency){ el.hidden = true; return; }
-  el.hidden = false; el.className = "urg" + (br.urgency.score>=7 ? " hot" : "");
-  el.innerHTML = 'Urgency <b>'+esc(br.urgency.score)+'</b>'+esc(br.urgency.label||"");
+
+/* ---------- Top 3 (carries over; checking one off clears it, with a short undo) ---------- */
+const TKEY = "cockpit.top3";
+const T3HINT = "The three that matter. They carry over until you finish them.";
+function blank(){ return {t:"",d:false}; }
+function getTop3(){
+  let s = load(TKEY);
+  if(!s || !Array.isArray(s.items)) s = { date: todayKey(), items:[blank(),blank(),blank()], done:[] };
+  if(s.date !== todayKey()){
+    const keep = s.items.filter(i => i.t.trim() && !i.d).map(i => ({t:i.t,d:false}));
+    while(keep.length < 3) keep.push(blank());
+    s = { date: todayKey(), items: keep.slice(0,3), done:[] };
+    save(TKEY,s);
+  }
+  if(!Array.isArray(s.done)) s.done = [];
+  if(s.items.some(i => i.d)){
+    s.items.filter(i => i.d && i.t.trim()).forEach(i => s.done.push(i.t));
+    s.items = s.items.filter(i => !i.d); while(s.items.length < 3) s.items.push(blank()); save(TKEY,s);
+  }
+  return s;
 }
-// Today's three: if you haven't written any yet today, start from the brief's priorities
+let undoTimer = null;
+function setHint(s, last){
+  const h = $("#t3hint"); clearTimeout(undoTimer);
+  if(last){
+    h.innerHTML = 'Done: ' + esc(last.t) + '<button class="undo" id="undo">Undo</button>';
+    $("#undo").onclick = () => {
+      const st = getTop3(); const ix = st.done.lastIndexOf(last.t); if(ix > -1) st.done.splice(ix,1);
+      const filled = st.items.filter(x => x.t.trim());
+      filled.splice(Math.min(last.i, filled.length), 0, {t:last.t,d:false});
+      while(filled.length < 3) filled.push(blank());
+      st.items = filled;
+      save(TKEY, st); renderTop3(); setHint(st);
+    };
+    undoTimer = setTimeout(() => setHint(getTop3()), 6000);
+    return;
+  }
+  const n = s.done.length;
+  h.textContent = n ? n + " knocked out today. " + (s.items.some(i => i.t.trim()) ? "Keep going." : "All clear.") : T3HINT;
+}
+function finishTodo(i, row){
+  const s = getTop3(), it = s.items[i]; if(!it || !it.t.trim()) return;
+  row.classList.add("done"); row.querySelector(".box").classList.add("done");
+  setTimeout(() => row.classList.add("gone"), 450);
+  setTimeout(() => {
+    const st = getTop3(), t = st.items[i] ? st.items[i].t : it.t;
+    st.items.splice(i,1); st.items.push(blank()); st.done.push(t); save(TKEY, st);
+    renderTop3(); setHint(st, { t, i });
+  }, 1000);
+}
+function renderTop3(){
+  const s = getTop3(), box = $("#todo"); box.innerHTML = "";
+  s.items.forEach((it,i) => {
+    const row = document.createElement("div"); row.className = "row";
+    const chk = document.createElement("button"); chk.className = "box"; chk.setAttribute("aria-label","Mark done");
+    chk.onclick = () => { if(row.classList.contains("done")) return; finishTodo(i, row); };
+    const inp = document.createElement("input"); inp.type = "text"; inp.value = it.t; inp.placeholder = "Priority " + (i+1); inp.maxLength = 90;
+    inp.oninput = () => { const st = getTop3(); st.items[i].t = inp.value; save(TKEY,st); };
+    row.append(chk, inp); box.append(row);
+  });
+}
 function prefillTop3(br){
   if(!br || br.date !== todayKey() || !(br.priorities||[]).length) return;
   const s = getTop3();
@@ -355,49 +668,33 @@ function prefillTop3(br){
   s.prefilled = todayKey(); save(TKEY, s); renderTop3();
   $("#t3hint").textContent = "Started from your brief’s priorities. Edit freely; unfinished ones carry over.";
 }
-function briefHTML(br){
-  const fresh = br.date === todayKey(), events = Array.isArray(br.events)?br.events:[], pris = Array.isArray(br.priorities)?br.priorities:[];
-  if(!events.length && !pris.length) return '<div class="empty">'+(fresh?"Nothing on the calendar today.":"Latest brief ("+esc(br.date)+") was empty.")+'</div>';
-  let h = '<div class="brief">';
-  if(!fresh) h += '<div class="hint" style="padding:0">Latest brief · '+esc(br.date)+'</div>';
-  for(const e of events) h += '<div class="ev"><div class="t">'+esc(e.time)+'</div><div class="ttl">'+esc(e.title)+'</div></div>';
-  for(const p of pris) h += '<div class="pri">• '+esc(p)+'</div>';
-  return h + '</div>';
-}
-let busy = false;
-async function renderBrief(){
-  const box = $("#brief"), k = load(KEYSTORE);
-  const b = await fetchData("data/brief.json");
-  const devLine = k ? '<div class="devline"><span>Private brief on · '+esc(k.label)+'</span><button id="forget">Turn off on this device</button></div>' : "";
-  let br = null;
-  if(!b){ box.innerHTML = '<div class="empty">No brief published yet. The Morning Brief runs at 6:17 AM and lands here sealed.</div>' + devLine; }
-  else if(b.v !== 2){ br = b; box.innerHTML = briefHTML(b) + devLine; }          // legacy plaintext
-  else {
-    let r; try{ r = b.locked ? { state: k ? "notyet" : "nokey" } : await unseal(b); }catch(e){ r = { state:"bad" }; }
-    if(r.state === "open"){ br = r.brief; box.innerHTML = briefHTML(br) + devLine; }
-    else if(r.state === "nokey"){
-      const tok = ghToken();
-      box.innerHTML = '<div class="lock"><div><b>Your brief is sealed.</b> The repo is public, so it’s encrypted and only devices you turn on can read it'+(b.date?' (latest: '+esc(b.date)+(b.n!=null?', '+b.n+' events':'')+')':'')+'.</div>'+
-        (tok?'':'<input id="tok" type="password" autocomplete="off" placeholder="Paste your GitHub token (stays on this device)">')+
-        '<button class="btn" id="enable">Turn on this device</button><div style="font-size:.78rem">Creates a key on this device and publishes only its public half. Briefs sealed after this unlock here.</div></div>';
-      $("#enable").onclick = async () => {
-        if(busy) return; const t = $("#tok"); if(t){ const v=t.value.trim(); if(!/^(github_pat_|ghp_)/.test(v)){ t.focus(); return; } try{ localStorage.setItem("cockpit.gh", v); }catch(e){} }
-        busy = true; $("#enable").disabled = true; $("#enable").textContent = "Turning on…";
-        try{ await enableDevice(); busy=false; renderBrief(); }
-        catch(e){ busy=false; $("#enable").disabled=false; $("#enable").textContent = e.fatal ? "GitHub refused the token · retry" : "Couldn’t reach GitHub · retry"; }
-      };
-    }
-    else if(r.state === "notyet") box.innerHTML = '<div class="lock"><div><b>This device is on.</b> The latest brief ('+esc(b.date)+') was sealed before it was added, so it unlocks with the next one (6:17 AM).</div></div>' + devLine;
-    else box.innerHTML = '<div class="lock"><div><b>Couldn’t unlock this brief.</b> If you reset this device’s key, turn it off and on again; the next brief will unlock.</div></div>' + devLine;
-  }
-  const f = $("#forget"); if(f) f.onclick = async () => { if(!confirm("Turn off the private brief on this device? Its key is deleted and future briefs won’t be sealed for it.")) return; try{ await forgetDevice(); }catch(e){ alert("Couldn’t reach GitHub. Try again."); return; } renderBrief(); };
-  lastBrief = br; renderNext(br); renderUrgency(br); prefillTop3(br);
-}
-let lastBrief = null;
 
-/* ---------- Fieldwork today: experiment mission, streak, check-in, side quest ----------
-   Same-device storage first (lets you tap "I did it today" here). Otherwise Fieldwork's feed in the repo,
-   sealed to the same device keys as the brief, so the public repo only holds ciphertext. */
+/* ---------- This week vs Nemesis ---------- */
+function fmtLeft(ms){
+  if(ms<=0) return "locks soon";
+  const d=Math.floor(ms/864e5), h=Math.floor(ms%864e5/36e5);
+  return (d? d+"d ":"") + h + "h left this week";
+}
+async function loadNemesis(){
+  let s = await fetchData("data/nemesis.json");
+  if(!s) s = load("nemesis.summary");
+  W.nem = s; renderNemesis(); paintWake(); renderWriteup();
+}
+function renderNemesis(){
+  const box = $("#nem"), s = W.nem;
+  if(!s){ box.innerHTML = '<div class="empty">Open <a href="../nemesis/">Nemesis</a> and turn on Cross-device sync in its settings, and your standing shows up here on any device.</div>'; return; }
+  const behind = (s.tracks||[]).filter(t => t.state === "behind");
+  const left = (s.closeMs||0) - (Date.now() - (s.updatedAt||Date.now()));
+  let owe;
+  if(s.pre) owe = '<div class="owe-none">Preseason — nothing owed yet.</div>';
+  else if(!behind.length) owe = '<div class="owe-none">Ahead or even on every track. Keep it there.</div>';
+  else owe = '<div class="owe">' + behind.map(t => '<span class="chip behind">'+esc(t.name)+'</span>').join("") + '</div>';
+  const title = s.pre ? "Preseason" : "Season "+s.season+" · Week "+s.week+" of "+s.len;
+  box.innerHTML = '<div class="standing"><div class="vs"><span>'+esc(s.youWins)+'</span><span class="mid">You · Nemesis</span><span>'+esc(s.nemWins)+'</span></div>' +
+    '<div class="meta">'+title+' · '+fmtLeft(left)+'</div>' + owe + '<div style="margin-top:14px"><a class="open" href="../nemesis/">Open Nemesis</a></div></div>';
+}
+
+/* ---------- Fieldwork today ---------- */
 const FKEY = "fieldwork.v1";
 const dUTC = s => { const [y,m,d] = s.split("-").map(Number); return Date.UTC(y,m-1,d); };
 const dDiff = (a,b) => Math.round((dUTC(b)-dUTC(a))/864e5);
@@ -407,7 +704,7 @@ const fwPhase = (e,date) => { const day = dDiff(e.start,date); return day<0 ? "s
 function fwLocal(){
   const S = load(FKEY); if(!S || S.v !== 1 || !Array.isArray(S.experiments)) return null;
   const t = todayKey(), ck = S.checkins || {}, act = S.experiments.filter(e => e.status === "active" && !e.sample), q = S.quests && S.quests.active;
-  if(!act.length && !q && !Object.values(ck).some(c => c && !c.sample)) return null;   // only example data: not yours yet
+  if(!act.length && !q && !Object.values(ck).some(c => c && !c.sample)) return null;
   const done = e => !!(ck[t] && ck[t].adh && ck[t].adh[e.id] === true);
   const streak = e => { let n = 0, d = t; if(!done(e)) d = dAdd(d,-1);
     while(fwPhase(e,d) === "test"){ const c = ck[d]; if(c && c.adh && c.adh[e.id] === true){ n++; d = dAdd(d,-1); } else break; } return n; };
@@ -424,8 +721,8 @@ function fwSetDone(id, on){
 }
 const FW_MSG = {
   none:   'Turn on <b>Cockpit feed</b> in <a href="../">Fieldwork</a> settings (the gear), and today’s mission, streak and check-in show up here on any device.',
-  locked: 'Fieldwork’s feed is on, but no Cockpit device can read it yet. Turn this device on under Today’s brief.',
-  nokey:  'Fieldwork’s feed is sealed. Turn this device on under Today’s brief to read it.',
+  locked: 'Fieldwork’s feed is on, but no Cockpit device can read it yet. Turn this device on in the writeup above.',
+  nokey:  'Fieldwork’s feed is sealed. Turn this device on in the writeup above to read it.',
   notyet: 'This device is on. The feed unlocks the next time Fieldwork sends an update (open Fieldwork once).',
   bad:    'Couldn’t unlock the Fieldwork feed. Open Fieldwork once to send a fresh one.' };
 async function renderFieldwork(){
@@ -454,13 +751,41 @@ async function renderFieldwork(){
   box.querySelectorAll("[data-fw]").forEach(b => b.onclick = () => { fwSetDone(b.dataset.id, b.dataset.fw === "done"); renderFieldwork(); });
 }
 
+/* ---------- voice and alarm settings ---------- */
+function renderSettings(){
+  const v = vset(), c = load(CALKEY);
+  if(!voices.length) loadVoices();
+  $("#set").innerHTML =
+    '<label>Address me as<input type="text" id="s-addr" value="'+esc(v.addr)+'" maxlength="24"></label>' +
+    '<label>Voice<select id="s-voice">' + (voices.length ? voices.map(x => '<option value="'+esc(x.voiceURI)+'"'+(x === pickVoice() ? ' selected' : '')+'>'+esc(x.name)+' · '+esc(x.lang)+'</option>').join("") : '<option>Default</option>') + '</select></label>' +
+    '<label>Speed · <span id="s-rv">'+Number(v.rate).toFixed(2)+'×</span><input type="range" id="s-rate" min="0.8" max="1.3" step="0.05" value="'+v.rate+'"></label>' +
+    '<label class="tg"><input type="checkbox" id="s-skip"'+(v.skipGreet ? ' checked' : '')+'> My alarm Shortcut says the greeting, so skip it here</label>' +
+    '<button class="btn ghost" id="s-test">Test the voice</button>' +
+    '<div class="mut">Pace on this phone: '+(c && c.n ? wps().toFixed(2)+' words a second, learned from '+c.n+' play'+(c.n===1?'':'s')+' (last one '+c.last+'s).' : 'not measured yet. The first full play calibrates the 60-second budget.')+
+    ' Weather uses this phone’s location, which stays on this device.</div>';
+  const upd = patch => { save(VKEY, Object.assign(vset(), patch)); paintWake(); renderWriteup(); };
+  $("#s-addr").onchange = e => upd({ addr: e.target.value.trim() || "sir" });
+  $("#s-voice").onchange = e => upd({ voice: e.target.value });
+  $("#s-rate").oninput = e => { $("#s-rv").textContent = Number(e.target.value).toFixed(2) + "×"; upd({ rate: +e.target.value }); };
+  $("#s-skip").onchange = e => upd({ skipGreet: e.target.checked });
+  $("#s-test").onclick = () => { try{ speechSynthesis.cancel(); speechSynthesis.speak(utter(greetWord(new Date()) + ", " + (vset().addr || "sir") + ". This is how your briefing will sound.")); }catch(e){} };
+}
+
+/* ---------- boot ---------- */
+$("#play").onclick = play;
+paintWake(); renderWriteup();
 renderTop3(); setHint(getTop3());
+loadBrief();
+loadNemesis();
+fetchData("data/tasks.json").then(t => { W.tasks = t; paintWake(); renderWriteup(); });
+loadWeather().then(w => { W.weather = w; paintWake(); renderWriteup(); });
 renderFieldwork();
-renderNemesis();
-renderBrief();
-document.addEventListener("visibilitychange", () => { if(!document.hidden){ renderFieldwork(); renderNemesis(); renderBrief(); } });
+renderSettings();
+try{ speechSynthesis.onvoiceschanged = () => { loadVoices(); renderSettings(); }; }catch(e){}
+if(params.get("wake") === "1") window.scrollTo(0, 0);
+document.addEventListener("visibilitychange", () => { if(!document.hidden && !speaking){ loadBrief(); loadNemesis(); renderFieldwork(); } });
 window.addEventListener("storage", e => { if(e.key === FKEY) renderFieldwork(); });
-setInterval(() => { if(!document.hidden && lastBrief) renderNext(lastBrief); }, 60000);
+setInterval(() => { if(!document.hidden && W.brief && !speaking){ renderNext(W.brief); paintWake(); } }, 60000);
 
 try{ if("serviceWorker" in navigator){
   navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(r=>{try{r.update();}catch(e){}}).catch(()=>{});
