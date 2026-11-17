@@ -1,9 +1,9 @@
 {
   "v": 1,
   "note": "Last run of each scheduled task, from the scheduler. Written by the Mission Control auto-fixer; read by Builder's Mission Control. Names and run times only.",
-  "checkedAt": "2026-11-17T12:42:33Z",
+  "checkedAt": "2026-11-17T23:41:59Z",
   "tasks": [
-    {"name": "Mission Control auto-fixer", "cron": "CRON_TZ=America/New_York 41 7,18 * * *", "enabled": true, "lastFired": "2026-11-17T12:42:00Z", "lastFinished": null, "lastStatus": "PENDING", "failure": null, "nextRun": "2026-11-17T23:41:00Z"},
+    {"name": "Mission Control auto-fixer", "cron": "CRON_TZ=America/New_York 41 7,18 * * *", "enabled": true, "lastFired": "2026-11-17T23:41:15Z", "lastFinished": null, "lastStatus": "PENDING", "failure": null, "nextRun": "2026-11-18T12:41:00Z"},
     {"name": "Receipts: weekly scoreboard review", "cron": "CRON_TZ=America/New_York 43 18 * * 0", "enabled": false, "lastFired": "2026-11-15T23:43:24Z", "lastFinished": "2026-11-15T23:43:52Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": null},
     {"name": "Receipts: daily draft deck", "cron": "CRON_TZ=America/New_York 13 7 * * 1-5", "enabled": false, "lastFired": "2026-11-16T12:13:46Z", "lastFinished": "2026-11-16T15:46:46Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": null},
     {"name": "Morning Brief", "cron": "CRON_TZ=America/New_York 17 6 * * *", "enabled": true, "lastFired": "2026-11-17T11:17:20Z", "lastFinished": "2026-11-17T11:19:08Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": "2026-11-18T11:17:00Z"},
