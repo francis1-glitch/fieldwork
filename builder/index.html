@@ -159,7 +159,7 @@
 
   <div id="board"></div>
 
-  <footer>Builder v1.7 · <a href="../cockpit/">Cockpit</a> · <a href="../">Fieldwork</a></footer>
+  <footer>Builder v1.8 · <a href="../cockpit/">Cockpit</a> · <a href="../">Fieldwork</a></footer>
 </div>
 
 <script>
@@ -320,6 +320,12 @@ const SEED = [
   {key:"recall", title:"Recall", status:"idea", url:"",
    summary:"An elite-memory trainer: memory palaces, the major system, faces and names, timed drills, applied to FAR formulas and networking names.",
    children:[]},
+  {key:"breakout", title:"Breakout tracker", status:"idea", url:"",
+   summary:"Judge each post against your own normal post, not raw views: views divided by the median of your last ~20 posts. About 3x or more is a breakout, half or less is a flop, and each breakout gets tagged with what was different (topic, format, hook, time) until a repeatable format shows up. Next: add it to the Receipts weekly review when Receipts comes back. Idea from the Virlo article, Nov 18.",
+   children:[
+     {title:"Your posts", summary:"Needs about 10 logged posts before the baseline means anything, and a repeat before anything counts as a pattern."},
+     {title:"Other accounts", summary:"When scouting bigger accounts, look for posts that beat that account's own median, not its most-viewed ones. Those ideas are the borrowable ones."},
+   ]},
 
   {key:"negotiator", title:"Negotiator", status:"parked", url:"",
    summary:"A negotiation trainer. An AI counterpart with a hidden bottom line, scoring on value captured, plus prep for real negotiations like a Big 4 offer.",
