@@ -1,12 +1,12 @@
 {
   "v": 1,
   "note": "Last run of each scheduled task, from the scheduler. Written by the Mission Control auto-fixer; read by Builder's Mission Control. Names and run times only.",
-  "checkedAt": "2026-11-20T23:42:21Z",
+  "checkedAt": "2026-11-21T12:41:56Z",
   "tasks": [
-    {"name": "Mission Control auto-fixer", "cron": "CRON_TZ=America/New_York 41 7,18 * * *", "enabled": true, "lastFired": "2026-11-20T23:41:50Z", "lastFinished": null, "lastStatus": "PENDING", "failure": null, "nextRun": "2026-11-21T12:41:00Z"},
+    {"name": "Mission Control auto-fixer", "cron": "CRON_TZ=America/New_York 41 7,18 * * *", "enabled": true, "lastFired": "2026-11-21T12:41:28Z", "lastFinished": null, "lastStatus": "PENDING", "failure": null, "nextRun": "2026-11-21T23:41:00Z"},
     {"name": "Receipts: weekly scoreboard review", "cron": "CRON_TZ=America/New_York 43 18 * * 0", "enabled": false, "lastFired": "2026-11-15T23:43:24Z", "lastFinished": "2026-11-15T23:43:52Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": null},
     {"name": "Receipts: daily draft deck", "cron": "CRON_TZ=America/New_York 13 7 * * 1-5", "enabled": false, "lastFired": "2026-11-16T12:13:46Z", "lastFinished": "2026-11-16T15:46:46Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": null},
-    {"name": "Morning Brief", "cron": "CRON_TZ=America/New_York 17 6 * * *", "enabled": true, "lastFired": "2026-11-20T11:17:50Z", "lastFinished": "2026-11-20T11:20:49Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": "2026-11-21T11:17:00Z"},
+    {"name": "Morning Brief", "cron": "CRON_TZ=America/New_York 17 6 * * *", "enabled": true, "lastFired": "2026-11-21T11:17:31Z", "lastFinished": "2026-11-21T11:20:26Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": "2026-11-22T11:17:00Z"},
     {"name": "Skill Lab weekly improver", "cron": "CRON_TZ=America/New_York 37 19 * * 0", "enabled": true, "lastFired": null, "lastFinished": null, "lastStatus": null, "failure": null, "nextRun": "2026-11-23T00:37:00Z"},
     {"name": "Nemesis Sunday showdown ping", "cron": "CRON_TZ=America/New_York 5 21 * * 0", "enabled": true, "lastFired": "2026-11-16T02:05:52Z", "lastFinished": "2026-11-16T02:06:00Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": "2026-11-23T02:05:00Z"},
     {"name": "NBA fair lines: publish page", "cron": "24 * * * *", "enabled": false, "lastFired": "2026-11-04T19:24:15Z", "lastFinished": "2026-11-04T19:24:50Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": null},
