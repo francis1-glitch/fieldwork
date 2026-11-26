@@ -1,17 +1,17 @@
 {
   "v": 1,
   "note": "Last run of each scheduled task, from the scheduler. Written by the Mission Control auto-fixer; read by Builder's Mission Control. Names and run times only.",
-  "checkedAt": "2026-11-25T23:41:45Z",
+  "checkedAt": "2026-11-26T12:41:53Z",
   "tasks": [
     {
       "name": "Mission Control auto-fixer",
       "cron": "CRON_TZ=America/New_York 41 7,18 * * *",
       "enabled": true,
-      "lastFired": "2026-11-25T23:41:16Z",
+      "lastFired": "2026-11-26T12:41:21Z",
       "lastFinished": null,
       "lastStatus": "PENDING",
       "failure": null,
-      "nextRun": "2026-11-26T12:41:00Z"
+      "nextRun": "2026-11-26T23:41:00Z"
     },
     {
       "name": "Receipts: weekly scoreboard review",
@@ -37,11 +37,11 @@
       "name": "Morning Brief",
       "cron": "CRON_TZ=America/New_York 17 6 * * *",
       "enabled": true,
-      "lastFired": "2026-11-25T11:17:38Z",
-      "lastFinished": "2026-11-25T11:21:39Z",
+      "lastFired": "2026-11-26T11:17:32Z",
+      "lastFinished": "2026-11-26T11:20:02Z",
       "lastStatus": "SUCCEEDED",
       "failure": null,
-      "nextRun": "2026-11-26T11:17:00Z"
+      "nextRun": "2026-11-27T11:17:00Z"
     },
     {
       "name": "Skill Lab weekly improver",
