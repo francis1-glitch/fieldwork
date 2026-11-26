@@ -1,107 +1,17 @@
 {
   "v": 1,
   "note": "Last run of each scheduled task, from the scheduler. Written by the Mission Control auto-fixer; read by Builder's Mission Control. Names and run times only.",
-  "checkedAt": "2026-11-26T12:41:53Z",
+  "checkedAt": "2026-11-26T23:42:11Z",
   "tasks": [
-    {
-      "name": "Mission Control auto-fixer",
-      "cron": "CRON_TZ=America/New_York 41 7,18 * * *",
-      "enabled": true,
-      "lastFired": "2026-11-26T12:41:21Z",
-      "lastFinished": null,
-      "lastStatus": "PENDING",
-      "failure": null,
-      "nextRun": "2026-11-26T23:41:00Z"
-    },
-    {
-      "name": "Receipts: weekly scoreboard review",
-      "cron": "CRON_TZ=America/New_York 43 18 * * 0",
-      "enabled": false,
-      "lastFired": "2026-11-15T23:43:24Z",
-      "lastFinished": "2026-11-15T23:43:52Z",
-      "lastStatus": "SUCCEEDED",
-      "failure": null,
-      "nextRun": null
-    },
-    {
-      "name": "Receipts: daily draft deck",
-      "cron": "CRON_TZ=America/New_York 13 7 * * 1-5",
-      "enabled": false,
-      "lastFired": "2026-11-16T12:13:46Z",
-      "lastFinished": "2026-11-16T15:46:46Z",
-      "lastStatus": "SUCCEEDED",
-      "failure": null,
-      "nextRun": null
-    },
-    {
-      "name": "Morning Brief",
-      "cron": "CRON_TZ=America/New_York 17 6 * * *",
-      "enabled": true,
-      "lastFired": "2026-11-26T11:17:32Z",
-      "lastFinished": "2026-11-26T11:20:02Z",
-      "lastStatus": "SUCCEEDED",
-      "failure": null,
-      "nextRun": "2026-11-27T11:17:00Z"
-    },
-    {
-      "name": "Skill Lab weekly improver",
-      "cron": "CRON_TZ=America/New_York 37 19 * * 0",
-      "enabled": true,
-      "lastFired": null,
-      "lastFinished": null,
-      "lastStatus": null,
-      "failure": null,
-      "nextRun": "2026-11-30T00:37:00Z"
-    },
-    {
-      "name": "Nemesis Sunday showdown ping",
-      "cron": "CRON_TZ=America/New_York 5 21 * * 0",
-      "enabled": true,
-      "lastFired": "2026-11-23T02:05:31Z",
-      "lastFinished": "2026-11-23T02:05:38Z",
-      "lastStatus": "SUCCEEDED",
-      "failure": null,
-      "nextRun": "2026-11-30T02:05:00Z"
-    },
-    {
-      "name": "NBA fair lines: publish page",
-      "cron": "24 * * * *",
-      "enabled": false,
-      "lastFired": "2026-11-04T19:24:15Z",
-      "lastFinished": "2026-11-04T19:24:50Z",
-      "lastStatus": "SUCCEEDED",
-      "failure": null,
-      "nextRun": null
-    },
-    {
-      "name": "CPA Exam Section Tracker",
-      "cron": "CRON_TZ=America/New_York 55 6 * * 1",
-      "enabled": true,
-      "lastFired": null,
-      "lastFinished": null,
-      "lastStatus": null,
-      "failure": null,
-      "nextRun": "2026-11-30T11:55:00Z"
-    },
-    {
-      "name": "CPA & Accounting News Roundup",
-      "cron": "CRON_TZ=America/New_York 50 6 * * 1",
-      "enabled": true,
-      "lastFired": null,
-      "lastFinished": null,
-      "lastStatus": null,
-      "failure": null,
-      "nextRun": "2026-11-30T11:50:00Z"
-    },
-    {
-      "name": "Big 4 Job Tracker",
-      "cron": "CRON_TZ=America/New_York 52 6 * * 1",
-      "enabled": true,
-      "lastFired": null,
-      "lastFinished": null,
-      "lastStatus": null,
-      "failure": null,
-      "nextRun": "2026-11-30T11:52:00Z"
-    }
+    {"name": "Mission Control auto-fixer", "cron": "CRON_TZ=America/New_York 41 7,18 * * *", "enabled": true, "lastFired": "2026-11-26T23:41:37Z", "lastFinished": null, "lastStatus": "PENDING", "failure": null, "nextRun": "2026-11-27T12:41:00Z"},
+    {"name": "Receipts: weekly scoreboard review", "cron": "CRON_TZ=America/New_York 43 18 * * 0", "enabled": false, "lastFired": "2026-11-15T23:43:24Z", "lastFinished": "2026-11-15T23:43:52Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": null},
+    {"name": "Receipts: daily draft deck", "cron": "CRON_TZ=America/New_York 13 7 * * 1-5", "enabled": false, "lastFired": "2026-11-16T12:13:46Z", "lastFinished": "2026-11-16T15:46:46Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": null},
+    {"name": "Morning Brief", "cron": "CRON_TZ=America/New_York 17 6 * * *", "enabled": true, "lastFired": "2026-11-26T11:17:32Z", "lastFinished": "2026-11-26T11:20:02Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": "2026-11-27T11:17:00Z"},
+    {"name": "Skill Lab weekly improver", "cron": "CRON_TZ=America/New_York 37 19 * * 0", "enabled": true, "lastFired": null, "lastFinished": null, "lastStatus": null, "failure": null, "nextRun": "2026-11-30T00:37:00Z"},
+    {"name": "Nemesis Sunday showdown ping", "cron": "CRON_TZ=America/New_York 5 21 * * 0", "enabled": true, "lastFired": "2026-11-23T02:05:31Z", "lastFinished": "2026-11-23T02:05:38Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": "2026-11-30T02:05:00Z"},
+    {"name": "NBA fair lines: publish page", "cron": "24 * * * *", "enabled": false, "lastFired": "2026-11-04T19:24:15Z", "lastFinished": "2026-11-04T19:24:50Z", "lastStatus": "SUCCEEDED", "failure": null, "nextRun": null},
+    {"name": "CPA Exam Section Tracker", "cron": "CRON_TZ=America/New_York 55 6 * * 1", "enabled": true, "lastFired": null, "lastFinished": null, "lastStatus": null, "failure": null, "nextRun": "2026-11-30T11:55:00Z"},
+    {"name": "CPA & Accounting News Roundup", "cron": "CRON_TZ=America/New_York 50 6 * * 1", "enabled": true, "lastFired": null, "lastFinished": null, "lastStatus": null, "failure": null, "nextRun": "2026-11-30T11:50:00Z"},
+    {"name": "Big 4 Job Tracker", "cron": "CRON_TZ=America/New_York 52 6 * * 1", "enabled": true, "lastFired": null, "lastFinished": null, "lastStatus": null, "failure": null, "nextRun": "2026-11-30T11:52:00Z"}
   ]
 }
